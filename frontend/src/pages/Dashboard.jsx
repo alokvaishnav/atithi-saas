@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { IndianRupee, BedDouble, CalendarCheck, LogOut } from 'lucide-react';
+import { API_URL } from '../config'; // <--- Importing the Cloud URL
 
 const Dashboard = () => {
   const [rooms, setRooms] = useState([]);
@@ -7,11 +8,11 @@ const Dashboard = () => {
 
   // Fetch Data
   const fetchData = () => {
-    fetch('http://localhost:8000/api/rooms/')
+    fetch(API_URL + '/api/rooms/')
       .then(res => res.json())
       .then(data => setRooms(data));
 
-    fetch('http://localhost:8000/api/bookings/')
+    fetch(API_URL + '/api/bookings/')
       .then(res => res.json())
       .then(data => setBookings(data));
   };
@@ -25,8 +26,7 @@ const Dashboard = () => {
     if (!window.confirm("Are you sure the guest has left? This will make the room Available.")) return;
 
     try {
-      // We manually force the status back to AVAILABLE
-      const response = await fetch(`http://localhost:8000/api/rooms/${roomId}/`, {
+      const response = await fetch(API_URL + `/api/rooms/${roomId}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'AVAILABLE' })

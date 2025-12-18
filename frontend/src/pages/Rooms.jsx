@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trash2, Plus, X } from 'lucide-react';
+import { API_URL } from '../config'; // <--- UPDATED IMPORT
 
 const Rooms = () => {
   const [rooms, setRooms] = useState([]);
@@ -15,7 +16,7 @@ const Rooms = () => {
 
   // 1. Fetch Rooms from Backend
   const fetchRooms = () => {
-    fetch('http://localhost:8000/api/rooms/')
+    fetch(API_URL + '/api/rooms/') // <--- UPDATED URL
       .then(res => res.json())
       .then(data => setRooms(data))
       .catch(err => console.error(err));
@@ -30,11 +31,11 @@ const Rooms = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 3. Send Data to Backend (The Magic Part)
+  // 3. Send Data to Backend
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:8000/api/rooms/', {
+      const response = await fetch(API_URL + '/api/rooms/', { // <--- UPDATED URL
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -66,7 +67,7 @@ const Rooms = () => {
         </button>
       </div>
 
-      {/* The "Add Room" Form (Only visible when clicked) */}
+      {/* The "Add Room" Form */}
       {showForm && (
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-100 mb-8 animate-pulse-once">
           <h3 className="text-lg font-bold mb-4">Add New Details</h3>

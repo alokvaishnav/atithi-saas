@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, X, Calendar } from 'lucide-react';
+import { API_URL } from '../config'; // <--- Importing the Cloud URL
 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -21,9 +22,9 @@ const Bookings = () => {
   const fetchAllData = async () => {
     try {
       const [resBookings, resRooms, resGuests] = await Promise.all([
-        fetch('http://localhost:8000/api/bookings/'),
-        fetch('http://localhost:8000/api/rooms/'),
-        fetch('http://localhost:8000/api/guests/')
+        fetch(API_URL + '/api/bookings/'),
+        fetch(API_URL + '/api/rooms/'),
+        fetch(API_URL + '/api/guests/')
       ]);
       
       setBookings(await resBookings.json());
@@ -42,19 +43,13 @@ const Bookings = () => {
   // 🧠 THE BRAIN: Auto-Calculate Price
   // ---------------------------------------------------------
   useEffect(() => {
-    // Only calculate if we have a Room AND both Dates
     if (formData.room && formData.check_in_date && formData.check_out_date) {
-      
-      // 1. Find the selected room's price
       const selectedRoom = rooms.find(r => r.id === parseInt(formData.room));
-      
-      // 2. Calculate number of nights
       const start = new Date(formData.check_in_date);
       const end = new Date(formData.check_out_date);
       const timeDiff = end - start;
-      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)); // Convert milliseconds to days
+      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24)); 
 
-      // 3. Update the Total Amount (if valid)
       if (selectedRoom && daysDiff > 0) {
         const total = daysDiff * selectedRoom.price_per_night;
         setFormData(prev => ({ ...prev, total_amount: total }));
@@ -70,7 +65,7 @@ const Bookings = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:8000/api/bookings/', {
+      const response = await fetch(API_URL + '/api/bookings/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -147,7 +142,7 @@ const Bookings = () => {
             <div>
               <label className="text-xs text-slate-500 font-bold text-blue-600">Total Amount (₹)</label>
               <input type="number" name="total_amount" className="w-full border p-2 rounded bg-slate-100 font-bold text-slate-700"
-                readOnly // Made read-only because the computer calculates it now!
+                readOnly
                 value={formData.total_amount} onChange={handleChange} />
             </div>
 
@@ -198,9 +193,6 @@ const Bookings = () => {
             ))}
           </tbody>
         </table>
-        {bookings.length === 0 && (
-          <div className="p-8 text-center text-slate-400">No bookings found.</div>
-        )}
       </div>
     </div>
   );

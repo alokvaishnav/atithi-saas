@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, X, Phone, Mail } from 'lucide-react';
+import { API_URL } from '../config'; // <--- UPDATED IMPORT
 
 const Guests = () => {
   const [guests, setGuests] = useState([]);
@@ -15,7 +16,7 @@ const Guests = () => {
 
   // 1. Fetch Guests
   const fetchGuests = () => {
-    fetch('http://localhost:8000/api/guests/')
+    fetch(API_URL + '/api/guests/') // <--- UPDATED URL
       .then(res => res.json())
       .then(data => setGuests(data))
       .catch(err => console.error(err));
@@ -30,7 +31,7 @@ const Guests = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 3. Submit Guest (Updated Logic)
+  // 3. Submit Guest
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -42,7 +43,7 @@ const Guests = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/guests/', {
+      const response = await fetch(API_URL + '/api/guests/', { // <--- UPDATED URL
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
