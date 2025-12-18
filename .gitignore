@@ -1,0 +1,15 @@
+# Ignore System Files
+.DS_Store
+Thumbs.db
+
+# Ignore Heavy Dependencies (The Cloud will install these later)
+node_modules/
+__pycache__/
+*.pyc
+
+# Ignore Database (We will use a Cloud Database later)
+*.sqlite3
+db.sqlite3
+
+# Ignore Secrets
+.env

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # 1. The Professional Database (PostgreSQL)
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=atithi_db
+      - POSTGRES_USER=atithi_admin
+      - POSTGRES_PASSWORD=secure_password_123
+    ports:
+      - "5432:5432"
+
+  # 2. The Backend API (Django)
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgres://atithi_admin:secure_password_123@db:5432/atithi_db
+
+  # 3. The Frontend Dashboard (React)
+# 3. The Frontend Dashboard (React)
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
