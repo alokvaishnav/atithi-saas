@@ -1,6 +1,6 @@
 import { 
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
-  LogOut, Utensils, CalendarDays, FileText, ConciergeBell 
+  LogOut, ShoppingBag, Utensils, CalendarDays, FileText, ConciergeBell, 
 } from 'lucide-react'; // 👈 Added ConciergeBell
 import { useNavigate, useLocation } from 'react-router-dom';
 
