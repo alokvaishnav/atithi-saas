@@ -16,6 +16,7 @@ import FrontDesk from './pages/FrontDesk';
 import Folio from './pages/Folio';
 import POS from './pages/POS';
 import Housekeeping from './pages/Housekeeping';
+import Staff from './pages/Staff'; // 👈 Imported correctly
 
 // 🔒 THE PROFESSIONAL GUARD (Role & Token Security)
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -28,7 +29,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   // 2. Check if role is authorized for this specific route
-  // If allowedRoles is provided, check against it.
   if (allowedRoles && !allowedRoles.includes(userRole)) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -81,7 +81,7 @@ function App() {
 
                     <div className="flex items-center space-x-6">
                       <div className="text-right hidden sm:block">
-                        <p className="text-sm font-black text-slate-700 leading-none">Administrator</p>
+                        <p className="text-sm font-black text-slate-700 leading-none">Hotel Personnel</p>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Role: {userRole}</span>
                       </div>
                       
@@ -102,7 +102,7 @@ function App() {
                     </div>
                   </header>
 
-                  {/* Internal Department Routes with Role-Specific Guards */}
+                  {/* Internal Department Routes */}
                   <div className="flex-1 overflow-y-auto">
                     <Routes>
                       {/* Standard Access */}
@@ -115,23 +115,29 @@ function App() {
                       <Route path="/folio/:bookingId" element={<Folio />} />
                       <Route path="/pos" element={<POS />} />
                       
-                      {/* Operationally Restricted Access */}
-                      <Route path="/services" element={
-                        <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
-                          <Services />
+                      {/* Management Restricted Access */}
+                      <Route path="/staff" element={ // 👈 RE-ADDED MISSING STAFF ROUTE
+                        <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
+                          <Staff />
+                        </ProtectedRoute>
+                      } />
+
+                      <Route path="/reports" element={
+                        <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'ACCOUNTANT']}>
+                          <Reports />
                         </ProtectedRoute>
                       } />
                       
+                      {/* Operations Access */}
                       <Route path="/housekeeping" element={
                         <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
                           <Housekeeping />
                         </ProtectedRoute>
                       } />
 
-                      {/* Financially Restricted Access */}
-                      <Route path="/reports" element={
-                        <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'ACCOUNTANT']}>
-                          <Reports />
+                      <Route path="/services" element={
+                        <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
+                          <Services />
                         </ProtectedRoute>
                       } />
                     </Routes>
