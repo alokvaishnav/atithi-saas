@@ -1,14 +1,15 @@
 import { 
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
-  LogOut, ShoppingBag, Utensils, CalendarDays, FileText, ConciergeBell, 
-} from 'lucide-react'; // 👈 Added ConciergeBell
+  LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
+  ConciergeBell, Sparkles // 👈 Added Sparkles for Housekeeping
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Define Groups
+  // Define Groups (Updated for Enterprise Operations)
   const groups = [
     {
       title: "Main",
@@ -19,10 +20,17 @@ const Sidebar = () => {
     {
       title: "Front Office",
       items: [
-        // 👇 NEW LINK: Reception Desk
         { icon: <ConciergeBell size={18} />, label: 'Reception Desk', path: '/front-desk' },
         { icon: <BedDouble size={18} />, label: 'Room Status', path: '/rooms' },
         { icon: <Users size={18} />, label: 'Guest Management', path: '/guests' },
+      ]
+    },
+    {
+      title: "Operations",
+      items: [
+        { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' }, // 👈 NEW
+        { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
+        { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
       ]
     },
     {
@@ -33,16 +41,9 @@ const Sidebar = () => {
       ]
     },
     {
-      title: "Point of Sale",
-      items: [
-        { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' }, // 👈 NEW
-        { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
-      ]
-    },
-    {
       title: "Night Audit",
       items: [
-        { icon: <FileText size={18} />, label: 'Reports & Stats', path: '/reports' },
+        { icon: <FileText size={18} />, label: 'Tax & Audit Reports', path: '/reports' }, // 👈 UPDATED LABEL
       ]
     }
   ];

@@ -1,7 +1,8 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.utils import timezone # 👈 Added for time-aware checks
+from django.utils import timezone
+from decimal import Decimal # 👈 Added for precise tax calculations
 
 # ==========================================
 # 1. ROOM MANAGEMENT
@@ -39,7 +40,7 @@ class Guest(models.Model):
         return self.full_name
 
 # ==========================================
-# 3. BOOKINGS & BILLING (Updated for DateTime)
+# 3. BOOKINGS & BILLING (Updated with Tax Fields)
 # ==========================================
 class Booking(models.Model):
     STATUS_CHOICES = (
@@ -52,27 +53,24 @@ class Booking(models.Model):
 
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
-    
-    # 👇 UPGRADED: Changed from DateField to DateTimeField to support timing
     check_in_date = models.DateTimeField() 
     check_out_date = models.DateTimeField()
-    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # Financials Updated for GST
+    subtotal_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0) # Base Price
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)      # GST Amount
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)    # Subtotal + Tax
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # 👇 SMART VALIDATION: Prevents overlaps based on exact hours/minutes
     def clean(self):
         if self.check_in_date and self.check_out_date:
-            # 1. Time sanity check
             if self.check_out_date <= self.check_in_date:
                 raise ValidationError("Check-out time must be after check-in time.")
 
-            # 2. Precise Overlap Check
-            # Only blocks if the room is busy during the specific time window
             overlapping_bookings = Booking.objects.filter(
                 room=self.room,
                 status__in=['CONFIRMED', 'CHECKED_IN']
@@ -83,18 +81,28 @@ class Booking(models.Model):
 
             if overlapping_bookings.exists():
                 raise ValidationError(
-                    f"Room {self.room.room_number} is already reserved during this specific time window."
+                    f"Room {self.room.room_number} is already reserved for this time window."
                 )
 
     def save(self, *args, **kwargs):
-        self.full_clean() # Triggers the clean() method
+        # Auto-Calculate Room Billing with 12% GST
+        if self.room and self.check_in_date and self.check_out_date:
+            delta = self.check_out_date - self.check_in_date
+            # Calculate nights (minimum 1)
+            days = max(delta.days, 1)
+            
+            self.subtotal_amount = self.room.price_per_night * days
+            self.tax_amount = self.subtotal_amount * Decimal('0.12') # 12% Room GST
+            self.total_amount = self.subtotal_amount + self.tax_amount
+
+        self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Booking {self.id} - {self.guest.full_name}"
 
 # ==========================================
-# 4. POS & SERVICES 
+# 4. POS & SERVICES (Updated with Tax Logic)
 # ==========================================
 class Service(models.Model):
     CATEGORY_CHOICES = (
@@ -106,7 +114,7 @@ class Service(models.Model):
     )
     
     name = models.CharField(max_length=100)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2) # Price excluding tax
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='FOOD')
     is_active = models.BooleanField(default=True)
 
@@ -118,12 +126,20 @@ class BookingCharge(models.Model):
     service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True)
     description = models.CharField(max_length=200, blank=True)
     quantity = models.PositiveIntegerField(default=1)
+    
+    # Financial Breakdown
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     added_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
         if self.service:
-            self.total_cost = self.service.price * self.quantity
+            self.subtotal = self.service.price * self.quantity
+            # Logic: 5% Tax for F&B, 18% for others
+            tax_rate = Decimal('0.05') if self.service.category == 'FOOD' else Decimal('0.18')
+            self.tax_amount = self.subtotal * tax_rate
+            self.total_cost = self.subtotal + self.tax_amount
         super().save(*args, **kwargs)
 
     def __str__(self):
