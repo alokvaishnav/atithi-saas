@@ -1,4 +1,5 @@
-import { LayoutDashboard, BedDouble, Users, CalendarCheck, LogOut, Utensils } from 'lucide-react'; // 👈 Added Utensils Icon
+// 👇 Updated Imports: Added CalendarDays and FileText
+import { LayoutDashboard, BedDouble, Users, CalendarCheck, LogOut, Utensils, CalendarDays, FileText } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -10,8 +11,10 @@ const Sidebar = () => {
     { icon: <Users size={20} />, label: 'Guests', path: '/guests' },
     { icon: <BedDouble size={20} />, label: 'Rooms', path: '/rooms' },
     { icon: <CalendarCheck size={20} />, label: 'Bookings', path: '/bookings' },
-    // 👇 NEW LINK
     { icon: <Utensils size={20} />, label: 'Services & Menu', path: '/services' },
+    // 👇 NEW LINKS ADDED HERE
+    { icon: <CalendarDays size={20} />, label: 'Timeline View', path: '/calendar' },
+    { icon: <FileText size={20} />, label: 'Reports', path: '/reports' },
   ];
 
   // 🚪 Logout Function
