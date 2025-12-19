@@ -1,13 +1,13 @@
 from django.db import models
-from django.conf import settings # To link to our Custom User
+from django.conf import settings
+from django.core.exceptions import ValidationError # 👈 Added for validation
 
 # ==========================================
-# 1. ROOM MANAGEMENT (Updated for Housekeeping)
+# 1. ROOM MANAGEMENT
 # ==========================================
 class Room(models.Model):
     ROOM_TYPES = (('SINGLE', 'Single'), ('DOUBLE', 'Double'), ('SUITE', 'Suite'))
     
-    # 👇 These statuses drive the Housekeeping Module
     STATUS_CHOICES = (
         ('AVAILABLE', 'Available'), 
         ('OCCUPIED', 'Occupied'), 
@@ -30,7 +30,7 @@ class Guest(models.Model):
     full_name = models.CharField(max_length=100)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15)
-    id_proof_number = models.CharField(max_length=50, blank=True) # Aadhar/Passport
+    id_proof_number = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -38,7 +38,7 @@ class Guest(models.Model):
         return self.full_name
 
 # ==========================================
-# 3. BOOKINGS & BILLING
+# 3. BOOKINGS & BILLING (Updated with Validation)
 # ==========================================
 class Booking(models.Model):
     STATUS_CHOICES = (
@@ -55,24 +55,45 @@ class Booking(models.Model):
     check_out_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
     
-    # Financials
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    # Audit Trail
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # 👇 NEW: Added validation to prevent double booking and invalid dates
+    def clean(self):
+        if self.check_in_date and self.check_out_date:
+            # 1. Date sanity check
+            if self.check_out_date <= self.check_in_date:
+                raise ValidationError("Check-out date must be after check-in date.")
+
+            # 2. Double Booking Prevention
+            # Check for overlapping bookings for the same room that are active
+            overlapping_bookings = Booking.objects.filter(
+                room=self.room,
+                status__in=['CONFIRMED', 'CHECKED_IN']
+            ).exclude(pk=self.pk).filter(
+                check_in_date__lt=self.check_out_date,
+                check_out_date__gt=self.check_in_date
+            )
+
+            if overlapping_bookings.exists():
+                raise ValidationError(
+                    f"Double Booking Error: Room {self.room.room_number} is already reserved for these dates."
+                )
+
+    def save(self, *args, **kwargs):
+        self.full_clean() # This triggers the clean() validation method
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Booking {self.id} - {self.guest.full_name}"
 
 # ==========================================
-# 4. NEW: POS & SERVICES (For Phase 2)
+# 4. POS & SERVICES 
 # ==========================================
 class Service(models.Model):
-    """
-    Menu items or Services (e.g., 'Coca Cola', 'Laundry', 'Taxi')
-    """
     CATEGORY_CHOICES = (
         ('FOOD', 'Food & Beverage'),
         ('LAUNDRY', 'Laundry'),
@@ -84,24 +105,20 @@ class Service(models.Model):
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='FOOD')
-    is_active = models.BooleanField(default=True) # If false, don't show in menu
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.name} - ₹{self.price}"
 
 class BookingCharge(models.Model):
-    """
-    Individual items added to a booking (e.g., Guest ordered 2 Coffees)
-    """
     booking = models.ForeignKey(Booking, related_name='charges', on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True)
-    description = models.CharField(max_length=200, blank=True) # Optional note
+    description = models.CharField(max_length=200, blank=True)
     quantity = models.PositiveIntegerField(default=1)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2)
     added_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # Auto-calculate cost if service exists
         if self.service:
             self.total_cost = self.service.price * self.quantity
         super().save(*args, **kwargs)
