@@ -2,7 +2,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 class User(AbstractUser):
-    # We define strict roles for the system
+    # Professional Roles for Enterprise HMS
     ROLE_CHOICES = (
         ('OWNER', 'Owner'),
         ('MANAGER', 'General Manager'),
@@ -14,7 +14,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='RECEPTIONIST')
     phone = models.CharField(max_length=15, blank=True, null=True)
     
-    # This forces Django to treat 'role' as a crucial part of the user
+    # Ensures email and role are handled during user creation
     REQUIRED_FIELDS = ['email', 'role']
 
     def __str__(self):
