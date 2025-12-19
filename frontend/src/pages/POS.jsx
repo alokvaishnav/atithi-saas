@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { 
-  Utensils, Search, Plus, Minus, X, 
-  CreditCard, Home, Printer, ShoppingBag 
+  Utensils, 
+  Search, 
+  Plus, 
+  Minus, 
+  X, 
+  CreditCard, 
+  Home, 
+  Printer, 
+  ShoppingBag // 👈 THIS MUST BE HERE
 } from 'lucide-react';
 import { API_URL } from '../config';
 
