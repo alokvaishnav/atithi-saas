@@ -9,9 +9,12 @@ import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
 import Services from './pages/Services';
 
-// 👇 1. MAKE SURE THESE ARE IMPORTED
+
+// 👇 Additional Features
 import CalendarView from './pages/CalendarView';
 import Reports from './pages/Reports';
+import FrontDesk from './pages/FrontDesk';
+import Folio from './pages/Folio'; // // 👈 IMPORT THIS
 
 // 🔒 THE GUARD
 const ProtectedRoute = ({ children }) => {
@@ -65,9 +68,11 @@ function App() {
                     <Route path="/bookings" element={<Bookings />} />
                     <Route path="/services" element={<Services />} />
                     
-                    {/* 👇 2. MAKE SURE THESE ROUTES EXIST */}
+                    {/* 👇 ALL NEW ROUTES */}
                     <Route path="/calendar" element={<CalendarView />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/front-desk" element={<FrontDesk />} />
+                    <Route path="/folio/:bookingId" element={<Folio />} />
                   </Routes>
                 </main>
               </div>

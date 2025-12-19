@@ -1,187 +1,191 @@
 import { useEffect, useState } from 'react';
-// 👇 FIXED: Imported Sparkles, Removed Broom
-import { IndianRupee, BedDouble, CalendarCheck, LogOut, Loader2, User, Wrench, Sparkles } from 'lucide-react'; 
+import { 
+  Building, Users, Loader2, LogIn, LogOut, 
+  CheckCircle, XCircle, AlertTriangle, Briefcase 
+} from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
 const Dashboard = () => {
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const token = localStorage.getItem('access_token');
 
+  // Fetch Data
   const fetchData = async () => {
     try {
       setLoading(true);
-      const roomRes = await fetch(API_URL + '/api/rooms/', { headers: { 'Authorization': `Bearer ${token}` } });
-      const bookingRes = await fetch(API_URL + '/api/bookings/', { headers: { 'Authorization': `Bearer ${token}` } });
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      const [resRooms, resBookings] = await Promise.all([
+        fetch(API_URL + '/api/rooms/', { headers }),
+        fetch(API_URL + '/api/bookings/', { headers })
+      ]);
 
-      if (!roomRes.ok || !bookingRes.ok) throw new Error("Failed to fetch data");
+      // 🛡️ SAFETY CHECK: Only set data if request was successful
+      if (resRooms.ok) {
+        const data = await resRooms.json();
+        setRooms(Array.isArray(data) ? data : []); // Ensure it's an array
+      } else {
+        console.error("Failed to fetch rooms:", resRooms.status);
+        setRooms([]); // Fallback to empty
+      }
 
-      setRooms(await roomRes.json());
-      setBookings(await bookingRes.json());
-    } catch (err) {
-      console.error("Error:", err);
-      setError("Could not load dashboard data.");
-    } finally {
-      setLoading(false);
+      if (resBookings.ok) {
+        const data = await resBookings.json();
+        setBookings(Array.isArray(data) ? data : []); // Ensure it's an array
+      } else {
+        console.error("Failed to fetch bookings:", resBookings.status);
+        setBookings([]); // Fallback to empty
+      }
+
+    } catch (err) { 
+      console.error("Error fetching dashboard data:", err);
+      setRooms([]);
+      setBookings([]);
+    } finally { 
+      setLoading(false); 
     }
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  const updateRoomStatus = async (roomId, newStatus) => {
-    setRooms(rooms.map(r => r.id === roomId ? { ...r, status: newStatus } : r));
+  // 🧮 CALCULATE STATS (With Safety Checks)
+  const todayStr = new Date().toISOString().split('T')[0];
 
-    try {
-      const response = await fetch(API_URL + `/api/rooms/${roomId}/`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      
-      if (!response.ok) {
-        alert("Failed to update status on server.");
-        fetchData(); 
-      }
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
+  const safeBookings = Array.isArray(bookings) ? bookings : [];
+  const safeRooms = Array.isArray(rooms) ? rooms : [];
 
-  const handleCheckOut = async (roomId) => {
-    if (!window.confirm("Guest is leaving? Mark room as DIRTY?")) return;
-    updateRoomStatus(roomId, 'DIRTY');
-  };
+  // 1. Expected Arrivals (Check-in Today)
+  const expectedArrivals = safeBookings.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED');
 
-  const getGuestName = (roomId) => {
-    const activeBooking = bookings.find(b => b.room === roomId && b.status !== 'CHECKED_OUT');
-    return activeBooking?.guest_details?.full_name || "Unknown Guest";
-  };
+  // 2. Expected Departures (Check-out Today)
+  const expectedDepartures = safeBookings.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN');
 
-  const renderCalendar = () => {
-    const today = new Date();
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const days = [];
+  // 3. Room Status Counts
+  const totalRooms = safeRooms.length;
+  const occupiedRooms = safeRooms.filter(r => r.status === 'OCCUPIED').length;
+  const dirtyVacant = safeRooms.filter(r => r.status === 'DIRTY').length; 
+  const cleanVacant = safeRooms.filter(r => r.status === 'AVAILABLE').length; 
+  const rmsToSell = cleanVacant + dirtyVacant; 
 
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(today.getFullYear(), today.getMonth(), i);
-      const dateString = currentDate.toISOString().split('T')[0];
-      const dailyBookings = bookings.filter(b => dateString >= b.check_in_date && dateString < b.check_out_date);
-
-      days.push(
-        <div key={i} className="border border-slate-100 p-2 min-h-[80px] bg-white rounded flex flex-col items-center justify-between hover:shadow-md transition-shadow">
-          <span className={`text-sm font-bold ${dateString === new Date().toISOString().split('T')[0] ? 'text-blue-600 bg-blue-100 px-2 rounded-full' : 'text-slate-400'}`}>{i}</span>
-          {dailyBookings.length > 0 ? (
-            <div className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded w-full text-center font-bold mt-1">{dailyBookings.length} Booked</div>
-          ) : ( <div className="text-[10px] text-green-500 font-medium mt-1">Available</div> )}
-        </div>
-      );
-    }
-    return days;
-  };
-
-  const totalRooms = rooms?.length || 0;
-  const totalBookings = bookings?.length || 0;
-  const totalRevenue = bookings?.reduce((sum, booking) => sum + (parseFloat(booking.total_amount) || 0), 0) || 0;
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'AVAILABLE': return 'bg-green-100 text-green-700 border-green-200';
-      case 'OCCUPIED': return 'bg-red-100 text-red-700 border-red-200';
-      case 'DIRTY': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'MAINTENANCE': return 'bg-gray-100 text-gray-700 border-gray-200';
-      default: return 'bg-slate-100 text-slate-700';
-    }
-  };
-
-  if (loading) return <div className="flex items-center justify-center h-full text-blue-600"><Loader2 className="animate-spin mr-2" /> Loading...</div>;
-  if (error) return <div className="p-8 text-red-600 font-bold">{error}</div>;
+  if (loading) return <div className="p-8 flex items-center text-blue-600"><Loader2 className="animate-spin mr-2"/> Loading Dashboard...</div>;
 
   return (
-    <div className="p-8">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">Overview</h2>
+    <div className="p-6 bg-slate-50 min-h-screen">
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-4 bg-green-100 rounded-full text-green-600"><IndianRupee size={28} /></div>
-          <div><p className="text-sm text-slate-500">Revenue</p><h3 className="text-2xl font-bold text-slate-800">₹{totalRevenue.toLocaleString()}</h3></div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-4 bg-blue-100 rounded-full text-blue-600"><CalendarCheck size={28} /></div>
-          <div><p className="text-sm text-slate-500">Bookings</p><h3 className="text-2xl font-bold text-slate-800">{totalBookings}</h3></div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-4 bg-purple-100 rounded-full text-purple-600"><BedDouble size={28} /></div>
-          <div><p className="text-sm text-slate-500">Rooms</p><h3 className="text-2xl font-bold text-slate-800">{totalRooms}</h3></div>
-        </div>
+      {/* HEADER */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-800">Dashboard</h1>
+        <p className="text-slate-500">Welcome back, ADMIN</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* 📊 TOP STATS CARDS */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         
-        <div className="lg:col-span-2">
-           <h2 className="text-xl font-bold text-slate-800 mb-4">Housekeeping & Status</h2>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             {rooms.map(room => (
-               <div key={room.id} className={`p-5 rounded-xl shadow-sm border-2 relative group bg-white ${getStatusColor(room.status).split(' ')[2]}`}>
-                 
-                 <div className="flex justify-between items-start mb-2">
-                   <h3 className="font-bold text-slate-800">Room {room.room_number}</h3>
-                   <span className={`px-2 py-1 rounded text-xs font-bold ${getStatusColor(room.status)}`}>
-                     {room.status}
-                   </span>
-                 </div>
-                 
-                 {room.status === 'OCCUPIED' ? (
-                   <>
-                     <div className="flex items-center gap-2 text-sm text-slate-600 mb-3 bg-slate-50 p-2 rounded">
-                       <User size={14}/> <span className="font-semibold">{getGuestName(room.id)}</span>
-                     </div>
-                     <button onClick={() => handleCheckOut(room.id)} className="w-full bg-slate-800 text-white py-2 rounded text-sm hover:bg-slate-700 flex items-center justify-center gap-2">
-                       <LogOut size={14} /> Check Out & Mark Dirty
-                     </button>
-                   </>
-                 ) : (
-                   <div className="flex gap-2 mt-4">
-                     {room.status === 'DIRTY' && (
-                       // 👇 FIXED: This was the problem. Now using Sparkles!
-                       <button onClick={() => updateRoomStatus(room.id, 'AVAILABLE')} className="flex-1 bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700 flex items-center justify-center gap-1">
-                         <Sparkles size={14}/> Mark Clean
-                       </button>
-                     )}
-                     
-                     {room.status === 'MAINTENANCE' ? (
-                        <button onClick={() => updateRoomStatus(room.id, 'AVAILABLE')} className="flex-1 bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700">
-                          Finish Repairs
-                        </button>
-                     ) : (
-                        <button onClick={() => updateRoomStatus(room.id, 'MAINTENANCE')} className="bg-gray-200 text-gray-600 px-3 py-2 rounded text-sm hover:bg-gray-300" title="Mark for Maintenance">
-                          <Wrench size={14}/>
-                        </button>
-                     )}
-                   </div>
-                 )}
-               </div>
-             ))}
-           </div>
+        {/* Card 1: Rooms to Sell */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border-t-4 border-teal-400 flex flex-col items-center justify-center">
+          <div className="p-3 rounded-full bg-teal-50 text-teal-500 mb-2"><Building size={24}/></div>
+          <div className="text-2xl font-bold text-slate-800">{rmsToSell}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">RMS TO SELL</div>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-slate-800">This Month</h2>
-            <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">{new Date().toLocaleString('default', { month: 'long' })}</span>
+        {/* Card 2: Total Occupancy */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border-t-4 border-purple-500 flex flex-col items-center justify-center">
+          <div className="p-3 rounded-full bg-purple-50 text-purple-600 mb-2"><Briefcase size={24}/></div>
+          <div className="text-2xl font-bold text-slate-800">{occupiedRooms}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">TOTAL OCC</div>
+        </div>
+
+        {/* Card 3: Dirty Vacant */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border-t-4 border-yellow-400 flex flex-col items-center justify-center">
+          <div className="p-3 rounded-full bg-yellow-50 text-yellow-500 mb-2"><AlertTriangle size={24}/></div>
+          <div className="text-2xl font-bold text-slate-800">{dirtyVacant}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">DIRTY VACANT</div>
+        </div>
+
+        {/* Card 4: Clean Vacant */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border-t-4 border-green-500 flex flex-col items-center justify-center">
+          <div className="p-3 rounded-full bg-green-50 text-green-500 mb-2"><CheckCircle size={24}/></div>
+          <div className="text-2xl font-bold text-slate-800">{cleanVacant}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">CLEAN VACANT</div>
+        </div>
+
+        {/* Card 5: Exp. Arrival */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border-t-4 border-blue-500 flex flex-col items-center justify-center">
+          <div className="p-3 rounded-full bg-blue-50 text-blue-500 mb-2"><LogIn size={24}/></div>
+          <div className="text-2xl font-bold text-slate-800">{expectedArrivals.length}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">EXP. ARR</div>
+        </div>
+
+        {/* Card 6: Exp. Departure */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border-t-4 border-red-500 flex flex-col items-center justify-center">
+          <div className="p-3 rounded-full bg-red-50 text-red-500 mb-2"><LogOut size={24}/></div>
+          <div className="text-2xl font-bold text-slate-800">{expectedDepartures.length}</div>
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">EXP. DEP</div>
+        </div>
+
+      </div>
+
+      {/* 📋 SPLIT TABLES */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        {/* Left: Expected Arrivals */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+            <h3 className="font-bold text-slate-700 flex items-center gap-2">
+              <LogIn size={18} className="text-blue-500"/> Expected Arrival
+            </h3>
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">{todayStr}</span>
           </div>
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-            <div className="grid grid-cols-5 gap-2">{renderCalendar()}</div>
+          <table className="w-full text-sm text-left">
+            <thead className="bg-white text-slate-400 border-b">
+              <tr><th className="p-3 font-medium">Reser. No</th><th className="p-3 font-medium">Guest Name</th><th className="p-3 font-medium">Room</th></tr>
+            </thead>
+            <tbody>
+              {expectedArrivals.length > 0 ? expectedArrivals.map(b => (
+                <tr key={b.id} className="border-b hover:bg-slate-50">
+                  <td className="p-3 text-blue-600 font-bold">#{b.id}</td>
+                  <td className="p-3 font-medium text-slate-700">{b.guest_details?.full_name}</td>
+                  <td className="p-3 text-slate-500">{b.room_details?.room_number || "Unassigned"}</td>
+                </tr>
+              )) : (
+                <tr><td colSpan="3" className="p-6 text-center text-slate-400 italic">No arrivals expected today.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Right: Expected Departures */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+            <h3 className="font-bold text-slate-700 flex items-center gap-2">
+              <LogOut size={18} className="text-red-500"/> Expected Departure
+            </h3>
+            <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">{todayStr}</span>
           </div>
+          <table className="w-full text-sm text-left">
+            <thead className="bg-white text-slate-400 border-b">
+              <tr><th className="p-3 font-medium">Room</th><th className="p-3 font-medium">Guest Name</th><th className="p-3 font-medium">Balance</th></tr>
+            </thead>
+            <tbody>
+              {expectedDepartures.length > 0 ? expectedDepartures.map(b => (
+                <tr key={b.id} className="border-b hover:bg-slate-50">
+                  <td className="p-3 font-bold text-slate-700">{b.room_details?.room_number}</td>
+                  <td className="p-3 text-slate-600">{b.guest_details?.full_name}</td>
+                  <td className="p-3 font-mono text-red-600 font-bold">₹{b.total_amount}</td> 
+                </tr>
+              )) : (
+                <tr><td colSpan="3" className="p-6 text-center text-slate-400 italic">No departures expected today.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
       </div>
     </div>
   );
 };
+
 export default Dashboard;

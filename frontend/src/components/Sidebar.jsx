@@ -1,62 +1,102 @@
-// 👇 Updated Imports: Added CalendarDays and FileText
-import { LayoutDashboard, BedDouble, Users, CalendarCheck, LogOut, Utensils, CalendarDays, FileText } from 'lucide-react';
+import { 
+  LayoutDashboard, BedDouble, Users, CalendarCheck, 
+  LogOut, Utensils, CalendarDays, FileText, ConciergeBell 
+} from 'lucide-react'; // 👈 Added ConciergeBell
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const menuItems = [
-    { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
-    { icon: <Users size={20} />, label: 'Guests', path: '/guests' },
-    { icon: <BedDouble size={20} />, label: 'Rooms', path: '/rooms' },
-    { icon: <CalendarCheck size={20} />, label: 'Bookings', path: '/bookings' },
-    { icon: <Utensils size={20} />, label: 'Services & Menu', path: '/services' },
-    // 👇 NEW LINKS ADDED HERE
-    { icon: <CalendarDays size={20} />, label: 'Timeline View', path: '/calendar' },
-    { icon: <FileText size={20} />, label: 'Reports', path: '/reports' },
+  // Define Groups
+  const groups = [
+    {
+      title: "Main",
+      items: [
+        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/' },
+      ]
+    },
+    {
+      title: "Front Office",
+      items: [
+        // 👇 NEW LINK: Reception Desk
+        { icon: <ConciergeBell size={18} />, label: 'Reception Desk', path: '/front-desk' },
+        { icon: <BedDouble size={18} />, label: 'Room Status', path: '/rooms' },
+        { icon: <Users size={18} />, label: 'Guest Management', path: '/guests' },
+      ]
+    },
+    {
+      title: "Reservations",
+      items: [
+        { icon: <CalendarCheck size={18} />, label: 'Booking List', path: '/bookings' },
+        { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' },
+      ]
+    },
+    {
+      title: "Point of Sale",
+      items: [
+        { icon: <Utensils size={18} />, label: 'Services & Menu', path: '/services' },
+      ]
+    },
+    {
+      title: "Night Audit",
+      items: [
+        { icon: <FileText size={18} />, label: 'Reports & Stats', path: '/reports' },
+      ]
+    }
   ];
 
-  // 🚪 Logout Function
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
-      window.location.href = '/login'; // Force refresh to clear state
+      window.location.href = '/login';
     }
   };
 
   return (
-    <div className="h-screen w-64 bg-slate-900 text-white flex flex-col shrink-0">
-      <div className="p-6 border-b border-slate-800">
-        <h1 className="text-2xl font-bold text-blue-400">Atithi<span className="text-white">SaaS</span></h1>
+    <div className="h-screen w-64 bg-slate-900 text-white flex flex-col shrink-0 overflow-y-auto">
+      {/* Brand Header */}
+      <div className="p-6 border-b border-slate-800 flex items-center gap-2">
+        <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white">A</div>
+        <h1 className="text-xl font-bold text-blue-400">Atithi<span className="text-white">HMS</span></h1>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
-        {menuItems.map((item) => (
-          <button
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-              location.pathname === item.path 
-                ? 'bg-blue-600 text-white shadow-lg' 
-                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-            }`}
-          >
-            {item.icon}
-            <span className="font-medium">{item.label}</span>
-          </button>
+      {/* Navigation Groups */}
+      <nav className="flex-1 p-4 space-y-6">
+        {groups.map((group, index) => (
+          <div key={index}>
+            <div className="px-4 mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+              {group.title}
+            </div>
+            <div className="space-y-1">
+              {group.items.map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-colors text-sm ${
+                    location.pathname === item.path 
+                      ? 'bg-blue-600 text-white shadow-lg font-medium' 
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
+      {/* Footer / Logout */}
       <div className="p-4 border-t border-slate-800">
-        {/* Logout Button */}
         <button 
           onClick={handleLogout}
-          className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+          className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors text-sm"
         >
-          <LogOut size={20} />
-          <span>Logout</span>
+          <LogOut size={18} />
+          <span>Logout System</span>
         </button>
       </div>
     </div>

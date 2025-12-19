@@ -1,29 +1,35 @@
 import { useEffect, useState } from 'react';
-// 👇 Added ShoppingCart for the "Add to Bill" button
-import { Plus, X, Calendar, Printer, ShoppingCart } from 'lucide-react'; 
+import { 
+  Plus, X, Calendar, Printer, ShoppingCart, 
+  CheckCircle, User, CreditCard, ChevronRight, ChevronLeft 
+} from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [guests, setGuests] = useState([]);
-  const [services, setServices] = useState([]); // 👈 Store Menu Items
+  const [services, setServices] = useState([]);
   
-  // Modals
-  const [showBookingForm, setShowBookingForm] = useState(false);
-  const [showChargeForm, setShowChargeForm] = useState(null); // Stores Booking ID when open
+  // Modal States
+  const [showWizard, setShowWizard] = useState(false);
+  const [showChargeForm, setShowChargeForm] = useState(null); 
+  const [currentStep, setCurrentStep] = useState(1); // 1=Dates, 2=Guest, 3=Confirm
 
   const token = localStorage.getItem('access_token');
 
-  // New Booking Data
+  // New Booking Wizard Data
   const [bookingData, setBookingData] = useState({
-    room: '', guest: '', check_in_date: '', check_out_date: '', total_amount: '', status: 'CONFIRMED'
+    room: '', 
+    guest: '', 
+    check_in_date: '', 
+    check_out_date: '', 
+    total_amount: 0, 
+    status: 'CONFIRMED'
   });
 
   // Charge Data (POS)
-  const [chargeData, setChargeData] = useState({
-    service: '', quantity: 1
-  });
+  const [chargeData, setChargeData] = useState({ service: '', quantity: 1 });
 
   // 1. Fetch ALL Data
   const fetchAllData = async () => {
@@ -33,7 +39,7 @@ const Bookings = () => {
         fetch(API_URL + '/api/bookings/', { headers }),
         fetch(API_URL + '/api/rooms/', { headers }),
         fetch(API_URL + '/api/guests/', { headers }),
-        fetch(API_URL + '/api/services/', { headers }) // 👈 Fetch Menu
+        fetch(API_URL + '/api/services/', { headers }) 
       ]);
       
       if (resBookings.ok) setBookings(await resBookings.json());
@@ -46,246 +52,262 @@ const Bookings = () => {
 
   useEffect(() => { fetchAllData(); }, []);
 
-  // ---------------------------------------------------------
-  // 🛒 POS LOGIC: Add Charge to Booking
-  // ---------------------------------------------------------
+  // 🛒 POS LOGIC
   const handleAddCharge = async (e) => {
     e.preventDefault();
     if (!showChargeForm) return;
 
-    // Find price of selected service
     const selectedService = services.find(s => s.id === parseInt(chargeData.service));
     const totalCost = selectedService ? selectedService.price * chargeData.quantity : 0;
-
-    const payload = {
-      booking: showChargeForm, // The ID of the booking we are charging
-      service: chargeData.service,
-      quantity: chargeData.quantity,
-      total_cost: totalCost
-    };
 
     try {
       const response = await fetch(API_URL + '/api/charges/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          booking: showChargeForm,
+          service: chargeData.service,
+          quantity: chargeData.quantity,
+          total_cost: totalCost
+        })
       });
 
       if (response.ok) {
-        alert("Item Added to Bill! 🛒");
-        setShowChargeForm(null); // Close modal
+        alert("Item Added! 🛒");
+        setShowChargeForm(null); 
         setChargeData({ service: '', quantity: 1 });
-        fetchAllData(); // Refresh to see updated total
-      } else {
-        alert("Failed to add charge. (Did you update the Backend?)");
+        fetchAllData(); 
       }
     } catch (error) { console.error(error); }
   };
 
-  // ---------------------------------------------------------
-  // 🖨️ PRINT INVOICE LOGIC (Updated to include POS Items)
-  // ---------------------------------------------------------
+  // 🖨️ PRINT INVOICE
   const handlePrintInvoice = (booking) => {
     const printWindow = window.open('', '', 'width=800,height=600');
-    
-    // Calculate Extras Total
     const extrasTotal = booking.charges ? booking.charges.reduce((sum, item) => sum + parseFloat(item.total_cost), 0) : 0;
     const grandTotal = parseFloat(booking.total_amount) + extrasTotal;
 
-    // Generate Rows for Extra Charges
     const extrasRows = booking.charges?.map(charge => `
-      <tr>
-        <td>${charge.service_name || 'Service'} (x${charge.quantity})</td>
-        <td>-</td>
-        <td>₹${charge.total_cost}</td>
-      </tr>
+      <tr><td>${charge.service_name || 'Service'} (x${charge.quantity})</td><td>-</td><td>₹${charge.total_cost}</td></tr>
     `).join('') || '';
 
-    const invoiceContent = `
-      <html>
-        <head>
-          <title>Invoice #${booking.id}</title>
-          <style>
-            body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
-            .h-title { font-size: 24px; font-weight: bold; color: #2563eb; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
-            .box { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
-            .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            .table th { text-align: left; background: #e2e8f0; padding: 10px; }
-            .table td { border-bottom: 1px solid #eee; padding: 10px; }
-            .total { text-align: right; font-size: 20px; font-weight: bold; margin-top: 30px; color: #16a34a; }
-            .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px;}
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="h-title">Atithi Hotel</div>
-            <p>123 Hotel Street, City Center, India</p>
-          </div>
-
-          <div class="info-grid">
-            <div class="box">
-              <strong>Billed To:</strong><br>${booking.guest_details?.full_name}<br>Phone: ${booking.guest_details?.phone}
-            </div>
-            <div class="box">
-              <strong>Invoice:</strong><br>#INV-${booking.id}<br>Date: ${new Date().toLocaleDateString()}
-            </div>
-          </div>
-
-          <table class="table">
-            <thead><tr><th>Description</th><th>Dates</th><th>Amount</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>Room Charge (${booking.room_details?.room_number})</td>
-                <td>${booking.check_in_date} to ${booking.check_out_date}</td>
-                <td>₹${booking.total_amount}</td>
-              </tr>
-              ${extrasRows} 
-            </tbody>
-          </table>
-
-          <div class="total">Grand Total: ₹${grandTotal}</div>
-          <div class="footer">Thank you for staying with us!</div>
-        </body>
-      </html>
+    const html = `
+      <html><head><title>Invoice #${booking.id}</title>
+      <style>body{font-family:sans-serif;padding:40px;color:#333}.header{text-align:center;border-bottom:2px solid #eee;padding-bottom:20px;margin-bottom:30px}.box{background:#f8fafc;padding:15px;border:1px solid #eee;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}table{width:100%;border-collapse:collapse}th{text-align:left;background:#e2e8f0;padding:10px}td{border-bottom:1px solid #eee;padding:10px}.total{text-align:right;font-size:20px;color:#16a34a;font-weight:bold;margin-top:30px}</style>
+      </head><body>
+      <div class="header"><h1>Atithi Hotel</h1><p>Invoice #${booking.id}</p></div>
+      <div class="grid">
+        <div class="box"><strong>Billed To:</strong><br>${booking.guest_details?.full_name}</div>
+        <div class="box"><strong>Details:</strong><br>Date: ${new Date().toLocaleDateString()}</div>
+      </div>
+      <table><thead><tr><th>Item</th><th>Dates</th><th>Amount</th></tr></thead><tbody>
+        <tr><td>Room Charge (${booking.room_details?.room_number})</td><td>${booking.check_in_date} to ${booking.check_out_date}</td><td>₹${booking.total_amount}</td></tr>
+        ${extrasRows}
+      </tbody></table>
+      <div class="total">Total: ₹${grandTotal}</div>
+      </body></html>
     `;
-    printWindow.document.write(invoiceContent);
+    printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+    printWindow.print();
   };
 
-  // Form Handlers
-  const handleBookingChange = (e) => setBookingData({ ...bookingData, [e.target.name]: e.target.value });
-
-  // Auto-Calculate Room Price
-  useEffect(() => {
+  // 🧙‍♂️ WIZARD LOGIC
+  const calculateTotal = () => {
     if (bookingData.room && bookingData.check_in_date && bookingData.check_out_date) {
-      const selectedRoom = rooms.find(r => r.id === parseInt(bookingData.room));
+      const room = rooms.find(r => r.id === parseInt(bookingData.room));
       const start = new Date(bookingData.check_in_date);
       const end = new Date(bookingData.check_out_date);
-      const daysDiff = Math.ceil((end - start) / (1000 * 3600 * 24)); 
-      if (selectedRoom && daysDiff > 0) {
-        setBookingData(prev => ({ ...prev, total_amount: daysDiff * selectedRoom.price_per_night }));
-      }
+      const days = Math.ceil((end - start) / (1000 * 3600 * 24));
+      if (room && days > 0) return days * room.price_per_night;
     }
-  }, [bookingData.room, bookingData.check_in_date, bookingData.check_out_date, rooms]);
+    return 0;
+  };
 
-  const handleBookingSubmit = async (e) => {
-    e.preventDefault();
+  const handleBookingSubmit = async () => {
+    const finalAmount = calculateTotal();
     try {
       const response = await fetch(API_URL + '/api/bookings/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(bookingData)
+        body: JSON.stringify({ ...bookingData, total_amount: finalAmount })
       });
-      if (response.ok) { alert("Booking Created!"); setShowBookingForm(false); fetchAllData(); }
+      if (response.ok) { 
+        alert("Booking Confirmed! 🎉"); 
+        setShowWizard(false); 
+        fetchAllData(); 
+        setBookingData({ room: '', guest: '', check_in_date: '', check_out_date: '', total_amount: 0, status: 'CONFIRMED' });
+        setCurrentStep(1);
+      }
     } catch (error) { console.error(error); }
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Booking Management</h2>
-        <button onClick={() => setShowBookingForm(!showBookingForm)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
-          {showBookingForm ? <><X size={18}/> Cancel</> : <><Plus size={18}/> New Booking</>}
+    <div className="p-8 bg-slate-50 min-h-screen">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-800">Reservations</h2>
+          <p className="text-slate-500">Manage bookings and invoices</p>
+        </div>
+        <button onClick={() => setShowWizard(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-lg">
+          <Plus size={20}/> New Reservation
         </button>
       </div>
 
-      {/* NEW BOOKING FORM */}
-      {showBookingForm && (
-        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-100 mb-8 animate-pulse-once">
-          <h3 className="text-lg font-bold mb-4">Create Reservation</h3>
-          <form onSubmit={handleBookingSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <select name="guest" className="border p-2 rounded" required value={bookingData.guest} onChange={handleBookingChange}>
-              <option value="">-- Select Guest --</option>
-              {guests.map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
-            </select>
-            <select name="room" className="border p-2 rounded" required value={bookingData.room} onChange={handleBookingChange}>
-              <option value="">-- Select Room --</option>
-              {rooms.map(r => <option key={r.id} value={r.id}>Room {r.room_number} (₹{r.price_per_night})</option>)}
-            </select>
-            <input type="date" name="check_in_date" className="border p-2 rounded" required value={bookingData.check_in_date} onChange={handleBookingChange} />
-            <input type="date" name="check_out_date" className="border p-2 rounded" required value={bookingData.check_out_date} onChange={handleBookingChange} />
-            <input type="number" className="border p-2 rounded bg-slate-100" readOnly value={bookingData.total_amount} placeholder="Total Amount" />
-            <button type="submit" className="md:col-span-2 bg-green-600 text-white py-2 rounded font-bold">Confirm Booking</button>
-          </form>
+      {/* 🧙‍♂️ RESERVATION WIZARD MODAL */}
+      {showWizard && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-[600px] shadow-2xl overflow-hidden animate-fade-in-up">
+            
+            {/* Header Steps */}
+            <div className="bg-slate-50 border-b border-slate-100 p-4 flex justify-between items-center">
+               <h3 className="font-bold text-slate-700">New Booking Wizard</h3>
+               <button onClick={() => setShowWizard(false)}><X size={20} className="text-slate-400 hover:text-red-500"/></button>
+            </div>
+
+            {/* Steps Indicator */}
+            <div className="flex justify-center gap-4 py-4 border-b border-slate-50">
+               <div className={`flex items-center gap-2 text-sm font-bold ${currentStep >= 1 ? 'text-blue-600' : 'text-slate-300'}`}>
+                 <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${currentStep >= 1 ? 'bg-blue-100 border-blue-600' : 'border-slate-300'}`}>1</div> Dates
+               </div>
+               <div className="w-8 h-px bg-slate-200 mt-3"></div>
+               <div className={`flex items-center gap-2 text-sm font-bold ${currentStep >= 2 ? 'text-blue-600' : 'text-slate-300'}`}>
+                 <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${currentStep >= 2 ? 'bg-blue-100 border-blue-600' : 'border-slate-300'}`}>2</div> Guest
+               </div>
+               <div className="w-8 h-px bg-slate-200 mt-3"></div>
+               <div className={`flex items-center gap-2 text-sm font-bold ${currentStep >= 3 ? 'text-blue-600' : 'text-slate-300'}`}>
+                 <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${currentStep >= 3 ? 'bg-blue-100 border-blue-600' : 'border-slate-300'}`}>3</div> Pay
+               </div>
+            </div>
+
+            {/* Wizard Content */}
+            <div className="p-8">
+              
+              {/* STEP 1: ROOM & DATES */}
+              {currentStep === 1 && (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Calendar className="text-blue-500"/> Select Stay Dates</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500">Check-In</label>
+                      <input type="date" className="w-full border p-3 rounded-lg bg-slate-50" 
+                        value={bookingData.check_in_date} onChange={(e) => setBookingData({...bookingData, check_in_date: e.target.value})}/>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-500">Check-Out</label>
+                      <input type="date" className="w-full border p-3 rounded-lg bg-slate-50" 
+                        value={bookingData.check_out_date} onChange={(e) => setBookingData({...bookingData, check_out_date: e.target.value})}/>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-500">Select Room</label>
+                    <select className="w-full border p-3 rounded-lg" value={bookingData.room} onChange={(e) => setBookingData({...bookingData, room: e.target.value})}>
+                      <option value="">-- Choose Available Room --</option>
+                      {rooms.filter(r => r.status === 'AVAILABLE').map(r => (
+                        <option key={r.id} value={r.id}>Room {r.room_number} ({r.room_type}) - ₹{r.price_per_night}/night</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: GUEST */}
+              {currentStep === 2 && (
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><User className="text-blue-500"/> Guest Details</h4>
+                  <select className="w-full border p-3 rounded-lg bg-slate-50" value={bookingData.guest} onChange={(e) => setBookingData({...bookingData, guest: e.target.value})}>
+                    <option value="">-- Select Existing Guest --</option>
+                    {guests.map(g => <option key={g.id} value={g.id}>{g.full_name} ({g.phone})</option>)}
+                  </select>
+                  <div className="text-center text-xs text-slate-400 my-2">- OR -</div>
+                  <button onClick={() => window.location.href='/guests'} className="w-full border-2 border-dashed border-slate-300 text-slate-500 p-3 rounded-lg hover:border-blue-500 hover:text-blue-500">
+                    + Register New Guest Profile
+                  </button>
+                </div>
+              )}
+
+              {/* STEP 3: CONFIRM */}
+              {currentStep === 3 && (
+                <div className="space-y-4 text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle size={32} className="text-green-600"/>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800">Confirm Reservation</h4>
+                  <div className="bg-slate-50 p-4 rounded-xl text-left text-sm space-y-2 border border-slate-100">
+                    <div className="flex justify-between"><span>Room:</span> <strong>{rooms.find(r => r.id === parseInt(bookingData.room))?.room_number}</strong></div>
+                    <div className="flex justify-between"><span>Dates:</span> <strong>{bookingData.check_in_date} to {bookingData.check_out_date}</strong></div>
+                    <div className="flex justify-between text-lg font-bold text-blue-600 border-t border-slate-200 pt-2 mt-2">
+                      <span>Total to Pay:</span> <span>₹{calculateTotal()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer Actions */}
+            <div className="bg-slate-50 p-4 flex justify-between">
+              {currentStep > 1 ? (
+                <button onClick={() => setCurrentStep(currentStep - 1)} className="text-slate-500 font-bold px-4 py-2 hover:bg-slate-200 rounded-lg">Back</button>
+              ) : <div></div>}
+              
+              {currentStep < 3 ? (
+                <button 
+                  disabled={!bookingData.room || !bookingData.check_in_date}
+                  onClick={() => setCurrentStep(currentStep + 1)} 
+                  className="bg-blue-600 text-white font-bold px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                  Next Step <ChevronRight size={16}/>
+                </button>
+              ) : (
+                <button onClick={handleBookingSubmit} className="bg-green-600 text-white font-bold px-6 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2">
+                  Confirm Booking <CheckCircle size={16}/>
+                </button>
+              )}
+            </div>
+
+          </div>
         </div>
       )}
 
-      {/* CHARGE MODAL (POPUP) */}
+      {/* POS CHARGE MODAL */}
       {showChargeForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl w-96 shadow-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Add Item to Bill</h3>
-              <button onClick={() => setShowChargeForm(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
+            <h3 className="text-lg font-bold mb-4">Add Service Charge</h3>
             <form onSubmit={handleAddCharge} className="flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500">Select Item</label>
-                <select className="w-full border p-2 rounded" required 
-                  value={chargeData.service} 
-                  onChange={(e) => setChargeData({...chargeData, service: e.target.value})}>
-                  <option value="">-- Choose Menu Item --</option>
-                  {services.map(s => <option key={s.id} value={s.id}>{s.name} - ₹{s.price}</option>)}
-                </select>
+              <select className="border p-2 rounded" required value={chargeData.service} onChange={(e) => setChargeData({...chargeData, service: e.target.value})}>
+                <option value="">-- Select Item --</option>
+                {services.map(s => <option key={s.id} value={s.id}>{s.name} - ₹{s.price}</option>)}
+              </select>
+              <input type="number" min="1" className="border p-2 rounded" required value={chargeData.quantity} onChange={(e) => setChargeData({...chargeData, quantity: e.target.value})}/>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowChargeForm(null)} className="flex-1 bg-slate-200 py-2 rounded">Cancel</button>
+                <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded font-bold">Add</button>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500">Quantity</label>
-                <input type="number" min="1" className="w-full border p-2 rounded" required 
-                  value={chargeData.quantity} 
-                  onChange={(e) => setChargeData({...chargeData, quantity: e.target.value})}/>
-              </div>
-              <button type="submit" className="bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700">Add Charge</button>
             </form>
           </div>
         </div>
       )}
 
       {/* BOOKINGS TABLE */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase">
             <tr><th className="p-4">Guest</th><th className="p-4">Room</th><th className="p-4">Dates</th><th className="p-4">Total</th><th className="p-4">Actions</th></tr>
           </thead>
           <tbody>
-            {bookings.length > 0 ? bookings.map(b => {
-              // Calculate Live Total (Room + Extras)
-              const extras = b.charges ? b.charges.reduce((sum, i) => sum + parseFloat(i.total_cost), 0) : 0;
-              const grandTotal = parseFloat(b.total_amount) + extras;
-
-              return (
-                <tr key={b.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="p-4 font-bold">{b.guest_details?.full_name}</td>
-                  <td className="p-4">{b.room_details?.room_number}</td>
-                  <td className="p-4 text-sm text-slate-500">{b.check_in_date} <br/>to {b.check_out_date}</td>
-                  <td className="p-4">
-                    <div className="font-bold text-green-600">₹{grandTotal}</div>
-                    {extras > 0 && <div className="text-xs text-slate-400">(Includes ₹{extras} extras)</div>}
-                  </td>
-                  <td className="p-4 flex items-center gap-2">
-                    {/* ADD CHARGE BUTTON (Shopping Cart) */}
-                    <button 
-                      onClick={() => setShowChargeForm(b.id)}
-                      className="bg-orange-100 text-orange-700 p-2 rounded hover:bg-orange-200 transition" 
-                      title="Add Food/Service"
-                    >
-                      <ShoppingCart size={16} />
-                    </button>
-                    {/* PRINT BUTTON */}
-                    <button 
-                      onClick={() => handlePrintInvoice(b)}
-                      className="bg-blue-100 text-blue-700 p-2 rounded hover:bg-blue-200 transition" 
-                      title="Print Invoice"
-                    >
-                      <Printer size={16} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            }) : <tr><td colSpan="5" className="p-8 text-center text-slate-400">No bookings found.</td></tr>}
+            {bookings.map(b => (
+              <tr key={b.id} className="border-b hover:bg-slate-50">
+                <td className="p-4 font-bold text-slate-700">{b.guest_details?.full_name}</td>
+                <td className="p-4"><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold">{b.room_details?.room_number}</span></td>
+                <td className="p-4 text-slate-500">{b.check_in_date} <span className="mx-1">➔</span> {b.check_out_date}</td>
+                <td className="p-4 font-bold text-green-600">₹{parseFloat(b.total_amount) + (b.charges?.reduce((s, i) => s + parseFloat(i.total_cost), 0) || 0)}</td>
+                <td className="p-4 flex gap-2">
+                  <button onClick={() => setShowChargeForm(b.id)} className="p-2 text-orange-600 hover:bg-orange-50 rounded" title="POS"><ShoppingCart size={18}/></button>
+                  <button onClick={() => handlePrintInvoice(b)} className="p-2 text-blue-600 hover:bg-blue-50 rounded" title="Invoice"><Printer size={18}/></button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
