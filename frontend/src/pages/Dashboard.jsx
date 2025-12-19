@@ -1,50 +1,94 @@
 import { useEffect, useState } from 'react';
-import { IndianRupee, BedDouble, CalendarCheck, LogOut } from 'lucide-react';
-import { API_URL } from '../config'; // <--- Importing the Cloud URL
+import { IndianRupee, BedDouble, CalendarCheck, LogOut, Loader2, User } from 'lucide-react';
+import { API_URL } from '../config'; 
 
 const Dashboard = () => {
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true); // <--- 1. LOADING STATE
+  const [error, setError] = useState(null);     // <--- 2. ERROR STATE
 
-  // Fetch Data
-  const fetchData = () => {
-    fetch(API_URL + '/api/rooms/')
-      .then(res => res.json())
-      .then(data => setRooms(data));
+  const token = localStorage.getItem('access_token');
 
-    fetch(API_URL + '/api/bookings/')
-      .then(res => res.json())
-      .then(data => setBookings(data));
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch Rooms
+      const roomRes = await fetch(API_URL + '/api/rooms/', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      // Fetch Bookings
+      const bookingRes = await fetch(API_URL + '/api/bookings/', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!roomRes.ok || !bookingRes.ok) throw new Error("Failed to fetch data");
+
+      const roomData = await roomRes.json();
+      const bookingData = await bookingRes.json();
+
+      setRooms(roomData);
+      setBookings(bookingData);
+    } catch (err) {
+      console.error("Error:", err);
+      setError("Could not load dashboard data. Please check your connection.");
+    } finally {
+      setLoading(false); // <--- Stop loading whether success or fail
+    }
   };
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  // 🧹 HANDLE CHECK-OUT
   const handleCheckOut = async (roomId) => {
-    if (!window.confirm("Are you sure the guest has left? This will make the room Available.")) return;
+    if (!window.confirm("Are you sure the guest has left?")) return;
 
     try {
       const response = await fetch(API_URL + `/api/rooms/${roomId}/`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ status: 'AVAILABLE' })
       });
 
       if (response.ok) {
         alert("Room is now Clean & Available! ✨");
-        fetchData(); // Refresh the screen
+        fetchData(); 
       }
     } catch (error) {
       console.error("Error:", error);
     }
   };
 
-  // Stats Logic
-  const totalRooms = rooms.length;
-  const totalBookings = bookings.length;
-  const totalRevenue = bookings.reduce((sum, booking) => sum + (parseFloat(booking.total_amount) || 0), 0);
+  // Helper to find who is in the room
+  const getGuestName = (roomId) => {
+    // Find a booking for this room that is still active (CONFIRMED/CHECKED_IN)
+    // Note: This matches the room ID to the booking's room ID
+    const activeBooking = bookings.find(b => b.room === roomId && b.status !== 'CHECKED_OUT');
+    return activeBooking?.guest_details?.full_name || "Unknown Guest";
+  };
+
+  // Stats
+  const totalRooms = rooms?.length || 0;
+  const totalBookings = bookings?.length || 0;
+  const totalRevenue = bookings?.reduce((sum, booking) => sum + (parseFloat(booking.total_amount) || 0), 0) || 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full text-blue-600">
+        <Loader2 className="animate-spin mr-2" /> Loading Dashboard...
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-8 text-red-600 font-bold">{error}</div>;
+  }
 
   return (
     <div className="p-8">
@@ -86,7 +130,14 @@ const Dashboard = () => {
             
             <p className="text-2xl font-bold text-slate-900 mb-2">₹{room.price_per_night}</p>
 
-            {/* SHOW CHECK-OUT BUTTON ONLY IF OCCUPIED */}
+            {/* 👇 SHOW GUEST NAME IF OCCUPIED */}
+            {room.status === 'OCCUPIED' && (
+              <div className="bg-slate-50 p-2 rounded mb-3 flex items-center gap-2 text-sm text-slate-600">
+                <User size={14} /> 
+                <span className="font-semibold">{getGuestName(room.id)}</span>
+              </div>
+            )}
+
             {room.status === 'OCCUPIED' && (
               <button 
                 onClick={() => handleCheckOut(room.id)}

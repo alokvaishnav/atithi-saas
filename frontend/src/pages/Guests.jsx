@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Plus, X, Phone, Mail } from 'lucide-react';
-import { API_URL } from '../config'; // <--- UPDATED IMPORT
+import { Plus, X, Phone, Mail, Trash2 } from 'lucide-react'; // 👈 Added Trash2 icon
+import { API_URL } from '../config'; 
 
 const Guests = () => {
   const [guests, setGuests] = useState([]);
   const [showForm, setShowForm] = useState(false);
   
+  // 🔐 Get the Token
+  const token = localStorage.getItem('access_token');
+
   // Guest Form Data
   const [formData, setFormData] = useState({
     full_name: '',
@@ -15,11 +18,23 @@ const Guests = () => {
   });
 
   // 1. Fetch Guests
-  const fetchGuests = () => {
-    fetch(API_URL + '/api/guests/') // <--- UPDATED URL
-      .then(res => res.json())
-      .then(data => setGuests(data))
-      .catch(err => console.error(err));
+  const fetchGuests = async () => {
+    try {
+      const response = await fetch(API_URL + '/api/guests/', {
+        headers: {
+          'Authorization': `Bearer ${token}` 
+        }
+      });
+      const data = await response.json();
+      
+      if (response.ok && Array.isArray(data)) {
+        setGuests(data);
+      } else {
+        console.error("Failed to fetch guests:", data);
+      }
+    } catch (err) {
+      console.error("Network Error:", err);
+    }
   };
 
   useEffect(() => {
@@ -35,17 +50,18 @@ const Guests = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Create a clean payload
     const payload = { ...formData };
-    // If email is empty string "", convert it to null so Backend accepts it
     if (!payload.email) {
         payload.email = null;
     }
 
     try {
-      const response = await fetch(API_URL + '/api/guests/', { // <--- UPDATED URL
+      const response = await fetch(API_URL + '/api/guests/', { 
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify(payload)
       });
 
@@ -53,7 +69,7 @@ const Guests = () => {
         alert("Guest Registered Successfully! 👤");
         setShowForm(false);
         setFormData({ full_name: '', phone: '', email: '', id_proof_number: '' });
-        fetchGuests();
+        fetchGuests(); // Refresh list
       } else {
         const errorData = await response.json();
         alert("Server Error: " + JSON.stringify(errorData));
@@ -61,6 +77,29 @@ const Guests = () => {
     } catch (error) {
       console.error("Error:", error);
       alert("Network Error: Could not connect to server.");
+    }
+  };
+
+  // 4. 👇 NEW: DELETE GUEST FUNCTION
+  const handleDelete = async (guestId) => {
+    if(!window.confirm("Are you sure you want to delete this guest?")) return;
+
+    try {
+      const response = await fetch(API_URL + `/api/guests/${guestId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        alert("Guest Deleted! 🗑️");
+        fetchGuests(); // Refresh list
+      } else {
+        alert("Could not delete guest. (They might have active bookings)");
+      }
+    } catch (error) {
+      console.error("Error deleting:", error);
     }
   };
 
@@ -120,7 +159,17 @@ const Guests = () => {
       {/* Guest List Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {guests.map(guest => (
-          <div key={guest.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3">
+          <div key={guest.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-3 relative group">
+            
+            {/* 👇 DELETE BUTTON (Visible on Hover) */}
+            <button 
+                onClick={() => handleDelete(guest.id)}
+                className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors"
+                title="Delete Guest"
+            >
+                <Trash2 size={18} />
+            </button>
+
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xl">
                 {guest.full_name.charAt(0)}

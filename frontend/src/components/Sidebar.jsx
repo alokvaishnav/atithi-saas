@@ -8,9 +8,18 @@ const Sidebar = () => {
   const menuItems = [
     { icon: <LayoutDashboard size={20} />, label: 'Dashboard', path: '/' },
     { icon: <Users size={20} />, label: 'Guests', path: '/guests' },
-    { icon: <BedDouble size={20} />, label: 'Rooms', path: '/rooms' }, // Placeholder
-    { icon: <CalendarCheck size={20} />, label: 'Bookings', path: '/bookings' }, // Placeholder
+    { icon: <BedDouble size={20} />, label: 'Rooms', path: '/rooms' },
+    { icon: <CalendarCheck size={20} />, label: 'Bookings', path: '/bookings' },
   ];
+
+  // 🚪 Logout Function
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to logout?")) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      window.location.href = '/login'; // Force refresh to clear state
+    }
+  };
 
   return (
     <div className="h-screen w-64 bg-slate-900 text-white flex flex-col shrink-0">
@@ -36,7 +45,11 @@ const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <button className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:bg-red-900/20 rounded-lg">
+        {/* 👇 Updated Logout Button */}
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+        >
           <LogOut size={20} />
           <span>Logout</span>
         </button>

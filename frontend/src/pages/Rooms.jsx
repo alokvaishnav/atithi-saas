@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Trash2, Plus, X } from 'lucide-react';
-import { API_URL } from '../config'; // <--- UPDATED IMPORT
+import { API_URL } from '../config';
 
 const Rooms = () => {
   const [rooms, setRooms] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  
+  // 🔐 Get the Token
+  const token = localStorage.getItem('access_token');
   
   // Form State
   const [formData, setFormData] = useState({
@@ -15,11 +18,23 @@ const Rooms = () => {
   });
 
   // 1. Fetch Rooms from Backend
-  const fetchRooms = () => {
-    fetch(API_URL + '/api/rooms/') // <--- UPDATED URL
-      .then(res => res.json())
-      .then(data => setRooms(data))
-      .catch(err => console.error(err));
+  const fetchRooms = async () => {
+    try {
+      const response = await fetch(API_URL + '/api/rooms/', {
+        headers: {
+          'Authorization': `Bearer ${token}` 
+        }
+      });
+      const data = await response.json();
+      
+      if (response.ok && Array.isArray(data)) {
+        setRooms(data);
+      } else {
+        console.error("Failed to fetch rooms:", data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
@@ -35,22 +50,48 @@ const Rooms = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(API_URL + '/api/rooms/', { // <--- UPDATED URL
+      const response = await fetch(API_URL + '/api/rooms/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify(formData)
       });
 
       if (response.ok) {
         alert("Room Created Successfully! 🎉");
-        setShowForm(false); // Close form
-        setFormData({ room_number: '', room_type: 'SINGLE', price_per_night: '', status: 'AVAILABLE' }); // Reset form
-        fetchRooms(); // Refresh list
+        setShowForm(false); 
+        setFormData({ room_number: '', room_type: 'SINGLE', price_per_night: '', status: 'AVAILABLE' }); 
+        fetchRooms(); 
       } else {
         alert("Failed to create room.");
       }
     } catch (error) {
       console.error("Error:", error);
+    }
+  };
+
+  // 4. 👇 NEW: DELETE ROOM FUNCTION
+  const handleDelete = async (roomId) => {
+    if(!window.confirm("Are you sure you want to delete this room?")) return;
+
+    try {
+      const response = await fetch(API_URL + `/api/rooms/${roomId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        alert("Room Deleted! 🗑️");
+        fetchRooms(); // Refresh list
+      } else {
+        alert("Could not delete room. (It might have active bookings)");
+      }
+    } catch (error) {
+      console.error("Error deleting:", error);
     }
   };
 
@@ -111,31 +152,39 @@ const Rooms = () => {
             </tr>
           </thead>
           <tbody>
-            {rooms.map(room => (
-              <tr key={room.id} className="border-b border-slate-50 hover:bg-slate-50">
-                <td className="p-4 font-bold text-slate-800">{room.room_number}</td>
-                <td className="p-4 text-slate-500">{room.room_type}</td>
-                <td className="p-4 font-medium">₹{room.price_per_night}</td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                    room.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {room.status}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <button className="text-red-400 hover:text-red-600">
-                    <Trash2 size={18} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {rooms.length > 0 ? (
+              rooms.map(room => (
+                <tr key={room.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <td className="p-4 font-bold text-slate-800">{room.room_number}</td>
+                  <td className="p-4 text-slate-500">{room.room_type}</td>
+                  <td className="p-4 font-medium">₹{room.price_per_night}</td>
+                  <td className="p-4">
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${
+                      room.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {room.status}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    {/* 👇 CONNECTED DELETE BUTTON */}
+                    <button 
+                      onClick={() => handleDelete(room.id)}
+                      className="text-red-400 hover:text-red-600"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+               <tr>
+                 <td colSpan="5" className="p-8 text-center text-slate-400">
+                   No rooms found. Add one above!
+                 </td>
+               </tr>
+            )}
           </tbody>
         </table>
-        
-        {rooms.length === 0 && (
-          <div className="p-8 text-center text-slate-400">No rooms found. Add one above!</div>
-        )}
       </div>
     </div>
   );

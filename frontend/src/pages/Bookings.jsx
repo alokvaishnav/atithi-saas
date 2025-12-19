@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Plus, X, Calendar } from 'lucide-react';
-import { API_URL } from '../config'; // <--- Importing the Cloud URL
+import { API_URL } from '../config'; 
 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [guests, setGuests] = useState([]);
   const [showForm, setShowForm] = useState(false);
+
+  // 🔐 Get the Token
+  const token = localStorage.getItem('access_token');
 
   // Form Data
   const [formData, setFormData] = useState({
@@ -18,18 +21,24 @@ const Bookings = () => {
     status: 'CONFIRMED'
   });
 
-  // 1. Fetch ALL Data
+  // 1. Fetch ALL Data (Bookings, Rooms, Guests) - NOW WITH AUTH
   const fetchAllData = async () => {
     try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+
       const [resBookings, resRooms, resGuests] = await Promise.all([
-        fetch(API_URL + '/api/bookings/'),
-        fetch(API_URL + '/api/rooms/'),
-        fetch(API_URL + '/api/guests/')
+        fetch(API_URL + '/api/bookings/', { headers }),
+        fetch(API_URL + '/api/rooms/', { headers }),
+        fetch(API_URL + '/api/guests/', { headers })
       ]);
       
-      setBookings(await resBookings.json());
-      setRooms(await resRooms.json());
-      setGuests(await resGuests.json());
+      if (resBookings.ok && resRooms.ok && resGuests.ok) {
+        setBookings(await resBookings.json());
+        setRooms(await resRooms.json());
+        setGuests(await resGuests.json());
+      } else {
+        console.error("Failed to fetch data. Check if you are logged in.");
+      }
     } catch (err) {
       console.error("Error fetching data:", err);
     }
@@ -67,7 +76,10 @@ const Bookings = () => {
     try {
       const response = await fetch(API_URL + '/api/bookings/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // <--- SHOW ID CARD HERE
+        },
         body: JSON.stringify(formData)
       });
 
@@ -169,28 +181,36 @@ const Bookings = () => {
             </tr>
           </thead>
           <tbody>
-            {bookings.map(booking => (
-              <tr key={booking.id} className="border-b border-slate-50 hover:bg-slate-50">
-                <td className="p-4 text-slate-400">#{booking.id}</td>
-                <td className="p-4 font-bold text-slate-800">
-                  {booking.guest_details ? booking.guest_details.full_name : 'Unknown'}
-                </td>
-                <td className="p-4 text-slate-600">
-                  Room {booking.room_details ? booking.room_details.room_number : 'N/A'}
-                </td>
-                <td className="p-4 text-sm">
-                  <div className="flex items-center gap-1 text-slate-500">
-                    <Calendar size={14}/> {booking.check_in_date}
-                  </div>
-                </td>
-                <td className="p-4 font-bold text-green-600">₹{booking.total_amount}</td>
-                <td className="p-4">
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">
-                    {booking.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {bookings.length > 0 ? (
+              bookings.map(booking => (
+                <tr key={booking.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <td className="p-4 text-slate-400">#{booking.id}</td>
+                  <td className="p-4 font-bold text-slate-800">
+                    {booking.guest_details ? booking.guest_details.full_name : 'Unknown'}
+                  </td>
+                  <td className="p-4 text-slate-600">
+                    Room {booking.room_details ? booking.room_details.room_number : 'N/A'}
+                  </td>
+                  <td className="p-4 text-sm">
+                    <div className="flex items-center gap-1 text-slate-500">
+                      <Calendar size={14}/> {booking.check_in_date}
+                    </div>
+                  </td>
+                  <td className="p-4 font-bold text-green-600">₹{booking.total_amount}</td>
+                  <td className="p-4">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">
+                      {booking.status}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            ) : (
+               <tr>
+                 <td colSpan="6" className="p-8 text-center text-slate-400">
+                   No bookings found.
+                 </td>
+               </tr>
+            )}
           </tbody>
         </table>
       </div>
