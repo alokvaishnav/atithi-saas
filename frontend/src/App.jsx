@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Guests from './pages/Guests';
 import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
+import Services from './pages/Services'; // 👈 1. IMPORT THIS
 
 // 🔒 THE GUARD: This checks if you are allowed to enter
 const ProtectedRoute = ({ children }) => {
@@ -69,6 +70,9 @@ function App() {
                     <Route path="/guests" element={<Guests />} />
                     <Route path="/rooms" element={<Rooms />} />
                     <Route path="/bookings" element={<Bookings />} />
+                    
+                    {/* 👇 2. ADD THIS ROUTE */}
+                    <Route path="/services" element={<Services />} />
                   </Routes>
                 </main>
               </div>

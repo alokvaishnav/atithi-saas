@@ -1,4 +1,4 @@
-import { LayoutDashboard, BedDouble, Users, CalendarCheck, LogOut } from 'lucide-react';
+import { LayoutDashboard, BedDouble, Users, CalendarCheck, LogOut, Utensils } from 'lucide-react'; // 👈 Added Utensils Icon
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -10,6 +10,8 @@ const Sidebar = () => {
     { icon: <Users size={20} />, label: 'Guests', path: '/guests' },
     { icon: <BedDouble size={20} />, label: 'Rooms', path: '/rooms' },
     { icon: <CalendarCheck size={20} />, label: 'Bookings', path: '/bookings' },
+    // 👇 NEW LINK
+    { icon: <Utensils size={20} />, label: 'Services & Menu', path: '/services' },
   ];
 
   // 🚪 Logout Function
@@ -45,7 +47,7 @@ const Sidebar = () => {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        {/* 👇 Updated Logout Button */}
+        {/* Logout Button */}
         <button 
           onClick={handleLogout}
           className="w-full flex items-center space-x-3 px-4 py-3 text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
