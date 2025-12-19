@@ -14,7 +14,7 @@ const Bookings = () => {
   // Modal States
   const [showWizard, setShowWizard] = useState(false);
   const [showChargeForm, setShowChargeForm] = useState(null); 
-  const [currentStep, setCurrentStep] = useState(1); // 1=Dates, 2=Guest, 3=Confirm
+  const [currentStep, setCurrentStep] = useState(1); // 1=Dates/Time, 2=Guest, 3=Confirm
 
   const token = localStorage.getItem('access_token');
 
@@ -101,7 +101,7 @@ const Bookings = () => {
         <div class="box"><strong>Details:</strong><br>Date: ${new Date().toLocaleDateString()}</div>
       </div>
       <table><thead><tr><th>Item</th><th>Dates</th><th>Amount</th></tr></thead><tbody>
-        <tr><td>Room Charge (${booking.room_details?.room_number})</td><td>${booking.check_in_date} to ${booking.check_out_date}</td><td>₹${booking.total_amount}</td></tr>
+        <tr><td>Room Charge (${booking.room_details?.room_number})</td><td>${new Date(booking.check_in_date).toLocaleString()} to ${new Date(booking.check_out_date).toLocaleString()}</td><td>₹${booking.total_amount}</td></tr>
         ${extrasRows}
       </tbody></table>
       <div class="total">Total: ₹${grandTotal}</div>
@@ -118,7 +118,9 @@ const Bookings = () => {
       const room = rooms.find(r => r.id === parseInt(bookingData.room));
       const start = new Date(bookingData.check_in_date);
       const end = new Date(bookingData.check_out_date);
-      const days = Math.ceil((end - start) / (1000 * 3600 * 24));
+      // Calculate hours to handle morning/evening bookings
+      const hours = Math.abs(end - start) / 36e5;
+      const days = Math.ceil(hours / 24); 
       if (room && days > 0) return days * room.price_per_night;
     }
     return 0;
@@ -138,6 +140,9 @@ const Bookings = () => {
         fetchAllData(); 
         setBookingData({ room: '', guest: '', check_in_date: '', check_out_date: '', total_amount: 0, status: 'CONFIRMED' });
         setCurrentStep(1);
+      } else {
+        const errData = await response.json();
+        alert(`Error: ${errData.detail || "Could not confirm booking. Check for conflicts."}`);
       }
     } catch (error) { console.error(error); }
   };
@@ -168,7 +173,7 @@ const Bookings = () => {
             {/* Steps Indicator */}
             <div className="flex justify-center gap-4 py-4 border-b border-slate-50">
                <div className={`flex items-center gap-2 text-sm font-bold ${currentStep >= 1 ? 'text-blue-600' : 'text-slate-300'}`}>
-                 <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${currentStep >= 1 ? 'bg-blue-100 border-blue-600' : 'border-slate-300'}`}>1</div> Dates
+                 <div className={`w-6 h-6 rounded-full flex items-center justify-center border ${currentStep >= 1 ? 'bg-blue-100 border-blue-600' : 'border-slate-300'}`}>1</div> Timing
                </div>
                <div className="w-8 h-px bg-slate-200 mt-3"></div>
                <div className={`flex items-center gap-2 text-sm font-bold ${currentStep >= 2 ? 'text-blue-600' : 'text-slate-300'}`}>
@@ -183,30 +188,55 @@ const Bookings = () => {
             {/* Wizard Content */}
             <div className="p-8">
               
-              {/* STEP 1: ROOM & DATES */}
+              {/* STEP 1: SMART ROOM & TIME SELECTION */}
               {currentStep === 1 && (
                 <div className="space-y-4">
-                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Calendar className="text-blue-500"/> Select Stay Dates</h4>
+                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Calendar className="text-blue-500"/> Select Stay Timing</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs font-bold text-slate-500">Check-In</label>
-                      <input type="date" className="w-full border p-3 rounded-lg bg-slate-50" 
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Check-In Arrival</label>
+                      <input type="datetime-local" className="w-full border p-3 rounded-lg bg-slate-50" 
                         value={bookingData.check_in_date} onChange={(e) => setBookingData({...bookingData, check_in_date: e.target.value})}/>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-slate-500">Check-Out</label>
-                      <input type="date" className="w-full border p-3 rounded-lg bg-slate-50" 
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Check-Out Departure</label>
+                      <input type="datetime-local" className="w-full border p-3 rounded-lg bg-slate-50" 
                         value={bookingData.check_out_date} onChange={(e) => setBookingData({...bookingData, check_out_date: e.target.value})}/>
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-500">Select Room</label>
-                    <select className="w-full border p-3 rounded-lg" value={bookingData.room} onChange={(e) => setBookingData({...bookingData, room: e.target.value})}>
-                      <option value="">-- Choose Available Room --</option>
-                      {rooms.filter(r => r.status === 'AVAILABLE').map(r => (
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Available Rooms for this Time</label>
+                    <select 
+                      className="w-full border p-3 rounded-lg" 
+                      value={bookingData.room} 
+                      onChange={(e) => setBookingData({...bookingData, room: e.target.value})}
+                      disabled={!bookingData.check_in_date || !bookingData.check_out_date}
+                    >
+                      <option value="">-- Choose Free Room --</option>
+                      {rooms.filter(room => {
+                        if (room.status === 'MAINTENANCE') return false;
+                        
+                        // Smart Conflict Check for specific time window
+                        const hasConflict = bookings.some(b => {
+                          if (b.room !== room.id) return false;
+                          if (b.status === 'CANCELLED' || b.status === 'CHECKED_OUT') return false;
+
+                          const newStart = new Date(bookingData.check_in_date);
+                          const newEnd = new Date(bookingData.check_out_date);
+                          const existStart = new Date(b.check_in_date);
+                          const existEnd = new Date(b.check_out_date);
+
+                          return (newStart < existEnd && newEnd > existStart);
+                        });
+
+                        return !hasConflict;
+                      }).map(r => (
                         <option key={r.id} value={r.id}>Room {r.room_number} ({r.room_type}) - ₹{r.price_per_night}/night</option>
                       ))}
                     </select>
+                    {!bookingData.check_in_date && (
+                      <p className="text-[10px] text-orange-500 mt-1">* Please select arrival/departure time first to check room availability</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -235,9 +265,10 @@ const Bookings = () => {
                   <h4 className="text-xl font-bold text-slate-800">Confirm Reservation</h4>
                   <div className="bg-slate-50 p-4 rounded-xl text-left text-sm space-y-2 border border-slate-100">
                     <div className="flex justify-between"><span>Room:</span> <strong>{rooms.find(r => r.id === parseInt(bookingData.room))?.room_number}</strong></div>
-                    <div className="flex justify-between"><span>Dates:</span> <strong>{bookingData.check_in_date} to {bookingData.check_out_date}</strong></div>
+                    <div className="flex justify-between"><span>Arrival:</span> <strong>{new Date(bookingData.check_in_date).toLocaleString()}</strong></div>
+                    <div className="flex justify-between"><span>Departure:</span> <strong>{new Date(bookingData.check_out_date).toLocaleString()}</strong></div>
                     <div className="flex justify-between text-lg font-bold text-blue-600 border-t border-slate-200 pt-2 mt-2">
-                      <span>Total to Pay:</span> <span>₹{calculateTotal()}</span>
+                      <span>Grand Total:</span> <span>₹{calculateTotal()}</span>
                     </div>
                   </div>
                 </div>
@@ -293,14 +324,18 @@ const Bookings = () => {
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase">
-            <tr><th className="p-4">Guest</th><th className="p-4">Room</th><th className="p-4">Dates</th><th className="p-4">Total</th><th className="p-4">Actions</th></tr>
+            <tr><th className="p-4">Guest</th><th className="p-4">Room</th><th className="p-4">Stay Timing</th><th className="p-4">Total</th><th className="p-4">Actions</th></tr>
           </thead>
           <tbody>
             {bookings.map(b => (
               <tr key={b.id} className="border-b hover:bg-slate-50">
                 <td className="p-4 font-bold text-slate-700">{b.guest_details?.full_name}</td>
                 <td className="p-4"><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold">{b.room_details?.room_number}</span></td>
-                <td className="p-4 text-slate-500">{b.check_in_date} <span className="mx-1">➔</span> {b.check_out_date}</td>
+                <td className="p-4 text-slate-500 text-xs">
+                  {new Date(b.check_in_date).toLocaleString()} <br/> 
+                  <span className="text-slate-300">to</span> <br/>
+                  {new Date(b.check_out_date).toLocaleString()}
+                </td>
                 <td className="p-4 font-bold text-green-600">₹{parseFloat(b.total_amount) + (b.charges?.reduce((s, i) => s + parseFloat(i.total_cost), 0) || 0)}</td>
                 <td className="p-4 flex gap-2">
                   <button onClick={() => setShowChargeForm(b.id)} className="p-2 text-orange-600 hover:bg-orange-50 rounded" title="POS"><ShoppingCart size={18}/></button>

@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
-from django.core.exceptions import ValidationError # 👈 Added for validation
+from django.core.exceptions import ValidationError
+from django.utils import timezone # 👈 Added for time-aware checks
 
 # ==========================================
 # 1. ROOM MANAGEMENT
@@ -38,7 +39,7 @@ class Guest(models.Model):
         return self.full_name
 
 # ==========================================
-# 3. BOOKINGS & BILLING (Updated with Validation)
+# 3. BOOKINGS & BILLING (Updated for DateTime)
 # ==========================================
 class Booking(models.Model):
     STATUS_CHOICES = (
@@ -51,25 +52,27 @@ class Booking(models.Model):
 
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
-    check_in_date = models.DateField()
-    check_out_date = models.DateField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
     
+    # 👇 UPGRADED: Changed from DateField to DateTimeField to support timing
+    check_in_date = models.DateTimeField() 
+    check_out_date = models.DateTimeField()
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # 👇 NEW: Added validation to prevent double booking and invalid dates
+    # 👇 SMART VALIDATION: Prevents overlaps based on exact hours/minutes
     def clean(self):
         if self.check_in_date and self.check_out_date:
-            # 1. Date sanity check
+            # 1. Time sanity check
             if self.check_out_date <= self.check_in_date:
-                raise ValidationError("Check-out date must be after check-in date.")
+                raise ValidationError("Check-out time must be after check-in time.")
 
-            # 2. Double Booking Prevention
-            # Check for overlapping bookings for the same room that are active
+            # 2. Precise Overlap Check
+            # Only blocks if the room is busy during the specific time window
             overlapping_bookings = Booking.objects.filter(
                 room=self.room,
                 status__in=['CONFIRMED', 'CHECKED_IN']
@@ -80,11 +83,11 @@ class Booking(models.Model):
 
             if overlapping_bookings.exists():
                 raise ValidationError(
-                    f"Double Booking Error: Room {self.room.room_number} is already reserved for these dates."
+                    f"Room {self.room.room_number} is already reserved during this specific time window."
                 )
 
     def save(self, *args, **kwargs):
-        self.full_clean() # This triggers the clean() validation method
+        self.full_clean() # Triggers the clean() method
         super().save(*args, **kwargs)
 
     def __str__(self):
