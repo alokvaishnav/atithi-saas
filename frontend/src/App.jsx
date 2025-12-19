@@ -14,7 +14,8 @@ import Services from './pages/Services';
 import CalendarView from './pages/CalendarView';
 import Reports from './pages/Reports';
 import FrontDesk from './pages/FrontDesk';
-import Folio from './pages/Folio'; // // 👈 IMPORT THIS
+import Folio from './pages/Folio';
+import POS from './pages/POS'; // 👈 IMPORT THIS
 
 // 🔒 THE GUARD
 const ProtectedRoute = ({ children }) => {
@@ -73,6 +74,7 @@ function App() {
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/front-desk" element={<FrontDesk />} />
                     <Route path="/folio/:bookingId" element={<Folio />} />
+                    <Route path="/pos" element={<POS />} />
                   </Routes>
                 </main>
               </div>

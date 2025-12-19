@@ -35,7 +35,8 @@ const Sidebar = () => {
     {
       title: "Point of Sale",
       items: [
-        { icon: <Utensils size={18} />, label: 'Services & Menu', path: '/services' },
+        { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' }, // 👈 NEW
+        { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
       ]
     },
     {
