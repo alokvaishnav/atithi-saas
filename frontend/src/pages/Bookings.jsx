@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, X, Calendar } from 'lucide-react';
+import { Plus, X, Calendar, Printer } from 'lucide-react'; // 👈 Added Printer Icon
 import { API_URL } from '../config'; 
 
 const Bookings = () => {
@@ -21,7 +21,7 @@ const Bookings = () => {
     status: 'CONFIRMED'
   });
 
-  // 1. Fetch ALL Data (Bookings, Rooms, Guests) - NOW WITH AUTH
+  // 1. Fetch ALL Data
   const fetchAllData = async () => {
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -48,9 +48,92 @@ const Bookings = () => {
     fetchAllData();
   }, []);
 
-  // ---------------------------------------------------------
-  // 🧠 THE BRAIN: Auto-Calculate Price
-  // ---------------------------------------------------------
+  // 👇 2. NEW: PRINT INVOICE FUNCTION
+  const handlePrintInvoice = (booking) => {
+    // Create a new invisible window
+    const printWindow = window.open('', '', 'width=800,height=600');
+    
+    // HTML Content for the Invoice
+    const invoiceContent = `
+      <html>
+        <head>
+          <title>Invoice #${booking.id}</title>
+          <style>
+            body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; }
+            .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+            .h-title { font-size: 24px; font-weight: bold; color: #2563eb; }
+            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+            .box { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #eee; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .table th { text-align: left; background: #e2e8f0; padding: 10px; }
+            .table td { border-bottom: 1px solid #eee; padding: 10px; }
+            .total { text-align: right; font-size: 20px; font-weight: bold; margin-top: 30px; color: #16a34a; }
+            .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px;}
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="h-title">Atithi Hotel</div>
+            <p>123 Hotel Street, City Center, India</p>
+            <p>Phone: +91 98765 43210</p>
+          </div>
+
+          <div class="info-grid">
+            <div class="box">
+              <strong>Billed To:</strong><br>
+              ${booking.guest_details?.full_name}<br>
+              Phone: ${booking.guest_details?.phone}
+            </div>
+            <div class="box">
+              <strong>Invoice Details:</strong><br>
+              Invoice #: INV-${booking.id}<br>
+              Date: ${new Date().toLocaleDateString()}<br>
+              Status: <span style="color: green">PAID</span>
+            </div>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Dates</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Room Charge (Room ${booking.room_details?.room_number})</td>
+                <td>${booking.check_in_date} to ${booking.check_out_date}</td>
+                <td>₹${booking.total_amount}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="total">
+            Total Paid: ₹${booking.total_amount}
+          </div>
+
+          <div class="footer">
+            Thank you for staying with us! <br>
+            This is a computer-generated invoice.
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Write content to the new window and print
+    printWindow.document.write(invoiceContent);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Wait for content to load then print
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 500);
+  };
+
+  // Auto-Calculate Price
   useEffect(() => {
     if (formData.room && formData.check_in_date && formData.check_out_date) {
       const selectedRoom = rooms.find(r => r.id === parseInt(formData.room));
@@ -65,7 +148,6 @@ const Bookings = () => {
       }
     }
   }, [formData.room, formData.check_in_date, formData.check_out_date, rooms]);
-  // ---------------------------------------------------------
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -78,7 +160,7 @@ const Bookings = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // <--- SHOW ID CARD HERE
+          'Authorization': `Bearer ${token}` 
         },
         body: JSON.stringify(formData)
       });
@@ -177,7 +259,7 @@ const Bookings = () => {
               <th className="p-4 font-semibold text-slate-600">Room</th>
               <th className="p-4 font-semibold text-slate-600">Dates</th>
               <th className="p-4 font-semibold text-slate-600">Amount</th>
-              <th className="p-4 font-semibold text-slate-600">Status</th>
+              <th className="p-4 font-semibold text-slate-600">Invoice</th> {/* 👈 New Column */}
             </tr>
           </thead>
           <tbody>
@@ -198,9 +280,14 @@ const Bookings = () => {
                   </td>
                   <td className="p-4 font-bold text-green-600">₹{booking.total_amount}</td>
                   <td className="p-4">
-                    <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">
-                      {booking.status}
-                    </span>
+                    {/* 👇 NEW: PRINT BUTTON */}
+                    <button 
+                      onClick={() => handlePrintInvoice(booking)}
+                      className="flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-100 hover:bg-blue-50 px-3 py-1 rounded-full text-sm font-medium"
+                      title="Print Invoice"
+                    >
+                      <Printer size={16} /> Print
+                    </button>
                   </td>
                 </tr>
               ))
