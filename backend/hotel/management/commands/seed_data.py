@@ -1,14 +1,27 @@
 import random
 from django.core.management.base import BaseCommand
 from hotel.models import Room, Guest, Booking, Expense
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
+
+User = get_user_model()
 
 class Command(BaseCommand):
     help = 'Stress test: Auto-generates Rooms, Guests, Bookings, and Expenses'
 
     def handle(self, *args, **kwargs):
         self.stdout.write("🌱 Starting Data Seeding...")
+
+        # 0. Get or Create a System User (REQUIRED for 'created_by')
+        system_user = User.objects.first()
+        if not system_user:
+            self.stdout.write("... Creating System Admin User")
+            system_user = User.objects.create_superuser(
+                username='system_admin',
+                email='admin@hotel.com',
+                password='admin_password_123'
+            )
 
         # 1. Create Dummy Rooms if none exist
         if Room.objects.count() == 0:
@@ -47,7 +60,8 @@ class Command(BaseCommand):
                 check_in_date=timezone.now() - timedelta(days=random.randint(1, 30)),
                 check_out_date=timezone.now() + timedelta(days=random.randint(1, 5)),
                 status=random.choice(['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT']),
-                advance_paid=random.randint(500, 2000)
+                advance_paid=random.randint(500, 2000),
+                created_by=system_user  # 👈 FIXED: Added the required user
             )
 
         # 4. Create 20 Expenses
@@ -58,7 +72,8 @@ class Command(BaseCommand):
                 title=f"Vendor Payment #{i}",
                 category=random.choice(categories),
                 amount=random.randint(1000, 15000),
-                date=timezone.now().date()
+                date=timezone.now().date(),
+                paid_by=system_user # 👈 FIXED: Added the required user
             )
         
         self.stdout.write(self.style.SUCCESS("✅ Successfully seeded live database!"))
