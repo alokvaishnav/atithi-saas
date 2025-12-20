@@ -5,33 +5,60 @@ from django.utils import timezone
 from datetime import timedelta
 
 class Command(BaseCommand):
-    help = 'Stress test: Generate 50 bookings and 20 expenses'
+    help = 'Stress test: Auto-generates Rooms, Guests, Bookings, and Expenses'
 
     def handle(self, *args, **kwargs):
+        self.stdout.write("🌱 Starting Data Seeding...")
+
+        # 1. Create Dummy Rooms if none exist
+        if Room.objects.count() == 0:
+            self.stdout.write("... Creating 10 Deluxe Rooms")
+            room_types = ['SINGLE', 'DOUBLE', 'SUITE']
+            for i in range(101, 111):
+                Room.objects.create(
+                    room_number=str(i),
+                    room_type=random.choice(room_types),
+                    price_per_night=random.randint(2000, 5000),
+                    status='AVAILABLE'
+                )
+        
+        # 2. Create Dummy Guests if none exist
+        if Guest.objects.count() == 0:
+            self.stdout.write("... Creating 5 VIP Guests")
+            names = ["Amit Sharma", "Priya Verma", "Rahul Singh", "Sneha Gupta", "Vikram Malhotra"]
+            for name in names:
+                Guest.objects.create(
+                    full_name=name,
+                    phone=f"98765{random.randint(10000, 99999)}",
+                    email=f"{name.split()[0].lower()}@example.com",
+                    id_proof_number=f"ABCD{random.randint(1000,9999)}F"
+                )
+
+        # Re-fetch lists
         rooms = list(Room.objects.all())
         guests = list(Guest.objects.all())
-        
-        if not rooms or not guests:
-            self.stdout.write("Error: Add rooms and guests first.")
-            return
 
+        # 3. Create 50 Bookings
+        self.stdout.write("... Generating 50 Bookings")
         for i in range(50):
             Booking.objects.create(
                 guest=random.choice(guests),
                 room=random.choice(rooms),
                 check_in_date=timezone.now() - timedelta(days=random.randint(1, 30)),
                 check_out_date=timezone.now() + timedelta(days=random.randint(1, 5)),
-                status='CONFIRMED',
+                status=random.choice(['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT']),
                 advance_paid=random.randint(500, 2000)
             )
 
+        # 4. Create 20 Expenses
+        self.stdout.write("... Generating 20 Expenses")
         categories = ['UTILITY', 'SALARY', 'INVENTORY', 'MAINTENANCE']
         for i in range(20):
             Expense.objects.create(
-                title=f"Stress Test Bill #{i}",
+                title=f"Vendor Payment #{i}",
                 category=random.choice(categories),
                 amount=random.randint(1000, 15000),
                 date=timezone.now().date()
             )
         
-        self.stdout.write(self.style.SUCCESS("Successfully seeded 70 records!"))
+        self.stdout.write(self.style.SUCCESS("✅ Successfully seeded live database!"))
