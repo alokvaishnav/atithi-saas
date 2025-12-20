@@ -16,7 +16,8 @@ import FrontDesk from './pages/FrontDesk';
 import Folio from './pages/Folio';
 import POS from './pages/POS';
 import Housekeeping from './pages/Housekeeping';
-import Staff from './pages/Staff'; // 👈 Imported correctly
+import Staff from './pages/Staff';
+import PrintGRC from './pages/PrintGRC'; // 👈 Imported correctly // 👈 Imported correctly
 
 // 🔒 THE PROFESSIONAL GUARD (Role & Token Security)
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -114,6 +115,7 @@ function App() {
                       <Route path="/calendar" element={<CalendarView />} />
                       <Route path="/folio/:bookingId" element={<Folio />} />
                       <Route path="/pos" element={<POS />} />
+                      <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
                       
                       {/* Management Restricted Access */}
                       <Route path="/staff" element={ // 👈 RE-ADDED MISSING STAFF ROUTE

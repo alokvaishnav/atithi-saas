@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { 
   Plus, X, Calendar, Printer, ShoppingCart, 
-  CheckCircle, User, CreditCard, ChevronRight, ChevronLeft 
+  CheckCircle, User, CreditCard, ChevronRight, ChevronLeft,
+  MapPin, FileText, Landmark, Mail // 👈 Added Mail icon
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
@@ -18,13 +19,17 @@ const Bookings = () => {
 
   const token = localStorage.getItem('access_token');
 
-  // New Booking Wizard Data
+  // New Booking Wizard Data (MERGED: Old fields + New legal/finance fields)
   const [bookingData, setBookingData] = useState({
     room: '', 
     guest: '', 
     check_in_date: '', 
     check_out_date: '', 
-    status: 'CONFIRMED'
+    status: 'CONFIRMED',
+    advance_paid: 0,
+    purpose_of_visit: 'Tourism',
+    coming_from: '',
+    going_to: ''
   });
 
   // Charge Data (POS)
@@ -50,6 +55,25 @@ const Bookings = () => {
 
   useEffect(() => { fetchAllData(); }, []);
 
+  // 📧 TRIGGER EMAIL NOTIFICATION (Manual Resend)
+  const handleSendEmail = async (bookingId) => {
+    try {
+      // Note: We use the existing update logic to trigger the save() method on the backend
+      // which sends the email, or a dedicated endpoint if you've created one.
+      const response = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ status: 'CONFIRMED' }) // Triggering a save to resend mail
+      });
+      if (response.ok) {
+        alert("Confirmation Email Resent Successfully! 📧");
+      }
+    } catch (error) { console.error("Email Error:", error); }
+  };
+
   const handleAddCharge = async (e) => {
     e.preventDefault();
     if (!showChargeForm) return;
@@ -74,7 +98,12 @@ const Bookings = () => {
     } catch (error) { console.error(error); }
   };
 
-  // 🖨️ PROFESSIONAL TAX INVOICE PRINTING
+  // 🖨️ LEGAL GRC PRINTING TRIGGER
+  const handlePrintGRC = (bookingId) => {
+    window.open(`/print-grc/${bookingId}`, '_blank');
+  };
+
+  // 🖨️ PROFESSIONAL TAX INVOICE PRINTING (Full Logic)
   const handlePrintInvoice = (booking) => {
     const printWindow = window.open('', '', 'width=900,height=800');
     
@@ -84,6 +113,8 @@ const Bookings = () => {
     const serviceSub = booking.charges?.reduce((s, c) => s + parseFloat(c.subtotal || 0), 0) || 0;
     const serviceTax = booking.charges?.reduce((s, c) => s + parseFloat(c.tax_amount || 0), 0) || 0;
     const finalTotal = roomSub + roomTax + serviceSub + serviceTax;
+    const advance = parseFloat(booking.advance_paid || 0);
+    const totalPaid = parseFloat(booking.amount_paid || 0);
 
     const html = `
       <html>
@@ -103,6 +134,7 @@ const Bookings = () => {
             .total-section { width: 350px; margin-left: auto; background: #f8fafc; padding: 20px; border-radius: 12px; }
             .total-row { display: flex; justify-content: space-between; padding: 5px 0; }
             .grand-total { border-top: 2px solid #e2e8f0; margin-top: 10px; padding-top: 10px; font-weight: 900; font-size: 20px; color: #2563eb; }
+            .balance-row { color: #ef4444; font-weight: bold; }
             .footer { margin-top: 60px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
             @media print { .no-print { display: none; } }
           </style>
@@ -147,8 +179,8 @@ const Bookings = () => {
             </thead>
             <tbody>
               <tr>
-                <td>Room Charges</td>
-                <td>1</td>
+                <td>Room Stay Charges</td>
+                <td>Stay</td>
                 <td>₹${roomSub.toLocaleString()}</td>
                 <td>12%</td>
                 <td>₹${roomTax.toLocaleString()}</td>
@@ -171,6 +203,8 @@ const Bookings = () => {
             <div class="total-row"><span>Net Subtotal:</span><span>₹${(roomSub + serviceSub).toLocaleString()}</span></div>
             <div class="total-row"><span>Total Tax (GST):</span><span>₹${(roomTax + serviceTax).toLocaleString()}</span></div>
             <div class="total-row grand-total"><span>Grand Total:</span><span>₹${finalTotal.toLocaleString()}</span></div>
+            <div class="total-row" style="margin-top:10px; opacity:0.7"><span>Advance Paid:</span><span>₹${advance.toLocaleString()}</span></div>
+            <div class="total-row balance-row"><span>Balance Due:</span><span>₹${(finalTotal - totalPaid).toLocaleString()}</span></div>
           </div>
 
           <div class="footer">
@@ -207,10 +241,13 @@ const Bookings = () => {
         body: JSON.stringify(bookingData)
       });
       if (response.ok) { 
-        alert("Booking Confirmed! 🎉"); 
+        alert("Booking Confirmed & Email Sent! 🎉"); 
         setShowWizard(false); 
         fetchAllData(); 
-        setBookingData({ room: '', guest: '', check_in_date: '', check_out_date: '', status: 'CONFIRMED' });
+        setBookingData({ 
+            room: '', guest: '', check_in_date: '', check_out_date: '', 
+            status: 'CONFIRMED', advance_paid: 0, purpose_of_visit: 'Tourism', coming_from: '', going_to: ''
+        });
         setCurrentStep(1);
       }
     } catch (error) { console.error(error); }
@@ -218,43 +255,49 @@ const Bookings = () => {
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen">
+      {/* HEADER SECTION */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800">Reservations</h2>
-          <p className="text-slate-500">Manage Tax Invoices and Bookings</p>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Reservations</h2>
+          <p className="text-slate-500 font-medium">Manage legal compliance and financial billing</p>
         </div>
-        <button onClick={() => setShowWizard(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 shadow-lg transition-all">
+        <button onClick={() => setShowWizard(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl hover:bg-blue-700 flex items-center gap-2 shadow-lg transition-all active:scale-95 font-bold">
           <Plus size={20}/> New Reservation
         </button>
       </div>
 
+      {/* RESERVATION WIZARD MODAL (FULL STEPS) */}
       {showWizard && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-[600px] shadow-2xl overflow-hidden animate-fade-in-up">
-            <div className="bg-slate-50 border-b border-slate-100 p-4 flex justify-between items-center">
-               <h3 className="font-bold text-slate-700">Reservation Wizard</h3>
-               <button onClick={() => setShowWizard(false)}><X size={20} className="text-slate-400 hover:text-red-500"/></button>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-[32px] w-[650px] shadow-2xl overflow-hidden animate-fade-in-up border border-white/20">
+            <div className="bg-slate-50 border-b border-slate-100 p-6 flex justify-between items-center">
+               <div className="flex items-center gap-2">
+                 <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+                 <h3 className="font-black text-slate-700 uppercase tracking-tighter text-sm">Reservation Wizard</h3>
+               </div>
+               <button onClick={() => setShowWizard(false)}><X size={24} className="text-slate-400 hover:text-red-500"/></button>
             </div>
 
             <div className="p-8">
+              {/* Step 1: Dates & Room Selection */}
               {currentStep === 1 && (
-                <div className="space-y-4">
-                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Calendar className="text-blue-500"/> Stay Duration</h4>
+                <div className="space-y-6">
+                  <h4 className="text-lg font-black text-slate-800 flex items-center gap-2"><Calendar className="text-blue-500" size={20}/> Stay Duration</h4>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Check-In</label>
-                      <input type="datetime-local" className="w-full border p-3 rounded-lg bg-slate-50" 
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Check-In</label>
+                      <input type="datetime-local" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-bold text-slate-700" 
                         value={bookingData.check_in_date} onChange={(e) => setBookingData({...bookingData, check_in_date: e.target.value})}/>
                     </div>
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Check-Out</label>
-                      <input type="datetime-local" className="w-full border p-3 rounded-lg bg-slate-50" 
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Check-Out</label>
+                      <input type="datetime-local" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-bold text-slate-700" 
                         value={bookingData.check_out_date} onChange={(e) => setBookingData({...bookingData, check_out_date: e.target.value})}/>
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 uppercase">Room Selection</label>
-                    <select className="w-full border p-3 rounded-lg" value={bookingData.room} onChange={(e) => setBookingData({...bookingData, room: e.target.value})} disabled={!bookingData.check_in_date}>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Select Available Unit</label>
+                    <select className="w-full border-none bg-slate-100 p-4 rounded-2xl font-black text-slate-700" value={bookingData.room} onChange={(e) => setBookingData({...bookingData, room: e.target.value})} disabled={!bookingData.check_in_date}>
                       <option value="">-- Choose Free Room --</option>
                       {rooms.filter(room => {
                         const hasConflict = bookings.some(b => b.room === room.id && b.status !== 'CANCELLED' && (new Date(bookingData.check_in_date) < new Date(b.check_out_date) && new Date(bookingData.check_out_date) > new Date(b.check_in_date)));
@@ -265,37 +308,54 @@ const Bookings = () => {
                 </div>
               )}
 
+              {/* Step 2: Guest & Legal GRC Info */}
               {currentStep === 2 && (
-                <div className="space-y-4">
-                  <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><User className="text-blue-500"/> Assign Guest</h4>
-                  <select className="w-full border p-3 rounded-lg bg-slate-50" value={bookingData.guest} onChange={(e) => setBookingData({...bookingData, guest: e.target.value})}>
-                    <option value="">-- Select Existing Guest --</option>
+                <div className="space-y-6">
+                  <h4 className="text-lg font-black text-slate-800 flex items-center gap-2"><MapPin className="text-blue-500" size={20}/> GRC Legal Details</h4>
+                  <select className="w-full border-none bg-slate-100 p-4 rounded-2xl font-black text-slate-700" value={bookingData.guest} onChange={(e) => setBookingData({...bookingData, guest: e.target.value})}>
+                    <option value="">-- Select Registered Guest --</option>
                     {guests.map(g => <option key={g.id} value={g.id}>{g.full_name} ({g.phone})</option>)}
+                  </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="text" placeholder="Coming From" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-medium" value={bookingData.coming_from} onChange={e => setBookingData({...bookingData, coming_from: e.target.value})} />
+                    <input type="text" placeholder="Going To" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-medium" value={bookingData.going_to} onChange={e => setBookingData({...bookingData, going_to: e.target.value})} />
+                  </div>
+                  <select className="w-full border-none bg-slate-100 p-4 rounded-2xl font-bold" value={bookingData.purpose_of_visit} onChange={e => setBookingData({...bookingData, purpose_of_visit: e.target.value})}>
+                    <option value="Tourism">Purpose: Tourism</option>
+                    <option value="Business">Purpose: Business</option>
+                    <option value="Medical">Purpose: Medical</option>
+                    <option value="Personal">Purpose: Personal</option>
                   </select>
                 </div>
               )}
 
+              {/* Step 3: Advance & Billing Preview */}
               {currentStep === 3 && (
-                <div className="space-y-4">
-                  <div className="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                    <h4 className="text-blue-800 font-black uppercase text-xs mb-4">Billing Preview</h4>
-                    <div className="space-y-2 text-sm">
-                        <div className="flex justify-between text-slate-600"><span>Room Subtotal:</span> <span>₹{calculatePreview().sub.toLocaleString()}</span></div>
-                        <div className="flex justify-between text-slate-600"><span>Room GST (12%):</span> <span>₹{calculatePreview().tax.toLocaleString()}</span></div>
-                        <div className="flex justify-between text-xl font-black text-slate-900 border-t pt-2 mt-2"><span>Grand Total:</span> <span>₹{calculatePreview().total.toLocaleString()}</span></div>
-                    </div>
-                  </div>
+                <div className="space-y-6">
+                   <h4 className="text-lg font-black text-slate-800 flex items-center gap-2"><CreditCard className="text-blue-500" size={20}/> Payment & Review</h4>
+                   <div className="bg-slate-900 text-white p-6 rounded-[24px] space-y-3 shadow-xl">
+                      <div className="flex justify-between opacity-60 text-xs font-black uppercase tracking-widest"><span>Est. Room Total</span> <span>₹{calculatePreview().total}</span></div>
+                      <div className="flex justify-between items-center pt-2 border-t border-white/10">
+                        <span className="font-bold">Advance Deposit Received</span>
+                        <input type="number" className="bg-white/10 border-none w-32 p-2 rounded-xl text-right font-black" value={bookingData.advance_paid} onChange={e => setBookingData({...bookingData, advance_paid: e.target.value})} />
+                      </div>
+                      <div className="flex justify-between text-xl font-black text-blue-400 border-t border-white/10 pt-4">
+                        <span>Balance at Check-in</span> 
+                        <span>₹{calculatePreview().total - bookingData.advance_paid}</span>
+                      </div>
+                   </div>
                 </div>
               )}
             </div>
 
-            <div className="bg-slate-50 p-4 flex justify-between">
-              {currentStep > 1 && <button onClick={() => setCurrentStep(currentStep - 1)} className="text-slate-500 font-bold px-4 py-2">Back</button>}
-              <div className="ml-auto flex gap-2">
+            {/* WIZARD FOOTER NAVIGATION */}
+            <div className="bg-slate-50 p-6 flex justify-between">
+              {currentStep > 1 && <button onClick={() => setCurrentStep(currentStep - 1)} className="text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-800 transition">Back</button>}
+              <div className="ml-auto flex gap-3">
                 {currentStep < 3 ? (
-                  <button disabled={!bookingData.room} onClick={() => setCurrentStep(currentStep + 1)} className="bg-blue-600 text-white font-bold px-6 py-2 rounded-lg flex items-center gap-2">Next Step <ChevronRight size={16}/></button>
+                  <button disabled={!bookingData.room} onClick={() => setCurrentStep(currentStep + 1)} className="bg-slate-800 text-white font-black px-8 py-3 rounded-2xl flex items-center gap-2 shadow-lg shadow-slate-200 uppercase text-xs tracking-widest disabled:opacity-30 transition-all">Next <ChevronRight size={16}/></button>
                 ) : (
-                  <button onClick={handleBookingSubmit} className="bg-green-600 text-white font-bold px-6 py-2 rounded-lg flex items-center gap-2">Confirm & Save <CheckCircle size={16}/></button>
+                  <button onClick={handleBookingSubmit} className="bg-blue-600 text-white font-black px-10 py-4 rounded-2xl flex items-center gap-2 shadow-xl shadow-blue-200 uppercase text-xs tracking-widest transition-all hover:scale-105">Confirm & Save <CheckCircle size={16}/></button>
                 )}
               </div>
             </div>
@@ -305,42 +365,64 @@ const Bookings = () => {
 
       {/* POS CHARGE MODAL */}
       {showChargeForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl w-96 shadow-2xl">
-            <h3 className="text-lg font-bold mb-4">Post POS Charge (Inc. Tax)</h3>
-            <form onSubmit={handleAddCharge} className="flex flex-col gap-4">
-              <select className="border p-2 rounded" required value={chargeData.service} onChange={(e) => setChargeData({...chargeData, service: e.target.value})}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white p-8 rounded-[32px] w-96 shadow-2xl animate-fade-in-up">
+            <h3 className="text-xl font-black mb-6 flex items-center gap-2 uppercase tracking-tighter"><ShoppingCart className="text-orange-500"/> Post POS Charge</h3>
+            <form onSubmit={handleAddCharge} className="flex flex-col gap-5">
+              <select className="bg-slate-50 border-none p-4 rounded-2xl font-bold text-slate-700" required value={chargeData.service} onChange={(e) => setChargeData({...chargeData, service: e.target.value})}>
                 <option value="">-- Select Item --</option>
                 {services.map(s => <option key={s.id} value={s.id}>{s.name} - ₹{s.price}</option>)}
               </select>
-              <input type="number" min="1" className="border p-2 rounded" required value={chargeData.quantity} onChange={(e) => setChargeData({...chargeData, quantity: e.target.value})}/>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowChargeForm(null)} className="flex-1 bg-slate-200 py-2 rounded">Cancel</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded font-bold">Post to Folio</button>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Quantity</label>
+                <input type="number" min="1" className="bg-slate-50 border-none p-4 rounded-2xl w-full font-bold" required value={chargeData.quantity} onChange={(e) => setChargeData({...chargeData, quantity: e.target.value})}/>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button type="button" onClick={() => setShowChargeForm(null)} className="flex-1 text-slate-400 font-bold">Cancel</button>
+                <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-100">Post Item</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold">
-            <tr><th className="p-4">Guest</th><th className="p-4">Room</th><th className="p-4">Timing</th><th className="p-4">Total (Inc. Tax)</th><th className="p-4">Actions</th></tr>
+      {/* MAIN DATA TABLE */}
+      <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
+        <table className="w-full text-left text-sm border-collapse">
+          <thead className="bg-slate-50/50 text-slate-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
+            <tr><th className="p-6">Guest / Contact</th><th className="p-6">Room Details</th><th className="p-6">Stay Period</th><th className="p-6">Finance</th><th className="p-6 text-center">Actions</th></tr>
           </thead>
-          <tbody>
-            {bookings.map(b => (
-              <tr key={b.id} className="border-b hover:bg-slate-50 transition-colors">
-                <td className="p-4 font-bold text-slate-700">{b.guest_details?.full_name}</td>
-                <td className="p-4"><span className="bg-blue-50 text-blue-700 px-2 py-1 rounded font-bold">{b.room_details?.room_number}</span></td>
-                <td className="p-4 text-slate-500 text-xs">{new Date(b.check_in_date).toLocaleString()}<br/><span className="text-slate-300">to</span><br/>{new Date(b.check_out_date).toLocaleString()}</td>
-                <td className="p-4 font-black text-green-600">₹{parseFloat(b.total_amount).toLocaleString()}</td>
-                <td className="p-4 flex gap-2">
-                  <button onClick={() => setShowChargeForm(b.id)} className="p-2 text-orange-600 hover:bg-orange-50 rounded" title="Add POS"><ShoppingCart size={18}/></button>
-                  <button onClick={() => handlePrintInvoice(b)} className="p-2 text-blue-600 hover:bg-blue-50 rounded" title="Print Tax Invoice"><Printer size={18}/></button>
+          <tbody className="divide-y divide-slate-50">
+            {bookings.length > 0 ? bookings.map(b => (
+              <tr key={b.id} className="hover:bg-slate-50 transition-colors group">
+                <td className="p-6">
+                    <p className="font-black text-slate-800">{b.guest_details?.full_name}</p>
+                    <p className="text-xs text-slate-400 font-bold">{b.guest_details?.phone}</p>
+                </td>
+                <td className="p-6">
+                    <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-black text-xs uppercase">Room {b.room_details?.room_number}</span>
+                    <p className="text-[10px] text-slate-400 mt-1 font-bold">{b.room_details?.room_type}</p>
+                </td>
+                <td className="p-6">
+                    <p className="text-xs font-black text-slate-700">{new Date(b.check_in_date).toLocaleDateString()}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">To {new Date(b.check_out_date).toLocaleDateString()}</p>
+                </td>
+                <td className="p-6">
+                    <p className="font-black text-slate-800">₹{parseFloat(b.total_amount).toLocaleString()}</p>
+                    {parseFloat(b.advance_paid) > 0 && <p className="text-[10px] text-green-500 font-black uppercase">Adv Paid: ₹{b.advance_paid}</p>}
+                </td>
+                <td className="p-6">
+                   <div className="flex justify-center items-center gap-2">
+                      <button onClick={() => setShowChargeForm(b.id)} className="p-3 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all" title="Add POS"><ShoppingCart size={18}/></button>
+                      <button onClick={() => handlePrintGRC(b.id)} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Legal GRC Form"><FileText size={18}/></button>
+                      <button onClick={() => handlePrintInvoice(b)} className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all" title="Tax Invoice"><Printer size={18}/></button>
+                      <button onClick={() => handleSendEmail(b.id)} className="p-3 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all" title="Resend Notification"><Mail size={18}/></button>
+                   </div>
                 </td>
               </tr>
-            ))}
+            )) : (
+              <tr><td colSpan="5" className="p-20 text-center text-slate-400 font-medium">No bookings found in the system.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

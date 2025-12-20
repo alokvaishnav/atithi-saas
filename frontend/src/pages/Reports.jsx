@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
-  Download, TrendingUp, IndianRupee, PieChart, 
-  Users, Calendar, FileBarChart, Printer, ArrowRightCircle, ShieldCheck
+  TrendingUp, FileBarChart, Printer, ArrowRightCircle, 
+  ShieldCheck, Landmark, Wallet, Percent, PieChart, Activity
 } from 'lucide-react';
 import { API_URL } from '../config'; 
 
@@ -23,6 +23,8 @@ const Reports = () => {
         ]);
         const bData = await resB.json();
         const rData = await resR.json();
+        
+        // Safety check to ensure data is an array
         setBookings(Array.isArray(bData) ? bData : []);
         setRooms(Array.isArray(rData) ? rData : []);
       } catch (err) {
@@ -36,11 +38,11 @@ const Reports = () => {
 
   // 📊 PROFESSIONAL AUDIT CALCULATIONS
   
-  // 1. Room Revenue Logic (Split by Net and Tax)
+  // 1. Room Revenue Logic (Base and Tax)
   const roomNet = bookings.reduce((sum, b) => sum + parseFloat(b.subtotal_amount || 0), 0);
   const roomTax = bookings.reduce((sum, b) => sum + parseFloat(b.tax_amount || 0), 0);
   
-  // 2. POS/Service Revenue Logic (Split by Net and Tax)
+  // 2. POS/Service Revenue Logic (Base and Tax)
   const posNet = bookings.reduce((sum, b) => {
     const chargesNet = b.charges?.reduce((s, c) => s + parseFloat(c.subtotal || 0), 0) || 0;
     return sum + chargesNet;
@@ -55,19 +57,19 @@ const Reports = () => {
   const totalTaxCollected = roomTax + posTax;
   const grandTotal = totalNetRevenue + totalTaxCollected;
 
-  // 3. Occupancy Statistics
+  // 3. Operational KPIs
   const inHouseCount = bookings.filter(b => b.status === 'CHECKED_IN').length;
   const occupancyPercent = rooms.length > 0 ? ((inHouseCount / rooms.length) * 100).toFixed(1) : 0;
   
-  const todayArrivals = bookings.filter(b => b.check_in_date?.startsWith(today)).length;
-  const todayDepartures = bookings.filter(b => b.check_out_date?.startsWith(today)).length;
+  const todayArrivals = bookings.filter(b => b.check_in_date?.split('T')[0] === today).length;
+  const todayDepartures = bookings.filter(b => b.check_out_date?.split('T')[0] === today).length;
 
   const handlePrintReport = () => { window.print(); };
 
   if (loading) return (
     <div className="p-8 flex items-center justify-center min-h-screen bg-slate-50">
-      <div className="text-blue-600 font-bold animate-pulse flex items-center gap-2">
-        <ArrowRightCircle className="animate-spin" /> Compiling Night Audit...
+      <div className="text-blue-600 font-bold animate-pulse flex items-center gap-3 bg-white p-6 rounded-3xl shadow-xl border border-blue-50">
+        <Activity className="animate-spin" /> Compiling Financial Intelligence...
       </div>
     </div>
   );
@@ -75,116 +77,137 @@ const Reports = () => {
   return (
     <div className="p-8 bg-slate-50 min-h-screen">
       {/* HEADER SECTION */}
-      <div className="flex justify-between items-center mb-8 no-print">
+      <div className="flex justify-between items-center mb-10 no-print">
         <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Financial Audit</h2>
-          <p className="text-slate-500 font-medium">System Date: {new Date().toLocaleDateString()}</p>
+          <h2 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase">Tax & Financial Audit</h2>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">
+            Night Audit Summary • {new Date().toLocaleDateString('en-IN', { dateStyle: 'full' })}
+          </p>
         </div>
-        <div className="flex gap-3">
-          <button onClick={handlePrintReport} className="bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-slate-50 shadow-sm font-bold">
-            <Printer size={18} /> Export PDF
+        <div className="flex gap-4">
+          <button onClick={handlePrintReport} className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-slate-50 shadow-sm font-black text-xs uppercase transition-all">
+            <Printer size={18} className="text-blue-600" /> Export PDF
           </button>
-          <button className="bg-slate-900 text-white px-6 py-2 rounded-xl flex items-center gap-2 hover:bg-black transition shadow-lg font-bold">
-            <ShieldCheck size={18} /> Finalize Night Audit
+          <button className="bg-slate-900 text-white px-8 py-3 rounded-2xl flex items-center gap-2 hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 font-black text-xs uppercase">
+            <ShieldCheck size={18} /> Close Day Audit
           </button>
         </div>
       </div>
 
       {/* 1. FINANCIAL SUMMARY CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="text-slate-400 text-[10px] font-black uppercase mb-1 tracking-widest">Net Revenue (Earnings)</div>
-            <div className="text-3xl font-black text-slate-800">₹{totalNetRevenue.toLocaleString()}</div>
-            <div className="mt-2 text-[10px] text-green-600 font-bold bg-green-50 w-fit px-2 py-0.5 rounded">Excluding GST</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400"><Wallet size={20}/></div>
+                <div className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Net Sales (Ex. Tax)</div>
+            </div>
+            <div className="text-4xl font-black text-slate-900 tracking-tighter">₹{totalNetRevenue.toLocaleString()}</div>
+            <p className="text-[10px] text-green-500 font-bold mt-2 flex items-center gap-1 uppercase tracking-tighter">Verified Room & POS Revenue</p>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="text-blue-600 text-[10px] font-black uppercase mb-1 tracking-widest text-opacity-70">GST Collected (Liability)</div>
-            <div className="text-3xl font-black text-blue-600">₹{totalTaxCollected.toLocaleString()}</div>
-            <div className="mt-2 text-[10px] text-blue-600 font-bold bg-blue-50 w-fit px-2 py-0.5 rounded">Tax Liability</div>
+
+        <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500"><Landmark size={20}/></div>
+                <div className="text-blue-400 text-[10px] font-black uppercase tracking-[0.2em]">GST Liability (Payable)</div>
+            </div>
+            <div className="text-4xl font-black text-blue-600 tracking-tighter">₹{totalTaxCollected.toLocaleString()}</div>
+            <p className="text-[10px] text-blue-400 font-bold mt-2 uppercase tracking-tighter">Total Tax Collected from Guests</p>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-md border-2 border-blue-600">
-            <div className="text-slate-400 text-[10px] font-black uppercase mb-1 tracking-widest">Grand Total (Cash In)</div>
-            <div className="text-3xl font-black text-slate-900">₹{grandTotal.toLocaleString()}</div>
-            <div className="mt-2 text-[10px] text-slate-500 font-bold bg-slate-100 w-fit px-2 py-0.5 rounded">Including All Taxes</div>
+
+        <div className="bg-slate-900 p-8 rounded-[32px] shadow-2xl border-b-8 border-blue-600">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-white"><PieChart size={20}/></div>
+                <div className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em]">Consolidated Total</div>
+            </div>
+            <div className="text-4xl font-black text-white tracking-tighter">₹{grandTotal.toLocaleString()}</div>
+            <p className="text-[10px] text-blue-400 font-bold mt-2 uppercase tracking-tighter">Final Net Cashflow</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         {/* 2. TAX BREAKDOWN TABLE */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">
-            <TrendingUp size={16} className="text-blue-600"/> Revenue & Tax Analysis
+        <div className="lg:col-span-2 bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="p-6 bg-slate-50/50 border-b border-slate-100 font-black text-slate-800 flex items-center gap-2 uppercase text-xs tracking-[0.2em]">
+            <TrendingUp size={16} className="text-blue-600"/> Revenue Stream Analysis
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="text-[10px] text-slate-400 uppercase bg-white border-b font-black">
+          <table className="w-full text-left">
+            <thead className="text-[9px] text-slate-400 uppercase bg-white border-b font-black tracking-widest">
               <tr>
-                <th className="p-4">Department</th>
-                <th className="p-4 text-right">Net Sales</th>
-                <th className="p-4 text-right">Tax Value</th>
-                <th className="p-4 text-right">Total</th>
+                <th className="p-6">Revenue Department</th>
+                <th className="p-6 text-right">Net Sales</th>
+                <th className="p-6 text-right">Tax Value</th>
+                <th className="p-6 text-right">Total (Incl. Tax)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-                <tr className="hover:bg-slate-50">
-                  <td className="p-4 font-bold text-slate-700">Room Division</td>
-                  <td className="p-4 text-right font-mono text-slate-600">₹{roomNet.toLocaleString()}</td>
-                  <td className="p-4 text-right font-mono text-blue-500">₹{roomTax.toLocaleString()}</td>
-                  <td className="p-4 text-right font-black text-slate-800">₹{(roomNet + roomTax).toLocaleString()}</td>
+                <tr className="hover:bg-slate-50 group transition-colors">
+                  <td className="p-6 font-black text-slate-800">Room Division Revenue</td>
+                  <td className="p-6 text-right font-mono text-slate-500">₹{roomNet.toLocaleString()}</td>
+                  <td className="p-6 text-right font-mono text-blue-500">₹{roomTax.toLocaleString()}</td>
+                  <td className="p-6 text-right font-black text-slate-900 group-hover:text-blue-600">₹{(roomNet + roomTax).toLocaleString()}</td>
                 </tr>
-                <tr className="hover:bg-slate-50">
-                  <td className="p-4 font-bold text-slate-700">F&B / Services</td>
-                  <td className="p-4 text-right font-mono text-slate-600">₹{posNet.toLocaleString()}</td>
-                  <td className="p-4 text-right font-mono text-blue-500">₹{posTax.toLocaleString()}</td>
-                  <td className="p-4 text-right font-black text-slate-800">₹{(posNet + posTax).toLocaleString()}</td>
+                <tr className="hover:bg-slate-50 group transition-colors">
+                  <td className="p-6 font-black text-slate-800">F&B & Ancillary Services</td>
+                  <td className="p-6 text-right font-mono text-slate-500">₹{posNet.toLocaleString()}</td>
+                  <td className="p-6 text-right font-mono text-blue-500">₹{posTax.toLocaleString()}</td>
+                  <td className="p-6 text-right font-black text-slate-900 group-hover:text-blue-600">₹{(posNet + posTax).toLocaleString()}</td>
                 </tr>
             </tbody>
             <tfoot className="bg-slate-900 text-white">
                 <tr>
-                  <td className="p-4 font-bold">Consolidated Total</td>
-                  <td className="p-4 text-right font-bold">₹{totalNetRevenue.toLocaleString()}</td>
-                  <td className="p-4 text-right font-bold">₹{totalTaxCollected.toLocaleString()}</td>
-                  <td className="p-4 text-right font-black text-green-400">₹{grandTotal.toLocaleString()}</td>
+                  <td className="p-6 font-black uppercase text-[10px] tracking-widest">Grand Summary</td>
+                  <td className="p-6 text-right font-black">₹{totalNetRevenue.toLocaleString()}</td>
+                  <td className="p-6 text-right font-black">₹{totalTaxCollected.toLocaleString()}</td>
+                  <td className="p-6 text-right font-black text-green-400 text-lg">₹{grandTotal.toLocaleString()}</td>
                 </tr>
             </tfoot>
           </table>
         </div>
 
         {/* 3. PERFORMANCE STATISTICS */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-bold text-slate-700 mb-6 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <FileBarChart size={18} className="text-blue-500"/> Key Metrics (KPIs)
+        <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 p-8">
+            <h3 className="font-black text-slate-800 mb-8 flex items-center gap-2 uppercase text-xs tracking-[0.2em]">
+                <FileBarChart size={18} className="text-blue-500"/> Operational KPIs
             </h3>
-            <div className="space-y-6">
+            
+            <div className="space-y-10">
                 <div>
-                    <div className="flex justify-between text-[10px] font-black text-slate-400 mb-2 uppercase">Room Occupancy</div>
-                    <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-600 transition-all duration-1000" style={{width: `${occupancyPercent}%`}}></div>
+                    <div className="flex justify-between text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">
+                        Room Occupancy Index <span>{occupancyPercent}%</span>
+                    </div>
+                    <div className="w-full h-4 bg-slate-50 rounded-full p-1 border border-slate-100">
+                        <div className="h-full bg-blue-600 rounded-full transition-all duration-1000 shadow-sm" style={{width: `${occupancyPercent}%`}}></div>
                     </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avg Room Rate (ARR)</div>
-                        <div className="text-xl font-black text-slate-800">₹{(roomNet / (inHouseCount || 1)).toFixed(0)}</div>
+                <div className="grid grid-cols-2 gap-6 border-t border-slate-50 pt-8">
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-center">
+                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Room Rate</div>
+                        <div className="text-2xl font-black text-slate-900 tracking-tighter">₹{(roomNet / (inHouseCount || 1)).toFixed(0)}</div>
                     </div>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">RevPAR</div>
-                        <div className="text-xl font-black text-slate-800">₹{(roomNet / (rooms.length || 1)).toFixed(0)}</div>
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-center">
+                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">RevPAR</div>
+                        <div className="text-2xl font-black text-slate-900 tracking-tighter">₹{(roomNet / (rooms.length || 1)).toFixed(0)}</div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-black text-slate-800">{todayArrivals}</div>
-                    <div className="text-[9px] font-bold text-slate-400 uppercase">Today Arrivals</div>
+                <div className="grid grid-cols-2 gap-4 bg-blue-600 p-6 rounded-[24px] text-white shadow-xl shadow-blue-100">
+                  <div className="text-center border-r border-white/10">
+                    <div className="text-3xl font-black tracking-tighter">{todayArrivals}</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest opacity-60">Arrivals Today</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-black text-slate-800">{todayDepartures}</div>
-                    <div className="text-[9px] font-bold text-slate-400 uppercase">Today Departures</div>
+                    <div className="text-3xl font-black tracking-tighter">{todayDepartures}</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest opacity-60">Departures Today</div>
                   </div>
                 </div>
             </div>
         </div>
+      </div>
+      
+      {/* PRINT-ONLY FOOTER */}
+      <div className="hidden print:block mt-20 border-t border-slate-900 pt-8 text-center text-xs text-slate-400 font-bold uppercase tracking-[0.4em]">
+        End of Night Audit Report • System Generated
       </div>
     </div>
   );
