@@ -4,6 +4,7 @@ from hotel.models import Room, Guest, Booking, Expense
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
+from django.conf import settings # 👈 Import settings
 
 User = get_user_model()
 
@@ -12,6 +13,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
         self.stdout.write("🌱 Starting Data Seeding...")
+
+        # 🛑 CRITICAL FIX: Disable actual email sending to prevent Timeouts
+        # This tells Django to "pretend" to send emails without connecting to Gmail
+        settings.EMAIL_BACKEND = 'django.core.mail.backends.dummy.EmailBackend'
 
         # 0. Get or Create a System User (REQUIRED for 'created_by')
         system_user = User.objects.first()
@@ -52,7 +57,7 @@ class Command(BaseCommand):
         guests = list(Guest.objects.all())
 
         # 3. Create 50 Bookings
-        self.stdout.write("... Generating 50 Bookings")
+        self.stdout.write("... Generating 50 Bookings (Emails Disabled)")
         for i in range(50):
             Booking.objects.create(
                 guest=random.choice(guests),
@@ -61,7 +66,7 @@ class Command(BaseCommand):
                 check_out_date=timezone.now() + timedelta(days=random.randint(1, 5)),
                 status=random.choice(['CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT']),
                 advance_paid=random.randint(500, 2000),
-                created_by=system_user  # 👈 FIXED: Added the required user
+                created_by=system_user
             )
 
         # 4. Create 20 Expenses
@@ -73,7 +78,7 @@ class Command(BaseCommand):
                 category=random.choice(categories),
                 amount=random.randint(1000, 15000),
                 date=timezone.now().date(),
-                paid_by=system_user # 👈 FIXED: Added the required user
+                paid_by=system_user
             )
         
         self.stdout.write(self.style.SUCCESS("✅ Successfully seeded live database!"))
