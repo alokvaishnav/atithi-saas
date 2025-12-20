@@ -3,7 +3,7 @@ import {
   Plus, X, Calendar, Printer, ShoppingCart, 
   CheckCircle, User, CreditCard, ChevronRight, ChevronLeft,
   MapPin, FileText, Landmark, Mail, LogOut, Search, Filter, 
-  Trash2, ArrowUpRight, TrendingDown, ClipboardList
+  Trash2, ArrowUpRight, TrendingDown, ClipboardList, LogIn, XCircle
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
@@ -63,6 +63,58 @@ const Bookings = () => {
   useEffect(() => { fetchAllData(); }, []);
 
   // --- AUTOMATION HANDLERS ---
+  
+  // 🚀 NEW: CHECK-IN LOGIC (Syncs Booking & Room Status)
+  const handleCheckIn = async (bookingId, roomId) => {
+    if (!window.confirm("Confirm Guest Arrival & Handover Key?")) return;
+
+    try {
+        // 1. Update Booking Status
+        await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: 'CHECKED_IN' })
+        });
+
+        // 2. Update Room Status to OCCUPIED
+        if (roomId) {
+            await fetch(`${API_URL}/api/rooms/${roomId}/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'OCCUPIED' })
+            });
+        }
+
+        alert("✅ Check-In Successful! Room marked OCCUPIED.");
+        fetchAllData();
+
+    } catch (err) { console.error("Check-In Error:", err); alert("Check-in failed."); }
+  };
+
+  // 🚀 NEW: CANCEL LOGIC
+  const handleCancel = async (bookingId, roomId) => {
+    if (!window.confirm("Are you sure you want to CANCEL this reservation?")) return;
+
+    try {
+        await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: 'CANCELLED' })
+        });
+        
+        // Free up room if needed
+        if (roomId) {
+            await fetch(`${API_URL}/api/rooms/${roomId}/`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'AVAILABLE' })
+            });
+        }
+        
+        fetchAllData();
+    } catch (err) { console.error(err); }
+  };
+
   const handleSendEmail = async (bookingId) => {
     try {
       const response = await fetch(`${API_URL}/api/bookings/${bookingId}/send-confirmation/`, {
@@ -313,7 +365,7 @@ const Bookings = () => {
               {/* STEP 3: FINANCIAL SETTLEMENT */}
               {currentStep === 3 && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-                   <div className="bg-slate-900 text-white p-12 rounded-[40px] shadow-2xl relative overflow-hidden">
+                    <div className="bg-slate-900 text-white p-12 rounded-[40px] shadow-2xl relative overflow-hidden">
                       <Landmark className="absolute -right-16 -bottom-16 w-64 h-64 opacity-5" />
                       <div className="flex justify-between items-start">
                         <div>
@@ -332,7 +384,7 @@ const Bookings = () => {
                           <input type="number" className="w-full bg-white/5 border-2 border-white/10 p-6 pl-12 rounded-[24px] text-3xl font-black outline-none focus:border-blue-500 transition-all" value={bookingData.advance_paid} onChange={e => setBookingData({...bookingData, advance_paid: e.target.value})} />
                         </div>
                       </div>
-                   </div>
+                    </div>
                 </div>
               )}
             </div>
@@ -438,18 +490,33 @@ const Bookings = () => {
                       </span>
                   </td>
                   <td className="p-8">
-                     <div className="flex justify-end items-center gap-3">
+                      <div className="flex justify-end items-center gap-3">
                         <button onClick={() => setShowChargeForm(b.id)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-orange-500 hover:border-orange-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="Post Charge"><ShoppingCart size={20}/></button>
                         <button onClick={() => handlePrintGRC(b.id)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="GRC"><FileText size={20}/></button>
                         <button onClick={() => handlePrintInvoice(b)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-slate-900 hover:border-slate-300 rounded-xl transition-all hover:scale-110 shadow-sm" title="Tax Invoice"><Printer size={20}/></button>
                         <button onClick={() => handleSendEmail(b.id)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-green-600 hover:border-green-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="Email Receipt"><Mail size={20}/></button>
                         
+                        {/* 🚀 ACTION: CHECK-IN */}
+                        {b.status === 'CONFIRMED' && (
+                           <button onClick={() => handleCheckIn(b.id, b.room)} className="h-12 px-6 flex items-center gap-2 bg-green-50 text-green-600 hover:bg-green-600 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-green-200" title="Check In Guest">
+                             <LogIn size={16}/> Check In
+                           </button>
+                        )}
+
+                        {/* 🚀 ACTION: CHECK-OUT */}
                         {b.status === 'CHECKED_IN' && (
                           <button onClick={() => handleCheckout(b.id)} className="h-12 px-6 flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-red-200" title="Finalize Settlement">
                             <LogOut size={16}/> Checkout
                           </button>
                         )}
-                     </div>
+                        
+                        {/* 🚀 ACTION: CANCEL */}
+                        {(b.status === 'CONFIRMED') && (
+                           <button onClick={() => handleCancel(b.id, b.room)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 hover:border-red-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="Cancel Booking">
+                             <XCircle size={20}/>
+                           </button>
+                        )}
+                      </div>
                   </td>
                 </tr>
               )) : (
