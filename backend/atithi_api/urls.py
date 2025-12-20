@@ -8,8 +8,10 @@ from hotel.views import (
     BookingViewSet, 
     ServiceViewSet, 
     BookingChargeViewSet,
-    AnalyticsView,      # 👈 Added for Executive Dashboard
-    PublicFolioView     # 👈 Added for Guest Mobile View
+    ExpenseViewSet,         # 👈 Added ExpenseViewSet (Critical for Accounting)
+    AnalyticsView,          # 👈 Executive Dashboard
+    PublicFolioView,        # 👈 Guest Mobile View
+    seed_data_trigger       # 👈 The Magic Seed Trigger
 )
 from core.views import UserViewSet
 
@@ -46,7 +48,7 @@ def home_view(request):
     return JsonResponse({
         "message": "Welcome to Atithi SaaS API 🏨",
         "status": "Running",
-        "version": "2.1 (Analytics & Guest Folio Enabled)",
+        "version": "2.2 (Analytics, Guest Folio & Seeding Enabled)",
         "admin_panel": "/admin/"
     })
 
@@ -56,6 +58,7 @@ router.register(r'guests', GuestViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'services', ServiceViewSet)
 router.register(r'charges', BookingChargeViewSet)
+router.register(r'expenses', ExpenseViewSet) # 👈 Added Expenses Endpoint
 router.register(r'users', UserViewSet)
 
 # ==========================================
@@ -72,6 +75,9 @@ urlpatterns = [
     # 🔓 PUBLIC GUEST FOLIO (Guest Access via ID)
     path('api/public/folio/<int:booking_id>/', PublicFolioView.as_view(), name='public_folio'),
     
+    # 🪄 MAGIC SEED LINK (Run this to populate DB)
+    path('seed-db-now/', seed_data_trigger, name='seed_data_trigger'),
+
     # 🔑 AUTHENTICATION
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

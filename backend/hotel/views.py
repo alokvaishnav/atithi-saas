@@ -5,6 +5,9 @@ from rest_framework.decorators import action
 from django.utils import timezone
 from django.db.models import Sum, Count, Q
 from django.db.models.functions import TruncDate
+from django.http import JsonResponse
+from django.core.management import call_command
+
 from .models import Guest, Room, Booking, Service, BookingCharge, Expense
 from .serializers import (
     GuestSerializer, 
@@ -181,3 +184,24 @@ class PublicFolioView(APIView):
             return Response(serializer.data)
         except Booking.DoesNotExist:
             return Response({"error": "Folio record not found"}, status=status.HTTP_404_NOT_FOUND)
+
+# ==============================
+# 5. 🪄 MAGIC SEED TRIGGER (Render Hack)
+# ==============================
+
+def seed_data_trigger(request):
+    """
+    Runs 'python manage.py seed_data' when visited.
+    This bypasses Render Free Tier shell restrictions.
+    """
+    try:
+        call_command('seed_data')
+        return JsonResponse({
+            "status": "Success", 
+            "message": "✅ Database has been populated with 50 bookings & rooms!"
+        })
+    except Exception as e:
+        return JsonResponse({
+            "status": "Error", 
+            "message": str(e)
+        })
