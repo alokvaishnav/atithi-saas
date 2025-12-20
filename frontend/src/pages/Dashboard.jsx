@@ -63,10 +63,10 @@ const Dashboard = () => {
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
   const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
-  // 📊 Chart Logic: Calculate Max Value for Scaling Bars
-  const maxRevenue = analytics?.trend?.length 
-    ? Math.max(...analytics.trend.map(t => parseFloat(t.daily_revenue || 0))) 
-    : 1; // Prevent division by zero
+  // 📊 Chart Logic: Robust Max Calculation
+  const trendData = analytics?.trend || [];
+  const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
+  const maxRevenue = Math.max(...revenueValues, 5000); // Default scale to 5000 if empty
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -271,32 +271,38 @@ const Dashboard = () => {
 
       </div>
 
-      {/* 🚀 ANALYTICS TREND BAR (FIXED) */}
-      {analytics?.trend?.length > 0 && (
-          <div className="mt-10 bg-slate-900 p-8 rounded-[48px] text-white overflow-hidden relative">
-              <div className="flex justify-between items-center mb-8 relative z-10">
+      {/* 🚀 ANALYTICS TREND BAR (UPDATED: High Visibility) */}
+      {trendData.length > 0 && (
+          <div className="mt-10 bg-slate-900 p-10 rounded-[48px] text-white overflow-hidden relative">
+              <div className="flex justify-between items-center mb-10 relative z-10">
                   <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Revenue Velocity</h3>
                   <TrendingUp className="text-blue-400" size={20}/>
               </div>
-              <div className="flex items-end justify-between gap-2 h-20 relative z-10">
-                  {analytics.trend.map((t, i) => {
-                      const dailyRevenue = parseFloat(t.daily_revenue || 0); // Force number
+              
+              {/* Increased Height & Spacing */}
+              <div className="flex items-end justify-between gap-4 h-40 relative z-10">
+                  {trendData.map((t, i) => {
+                      const dailyRevenue = Number(t.daily_revenue || 0); 
+                      // Calculate percent, but ensure max doesn't crash on 0
                       const heightPercent = maxRevenue > 0 ? (dailyRevenue / maxRevenue) * 100 : 0;
                       
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center group/trend">
-                            <div className="w-full relative h-full flex items-end">
+                        <div key={i} className="flex-1 flex flex-col items-center group/trend h-full justify-end">
+                            {/* Bar Container */}
+                            <div className="w-full relative flex items-end justify-center" style={{height: '100%'}}>
+                                {/* The Visible Bar */}
                                 <div 
                                   style={{ height: `${heightPercent}%` }} 
-                                  className="w-full bg-blue-500/30 border-t-2 border-blue-400 rounded-t-lg group-hover/trend:bg-blue-500 transition-all duration-500 relative"
+                                  className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 relative min-h-[4px]" // Forced solid color & min-height
                                 >
-                                    {/* Tooltip on Hover */}
-                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-black py-1 px-2 rounded opacity-0 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                        ₹{dailyRevenue.toLocaleString()}
+                                    {/* Value Label (Always visible now) */}
+                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold opacity-70 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap">
+                                        {dailyRevenue > 0 ? `₹${(dailyRevenue/1000).toFixed(1)}k` : ''}
                                     </div>
                                 </div>
                             </div>
-                            <p className="text-[8px] font-black mt-2 opacity-40 uppercase tracking-tighter">{t.date.split('-').slice(1).join('/')}</p>
+                            {/* Date Label */}
+                            <p className="text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest">{t.date.split('-').slice(1).join('/')}</p>
                         </div>
                       );
                   })}
