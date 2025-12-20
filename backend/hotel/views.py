@@ -141,14 +141,11 @@ class AnalyticsView(APIView):
         # 2. Expense Stats
         exp_total = Expense.objects.aggregate(total_exp=Sum('amount'))['total_exp'] or 0
 
-        # 3. Safe Math Conversion (Decimal -> Float) 
-        # 🚨 FIX: This prevents the 500 Error when subtracting Decimal vs Float
+        # 3. Safe Math Conversion (Decimal -> Float)
         total_revenue = float(rev_stats['total_rev'] or 0)
         total_tax = float(rev_stats['total_tax'] or 0)
         total_advance = float(rev_stats['total_advance'] or 0)
         total_expenses = float(exp_total)
-
-        # Now subtraction works perfectly
         net_profit = total_revenue - total_expenses
 
         # 4. Live Occupancy
@@ -157,10 +154,18 @@ class AnalyticsView(APIView):
         occupancy_rate = (occupied_rooms / total_rooms * 100) if total_rooms > 0 else 0
 
         # 5. Revenue Trend (Last 7 Days)
-        trend = Booking.objects.annotate(date=TruncDate('check_in_date')) \
+        raw_trend = Booking.objects.annotate(date=TruncDate('check_in_date')) \
             .values('date') \
             .annotate(daily_revenue=Sum('total_amount')) \
             .order_by('-date')[:7]
+
+        # 🚨 FIX: Convert Decimal to Float specifically for the Chart Library
+        formatted_trend = []
+        for item in raw_trend:
+            formatted_trend.append({
+                "date": item['date'],
+                "daily_revenue": float(item['daily_revenue'] or 0) # <--- The Magic Fix
+            })
 
         return Response({
             "financials": {
@@ -171,7 +176,7 @@ class AnalyticsView(APIView):
                 "net_profit": net_profit
             },
             "occupancy": round(occupancy_rate, 1),
-            "trend": list(trend),
+            "trend": formatted_trend, # Sending the clean float data
             "room_count": total_rooms
         })
 
