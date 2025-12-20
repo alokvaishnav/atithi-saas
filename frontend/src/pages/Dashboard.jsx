@@ -63,6 +63,11 @@ const Dashboard = () => {
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
   const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
+  // 📊 Chart Logic: Calculate Max Value for Scaling Bars
+  const maxRevenue = analytics?.trend?.length 
+    ? Math.max(...analytics.trend.map(t => parseFloat(t.daily_revenue || 0))) 
+    : 1; // Prevent division by zero
+
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
       <div className="relative">
@@ -266,7 +271,7 @@ const Dashboard = () => {
 
       </div>
 
-      {/* 🚀 ANALYTICS TREND BAR */}
+      {/* 🚀 ANALYTICS TREND BAR (FIXED) */}
       {analytics?.trend?.length > 0 && (
           <div className="mt-10 bg-slate-900 p-8 rounded-[48px] text-white overflow-hidden relative">
               <div className="flex justify-between items-center mb-8 relative z-10">
@@ -274,15 +279,27 @@ const Dashboard = () => {
                   <TrendingUp className="text-blue-400" size={20}/>
               </div>
               <div className="flex items-end justify-between gap-2 h-20 relative z-10">
-                  {analytics.trend.map((t, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center group/trend">
-                          <div 
-                            style={{ height: `${(t.daily_revenue / Math.max(...analytics.trend.map(x => x.daily_revenue))) * 100}%` }} 
-                            className="w-full bg-blue-500/30 border-t-2 border-blue-400 rounded-t-lg group-hover/trend:bg-blue-500 transition-all duration-500"
-                          ></div>
-                          <p className="text-[8px] font-black mt-2 opacity-40 uppercase tracking-tighter">{t.date.split('-').slice(1).join('/')}</p>
-                      </div>
-                  ))}
+                  {analytics.trend.map((t, i) => {
+                      const dailyRevenue = parseFloat(t.daily_revenue || 0); // Force number
+                      const heightPercent = maxRevenue > 0 ? (dailyRevenue / maxRevenue) * 100 : 0;
+                      
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center group/trend">
+                            <div className="w-full relative h-full flex items-end">
+                                <div 
+                                  style={{ height: `${heightPercent}%` }} 
+                                  className="w-full bg-blue-500/30 border-t-2 border-blue-400 rounded-t-lg group-hover/trend:bg-blue-500 transition-all duration-500 relative"
+                                >
+                                    {/* Tooltip on Hover */}
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-black py-1 px-2 rounded opacity-0 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                        ₹{dailyRevenue.toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-[8px] font-black mt-2 opacity-40 uppercase tracking-tighter">{t.date.split('-').slice(1).join('/')}</p>
+                        </div>
+                      );
+                  })}
               </div>
           </div>
       )}
