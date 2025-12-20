@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { 
   Building, Users, Loader2, LogIn, LogOut, 
   CheckCircle, XCircle, AlertTriangle, Briefcase,
-  Sparkles, TrendingUp, Wallet, BarChart3, Clock, AlertCircle
+  Sparkles, TrendingUp, Wallet, BarChart3, Clock, AlertCircle, TrendingDown,
+  ArrowUpRight, MapPin, Calendar, ShieldCheck
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
@@ -31,7 +32,7 @@ const Dashboard = () => {
       if (resAnalytics.ok) setAnalytics(await resAnalytics.json());
 
     } catch (err) { 
-      console.error("Error fetching dashboard data:", err);
+      console.error("Critical System Fetch Error:", err);
     } finally { 
       setLoading(false); 
     }
@@ -39,7 +40,7 @@ const Dashboard = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // 🧮 OPERATIONAL CALCULATIONS
+  // 🧮 EXTENDED OPERATIONAL LOGIC
   const todayStr = new Date().toISOString().split('T')[0];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
@@ -57,179 +58,206 @@ const Dashboard = () => {
   const dirtyVacant = safeRooms.filter(r => r.status === 'DIRTY').length; 
   const cleanVacant = safeRooms.filter(r => r.status === 'AVAILABLE').length; 
   const maintenance = safeRooms.filter(r => r.status === 'MAINTENANCE').length;
-  const rmsToSell = cleanVacant + dirtyVacant; 
-
+  
+  // Logic for Inventory Efficiency
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
+  const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
-      <Loader2 className="w-16 h-16 text-blue-600 animate-spin mb-4" />
-      <p className="font-black text-slate-400 uppercase tracking-widest text-xs">Initializing Atithi HMS...</p>
+      <div className="relative">
+        <Loader2 className="w-20 h-20 text-blue-600 animate-spin" />
+        <Building className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
+      </div>
+      <p className="mt-6 font-black text-slate-400 uppercase tracking-[0.3em] text-[10px]">Booting Enterprise PMS Engine...</p>
     </div>
   );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
+    <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* 👋 HEADER */}
-      <div className="flex justify-between items-end mb-10">
+      {/* 👋 DYNAMIC MANAGEMENT HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
         <div>
-          <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase">Property Dashboard</h1>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">
-            Role: <span className="text-blue-600">{userRole}</span> • Operations Status: <span className="text-green-500">Live</span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="bg-blue-600 text-white p-1 rounded-md"><ShieldCheck size={14}/></span>
+            <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">Management Portal v2.1</p>
+          </div>
+          <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Intelligence</h1>
+          <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mt-3 flex items-center gap-2">
+             <Clock size={12}/> Last Refreshed: {new Date().toLocaleTimeString()}
           </p>
         </div>
-        <div className="text-right hidden sm:block">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">System Date</p>
-          <p className="text-lg font-bold text-slate-700">{new Date().toLocaleDateString()}</p>
+        
+        <div className="flex gap-4">
+            <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 shadow-sm text-right">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Health</p>
+                <p className="text-xl font-black text-emerald-500">{healthScore}%</p>
+            </div>
+            <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Personnel</p>
+                <p className="text-xl font-black text-white">{userRole}</p>
+            </div>
         </div>
       </div>
 
-      {/* 📊 EXECUTIVE FINANCIALS (Top Row) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner"><Wallet size={24}/></div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Revenue</p>
-            <h3 className="text-xl font-black text-slate-900">₹{parseFloat(analytics?.financials?.total_rev || 0).toLocaleString()}</h3>
+      {/* 📊 CORE FINANCIAL INTELLIGENCE */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        {/* REVENUE */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
+          <div className="flex justify-between items-start mb-6">
+            <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
+            <ArrowUpRight className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
+          <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_rev || 0).toLocaleString()}</h3>
+        </div>
+
+        {/* EXPENSES */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
+          <div className="flex justify-between items-start mb-6">
+            <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
+            <AlertCircle className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Expenses</p>
+          <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_expenses || 0).toLocaleString()}</h3>
+        </div>
+
+        {/* NET PROFIT (DYNAMIC CALCULATION) */}
+        <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
+          <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
+          <div className="relative z-10">
+            <div className="w-14 h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
+            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit Flow</p>
+            <h3 className="text-3xl font-black text-white italic tracking-tighter">₹{(analytics?.financials?.net_profit || 0).toLocaleString()}</h3>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner"><BarChart3 size={24}/></div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Advance Float</p>
-            <h3 className="text-xl font-black text-slate-900">₹{parseFloat(analytics?.financials?.total_advance || 0).toLocaleString()}</h3>
+        {/* ADVANCE LIABILITY */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-orange-500 transition-all duration-500">
+          <div className="flex justify-between items-start mb-6">
+            <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
           </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center shadow-inner"><TrendingUp size={24}/></div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Occupancy %</p>
-            <h3 className="text-xl font-black text-slate-900">{occupancyRate}%</h3>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-inner"><Building size={24}/></div>
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">GST Liability</p>
-            <h3 className="text-xl font-black text-slate-900">₹{parseFloat(analytics?.financials?.total_tax || 0).toLocaleString()}</h3>
-          </div>
-        </div>
-      </div>
-
-      {/* 📈 OPERATIONAL KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-t-4 border-yellow-400">
-          <div className="flex justify-between items-center mb-2">
-            <AlertTriangle className="text-yellow-500" size={18}/>
-            <span className="text-2xl font-black">{dirtyVacant}</span>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dirty Vacant</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-t-4 border-teal-500">
-          <div className="flex justify-between items-center mb-2">
-            <CheckCircle className="text-teal-500" size={18}/>
-            <span className="text-2xl font-black">{cleanVacant}</span>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clean Vacant</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-t-4 border-blue-500">
-          <div className="flex justify-between items-center mb-2">
-            <LogIn className="text-blue-500" size={18}/>
-            <span className="text-2xl font-black">{expectedArrivals.length}</span>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today Arrivals</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl shadow-sm border-t-4 border-red-500">
-          <div className="flex justify-between items-center mb-2">
-            <LogOut className="text-red-500" size={18}/>
-            <span className="text-2xl font-black">{expectedDepartures.length}</span>
-          </div>
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Today Departures</p>
+          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Advance Float</p>
+          <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_advance || 0).toLocaleString()}</h3>
         </div>
       </div>
 
-      {/* 📈 INVENTORY HEALTH BAR */}
-      <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="font-black text-slate-700 uppercase text-xs tracking-widest flex items-center gap-2">
-            <TrendingUp size={16} className="text-blue-600"/> Inventory Distribution Health
-          </h3>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Inventory: {totalRoomsCount} Units</span>
+      {/* 📈 OPERATIONAL KPI GRID */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        {[
+          { label: "DIRTY VACANT", val: dirtyVacant, icon: Sparkles, color: "text-orange-500", bg: "border-orange-200", desc: "Needs Cleaning" },
+          { label: "CLEAN READY", val: cleanVacant, icon: CheckCircle, color: "text-teal-500", bg: "border-teal-200", desc: "Available to Sell" },
+          { label: "TODAY ARRIVALS", val: expectedArrivals.length, icon: LogIn, color: "text-blue-500", bg: "border-blue-200", desc: "Confirmed Guest" },
+          { label: "TODAY DEPARTURES", val: expectedDepartures.length, icon: LogOut, color: "text-red-500", bg: "border-red-200", desc: "Pending Folios" }
+        ].map((kpi, i) => (
+          <div key={i} className={`bg-white p-6 rounded-[32px] shadow-sm border-l-8 ${kpi.bg} hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1`}>
+            <div className="flex justify-between items-center mb-2">
+              <kpi.icon className={kpi.color} size={24}/>
+              <span className="text-4xl font-black text-slate-800 tracking-tighter">{kpi.val}</span>
+            </div>
+            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{kpi.label}</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{kpi.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* 🏢 INVENTORY DISTRIBUTION ENGINE */}
+      <div className="bg-white p-10 rounded-[48px] border border-slate-200 shadow-sm mb-10 group">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h3 className="font-black text-slate-900 uppercase text-sm tracking-[0.3em]">Live Inventory Health</h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Real-time room status distribution</p>
+          </div>
+          <div className="text-right">
+             <span className="text-3xl font-black text-slate-900 tracking-tighter">{occupancyRate}%</span>
+             <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">Occupancy</p>
+          </div>
         </div>
         
-        <div className="flex h-12 w-full rounded-2xl overflow-hidden shadow-inner bg-slate-100 p-1">
-          <div style={{ width: `${(cleanVacant / totalRoomsCount) * 100}%` }} className="bg-teal-500 h-full transition-all duration-1000 border-r-2 border-white/20 rounded-l-xl"></div>
-          <div style={{ width: `${(occupiedRooms / totalRoomsCount) * 100}%` }} className="bg-blue-600 h-full transition-all duration-1000 border-r-2 border-white/20"></div>
-          <div style={{ width: `${(dirtyVacant / totalRoomsCount) * 100}%` }} className="bg-yellow-400 h-full transition-all duration-1000 border-r-2 border-white/20"></div>
-          <div style={{ width: `${(maintenance / totalRoomsCount) * 100}%` }} className="bg-red-600 h-full transition-all duration-1000 rounded-r-xl"></div>
+        <div className="flex h-16 w-full rounded-[24px] overflow-hidden shadow-inner bg-slate-50 p-2 border-4 border-slate-50">
+          <div style={{ width: `${(cleanVacant / totalRoomsCount) * 100}%` }} className="bg-teal-500 h-full transition-all duration-1000 border-r-4 border-white group-hover:brightness-110"></div>
+          <div style={{ width: `${(occupiedRooms / totalRoomsCount) * 100}%` }} className="bg-blue-600 h-full transition-all duration-1000 border-r-4 border-white group-hover:brightness-110"></div>
+          <div style={{ width: `${(dirtyVacant / totalRoomsCount) * 100}%` }} className="bg-orange-400 h-full transition-all duration-1000 border-r-4 border-white group-hover:brightness-110"></div>
+          <div style={{ width: `${(maintenance / totalRoomsCount) * 100}%` }} className="bg-red-600 h-full transition-all duration-1000 group-hover:brightness-110"></div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-teal-500"></div> <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Ready (Clean)</span></div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-600"></div> <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">In-House</span></div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-yellow-400"></div> <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Needs Cleaning</span></div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-600"></div> <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Out of Order</span></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-10">
+          <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="w-3 h-3 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]"></div> 
+            <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Ready</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{cleanVacant} Units</p></div>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="w-3 h-3 rounded-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div> 
+            <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Occupied</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{occupiedRooms} Units</p></div>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="w-3 h-3 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.5)]"></div> 
+            <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Dirty</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{dirtyVacant} Units</p></div>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="w-3 h-3 rounded-full bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]"></div> 
+            <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">O.O.O</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{maintenance} Units</p></div>
+          </div>
         </div>
       </div>
 
-      {/* 📋 SPLIT DATA TABLES */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* 📋 OPERATIONAL MANIFESTS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         
-        {/* Arrivals Table */}
-        <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-            <h3 className="font-black text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">
-              <LogIn size={18} className="text-blue-500"/> Check-in Manifest
+        {/* Arrivals Card */}
+        <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
+          <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-blue-50 transition-colors">
+            <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest">
+              <LogIn size={20} className="text-blue-600"/> Arriving Guest Manifest
             </h3>
+            <span className="text-[9px] font-black px-3 py-1 bg-blue-100 text-blue-700 rounded-full tracking-widest uppercase italic">ETA Today</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-white text-slate-400 border-b text-[10px] font-black uppercase tracking-widest">
-                <tr><th className="p-6">ID</th><th className="p-6">Guest</th><th className="p-6">Allocation</th></tr>
-              </thead>
               <tbody className="divide-y divide-slate-50">
                 {expectedArrivals.length > 0 ? expectedArrivals.map(b => (
-                  <tr key={b.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-6 font-bold text-blue-600">#{b.id}</td>
-                    <td className="p-6 font-black text-slate-800">{b.guest_details?.full_name}</td>
-                    <td className="p-6"><span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-black text-xs uppercase">Room {b.room_details?.room_number || "TBA"}</span></td>
+                  <tr key={b.id} className="hover:bg-slate-50 transition-colors group/row">
+                    <td className="p-6">
+                        <p className="font-black text-slate-800 text-base">{b.guest_details?.full_name}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ref: #BK-{b.id}</p>
+                    </td>
+                    <td className="p-6 text-right">
+                        <span className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-blue-100">RM {b.room_details?.room_number || "TBA"}</span>
+                    </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="3" className="p-12 text-center text-slate-400 italic">No scheduled arrivals for today.</td></tr>
+                  <tr><td className="p-20 text-center text-slate-300 italic font-medium">No arrivals scheduled for current business date.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Departures Table */}
-        <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-            <h3 className="font-black text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">
-              <LogOut size={18} className="text-red-500"/> Check-out Manifest
+        {/* Departures Card */}
+        <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
+          <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-red-50 transition-colors">
+            <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest">
+              <LogOut size={20} className="text-red-600"/> Departure Settlement List
             </h3>
+            <span className="text-[9px] font-black px-3 py-1 bg-red-100 text-red-700 rounded-full tracking-widest uppercase italic">Out Today</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-white text-slate-400 border-b text-[10px] font-black uppercase tracking-widest">
-                <tr><th className="p-6">Unit</th><th className="p-6">Guest</th><th className="p-6">Folio Balance</th></tr>
-              </thead>
               <tbody className="divide-y divide-slate-50">
                 {expectedDepartures.length > 0 ? expectedDepartures.map(b => (
                   <tr key={b.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-6 font-black text-slate-700">RM {b.room_details?.room_number}</td>
-                    <td className="p-6 font-black text-slate-800">{b.guest_details?.full_name}</td>
-                    <td className="p-6 font-black text-red-600">₹{parseFloat(b.total_amount).toLocaleString()}</td> 
+                    <td className="p-6">
+                        <p className="font-black text-slate-800 text-base">{b.guest_details?.full_name}</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Unit: {b.room_details?.room_number}</p>
+                    </td>
+                    <td className="p-6 text-right">
+                        <p className="text-red-600 font-black text-lg tracking-tighter">₹{(parseFloat(b.total_amount) - parseFloat(b.amount_paid)).toLocaleString()}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Balance Due</p>
+                    </td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="3" className="p-12 text-center text-slate-400 italic">No scheduled departures for today.</td></tr>
+                  <tr><td className="p-20 text-center text-slate-300 italic font-medium">No departures scheduled for current business date.</td></tr>
                 )}
               </tbody>
             </table>
@@ -237,6 +265,28 @@ const Dashboard = () => {
         </div>
 
       </div>
+
+      {/* 🚀 ANALYTICS TREND BAR */}
+      {analytics?.trend?.length > 0 && (
+          <div className="mt-10 bg-slate-900 p-8 rounded-[48px] text-white overflow-hidden relative">
+              <div className="flex justify-between items-center mb-8 relative z-10">
+                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Revenue Velocity</h3>
+                  <TrendingUp className="text-blue-400" size={20}/>
+              </div>
+              <div className="flex items-end justify-between gap-2 h-20 relative z-10">
+                  {analytics.trend.map((t, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center group/trend">
+                          <div 
+                            style={{ height: `${(t.daily_revenue / Math.max(...analytics.trend.map(x => x.daily_revenue))) * 100}%` }} 
+                            className="w-full bg-blue-500/30 border-t-2 border-blue-400 rounded-t-lg group-hover/trend:bg-blue-500 transition-all duration-500"
+                          ></div>
+                          <p className="text-[8px] font-black mt-2 opacity-40 uppercase tracking-tighter">{t.date.split('-').slice(1).join('/')}</p>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

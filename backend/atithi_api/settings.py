@@ -1,6 +1,6 @@
 """
 Django settings for atithi_api project.
-Updated for Atithi HMS v2.0 - Email Automation & Enterprise Security
+Updated for Atithi HMS Enterprise v2.1 - Deployment Optimized
 """
 
 from pathlib import Path
@@ -12,12 +12,12 @@ from datetime import timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-=n8%jjzrhdr)$7&npl*kyl6lbp(%f@79b_+tp*bo6_ppe(0m=v'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*kyl6lbp(%f@79b_+tp*bo6_ppe(0m=v')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ['*'] # Render handles specific host security via environment
 
 # Application definition
 INSTALLED_APPS = [
@@ -26,17 +26,23 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic', # Must be before staticfiles
     'django.contrib.staticfiles',
+    
+    # 📦 Professional SaaS Stack
     'rest_framework',
+    'rest_framework_simplejwt',
+    'corsheaders',
+    
+    # 🏨 Internal Apps
     'core',
     'hotel',
-    'corsheaders',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # 👈 Priority #1
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
+    'whitenoise.middleware.WhiteNoiseMiddleware', # 👈 Priority #2
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -45,7 +51,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# REST Framework & JWT Configuration
+# --------------------------------------------------------
+# 🔒 AUTHENTICATION & REST SECURITY
+# --------------------------------------------------------
+AUTH_USER_MODEL = 'core.User'
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -58,6 +68,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
 }
 
 ROOT_URLCONF = 'atithi_api.urls'
@@ -93,11 +105,12 @@ DATABASES = {
     }
 }
 
+# Render.com External URL
 MANUAL_DB_URL = "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr"
 
-if 'DATABASE_URL' in os.environ:
+if os.environ.get('DATABASE_URL'):
     DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
-elif not os.environ.get('DOCKER_ENV'):
+else:
     DATABASES['default'] = dj_database_url.config(
         default=MANUAL_DB_URL,
         conn_max_age=600,
@@ -107,16 +120,48 @@ elif not os.environ.get('DOCKER_ENV'):
 # --------------------------------------------------------
 # 📧 EMAIL AUTOMATION CONFIGURATION
 # --------------------------------------------------------
-# For Gmail: Use an "App Password" (16 digits) from Google Account Security
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-hotel-email@gmail.com' # 👈 Update with your email
-EMAIL_HOST_PASSWORD = 'your-app-password'      # 👈 Update with your App Password
+EMAIL_HOST_USER = os.environ.get('EMAIL_USER', 'your-hotel-email@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS', 'your-app-password')
 DEFAULT_FROM_EMAIL = f"Atithi Hotel Manager <{EMAIL_HOST_USER}>"
 
 # --------------------------------------------------------
+# 📁 MEDIA & STATIC FILES
+# --------------------------------------------------------
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'Asia/Kolkata' # 🇮🇳 Indian Standard Time
+USE_I18N = True
+USE_TZ = True 
+
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# WhiteNoise storage optimized for production
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+# 🌐 CORS CONFIGURATION
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# ☁️ CLOUD OVERRIDE (Render.com Logic)
+if os.environ.get('RENDER'):
+    CORS_ALLOW_ALL_ORIGINS = True  # Allows your frontend to talk to backend
+    DEBUG = False
+    RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    if RENDER_EXTERNAL_HOSTNAME:
+        ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -126,30 +171,4 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Kolkata' # 👈 Updated for Indian Standard Time
-USE_I18N = True
-USE_TZ = True 
-
-# Static files
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-# Default primary key
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Use Professional User Model
-AUTH_USER_MODEL = 'core.User'
-
-# CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
-
-# --------------------------------------------------------
-# ☁️ CLOUD CONFIGURATION (Render.com Logic)
-# --------------------------------------------------------
-if os.environ.get('RENDER'):
-    CORS_ALLOW_ALL_ORIGINS = True

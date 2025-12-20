@@ -3,7 +3,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
-from django.core.mail import send_mail # 👈 New import for notifications
+from django.core.mail import send_mail
 
 # ==========================================
 # 1. ROOM MANAGEMENT
@@ -72,7 +72,7 @@ class Booking(models.Model):
     coming_from = models.CharField(max_length=100, blank=True, null=True)
     going_to = models.CharField(max_length=100, blank=True, null=True)
 
-    # Financial breakdown (Strict Decimal Precision)
+    # Financial breakdown
     subtotal_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0) 
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)      
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)    
@@ -85,7 +85,6 @@ class Booking(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
-        """Logic to prevent double bookings and date errors"""
         if self.check_in_date and self.check_out_date:
             if self.check_out_date <= self.check_in_date:
                 raise ValidationError("Check-out must be after check-in.")
@@ -102,8 +101,7 @@ class Booking(models.Model):
                 raise ValidationError(f"Room {self.room.room_number} is occupied during these dates.")
 
     def save(self, *args, **kwargs):
-        """Auto-calculate Tax (12% Room GST), balance, and send confirmation email"""
-        is_new = self.pk is None # Check if this is a new booking
+        is_new = self.pk is None 
         
         if self.room and self.check_in_date and self.check_out_date:
             delta = self.check_out_date - self.check_in_date
@@ -113,51 +111,39 @@ class Booking(models.Model):
             self.tax_amount = (self.subtotal_amount * Decimal('0.12')).quantize(Decimal('0.01'))
             self.total_amount = self.subtotal_amount + self.tax_amount
             
-            # Sync amount_paid with advance if it's a new booking
             if self.advance_paid > 0 and self.amount_paid < self.advance_paid:
                 self.amount_paid = self.advance_paid
 
         self.full_clean()
         super().save(*args, **kwargs)
 
-        # 📧 AUTOMATION: Send confirmation email on new booking creation
         if is_new and self.guest.email:
             self.send_confirmation_email()
 
     def send_confirmation_email(self):
-        """Logic to construct and send the email notification"""
         subject = f"Booking Confirmed at Atithi Hotel - ID: {self.id}"
         message = (
             f"Dear {self.guest.full_name},\n\n"
-            f"Your reservation is confirmed! Here are your stay details:\n\n"
-            f"Room: {self.room.room_number} ({self.room.room_type})\n"
-            f"Check-In: {self.check_in_date.strftime('%d %b %Y, %I:%M %p')}\n"
-            f"Check-Out: {self.check_out_date.strftime('%d %b %Y, %I:%M %p')}\n\n"
-            f"Total Amount: ₹{self.total_amount}\n"
-            f"Advance Paid: ₹{self.advance_paid}\n"
-            f"Balance to Pay: ₹{self.balance_due}\n\n"
-            f"Thank you for choosing Atithi Hotel. We look forward to your arrival!"
+            f"Your reservation is confirmed! Stay Details:\n\n"
+            f"Room: {self.room.room_number}\n"
+            f"Check-In: {self.check_in_date.strftime('%d %b %Y')}\n\n"
+            f"Total: ₹{self.total_amount}\n"
+            f"Advance: ₹{self.advance_paid}\n"
+            f"Balance: ₹{self.balance_due}\n\n"
+            f"Thank you for choosing us!"
         )
         try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [self.guest.email],
-                fail_silently=False,
-            )
+            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.guest.email])
         except Exception as e:
-            # Logs error but allows booking to be saved even if email fails
-            print(f"Error sending email: {e}")
+            print(f"Email failed: {e}")
 
     @property
     def balance_due(self):
-        """Calculates live balance including POS charges"""
         pos_total = sum(charge.total_cost for charge in self.charges.all())
         return (self.total_amount + pos_total) - self.amount_paid
 
     def __str__(self):
-        return f"B-{self.id} | {self.guest.full_name} | {self.room.room_number}"
+        return f"B-{self.id} | {self.guest.full_name}"
 
 # ==========================================
 # 4. POS & SERVICES (Tax Category Aware)
@@ -191,7 +177,6 @@ class BookingCharge(models.Model):
     added_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        """Dynamic Taxing: 5% for Food, 18% for services"""
         if self.service:
             self.subtotal = self.service.price * self.quantity
             tax_rate = Decimal('0.05') if self.service.category == 'FOOD' else Decimal('0.18')
@@ -199,5 +184,47 @@ class BookingCharge(models.Model):
             self.total_cost = self.subtotal + self.tax_amount
         super().save(*args, **kwargs)
 
+# ==========================================
+# 5. EXPENSE TRACKING (Financial Outflow)
+# ==========================================
+class Expense(models.Model):
+    CATEGORY_CHOICES = [
+        ('UTILITY', 'Electricity/Water'),
+        ('SALARY', 'Staff Salaries'),
+        ('MAINTENANCE', 'Repairs & Maintenance'),
+        ('INVENTORY', 'Supplies & Grocery'),
+        ('TAX', 'Govt Taxes/Fees'),
+        ('OTHER', 'Miscellaneous'),
+    ]
+
+    title = models.CharField(max_length=200)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OTHER')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateField(default=timezone.now)
+    description = models.TextField(blank=True)
+    paid_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
     def __str__(self):
-        return f"Charge {self.id} for Booking {self.booking.id}"
+        return f"{self.title} - ₹{self.amount}"
+
+# ==========================================
+# 6. PROPERTY SETTINGS (White-Label Config)
+# ==========================================
+class PropertySetting(models.Model):
+    hotel_name = models.CharField(max_length=200, default="Atithi Hotel")
+    gstin = models.CharField(max_length=15, blank=True, verbose_name="GST Identification Number")
+    contact_number = models.CharField(max_length=15, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
+    
+    # Financial Configuration
+    currency_symbol = models.CharField(max_length=5, default="₹")
+    room_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.00, help_text="Default Room GST %")
+
+    class Meta:
+        verbose_name = "Property Setting"
+        verbose_name_plural = "Property Settings"
+
+    def __str__(self):
+        return self.hotel_name

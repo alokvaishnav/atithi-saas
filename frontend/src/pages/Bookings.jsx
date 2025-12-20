@@ -2,24 +2,29 @@ import { useEffect, useState } from 'react';
 import { 
   Plus, X, Calendar, Printer, ShoppingCart, 
   CheckCircle, User, CreditCard, ChevronRight, ChevronLeft,
-  MapPin, FileText, Landmark, Mail // 👈 Added Mail icon
+  MapPin, FileText, Landmark, Mail, LogOut, Search, Filter, 
+  Trash2, ArrowUpRight, TrendingDown, ClipboardList
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
 const Bookings = () => {
+  // --- STATE MANAGEMENT ---
   const [bookings, setBookings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [guests, setGuests] = useState([]);
   const [services, setServices] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   
-  // Modal States
+  // Modal & Step States
   const [showWizard, setShowWizard] = useState(false);
   const [showChargeForm, setShowChargeForm] = useState(null); 
   const [currentStep, setCurrentStep] = useState(1); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const token = localStorage.getItem('access_token');
 
-  // New Booking Wizard Data (MERGED: Old fields + New legal/finance fields)
+  // New Booking Data Model
   const [bookingData, setBookingData] = useState({
     room: '', 
     guest: '', 
@@ -29,12 +34,14 @@ const Bookings = () => {
     advance_paid: 0,
     purpose_of_visit: 'Tourism',
     coming_from: '',
-    going_to: ''
+    going_to: '',
+    nationality: 'Indian'
   });
 
-  // Charge Data (POS)
+  // POS Charge Model
   const [chargeData, setChargeData] = useState({ service: '', quantity: 1 });
 
+  // --- DATA FETCHING ---
   const fetchAllData = async () => {
     try {
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -50,382 +57,430 @@ const Bookings = () => {
       if (resGuests.ok) setGuests(await resGuests.json());
       if (resServices.ok) setServices(await resServices.json());
 
-    } catch (err) { console.error("Error fetching data:", err); }
+    } catch (err) { console.error("Critical Fetch Error:", err); }
   };
 
   useEffect(() => { fetchAllData(); }, []);
 
-  // 📧 TRIGGER EMAIL NOTIFICATION (Manual Resend)
+  // --- AUTOMATION HANDLERS ---
   const handleSendEmail = async (bookingId) => {
     try {
-      // Note: We use the existing update logic to trigger the save() method on the backend
-      // which sends the email, or a dedicated endpoint if you've created one.
-      const response = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ status: 'CONFIRMED' }) // Triggering a save to resend mail
+      const response = await fetch(`${API_URL}/api/bookings/${bookingId}/send-confirmation/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (response.ok) {
-        alert("Confirmation Email Resent Successfully! 📧");
+      if (response.ok) alert("Confirmation Sent to Guest Email! 📧");
+    } catch (err) { console.error("Email API Fail:", err); }
+  };
+
+  const handleCheckout = async (bookingId) => {
+    if (!window.confirm("Perform checkout and mark room RM for cleaning?")) return;
+    try {
+      const res = await fetch(`${API_URL}/api/bookings/${bookingId}/checkout/`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert("Guest Checked Out. Room moved to Dirty list. 🧹");
+        fetchAllData();
       }
-    } catch (error) { console.error("Email Error:", error); }
+    } catch (err) { console.error("Checkout Fail:", err); }
   };
 
   const handleAddCharge = async (e) => {
     e.preventDefault();
-    if (!showChargeForm) return;
-
     try {
-      const response = await fetch(API_URL + '/api/charges/', {
+      const res = await fetch(API_URL + '/api/charges/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          booking: showChargeForm,
-          service: chargeData.service,
-          quantity: chargeData.quantity
-        })
+        body: JSON.stringify({ booking: showChargeForm, ...chargeData })
       });
-
-      if (response.ok) {
-        alert("Item Added with Tax! 🛒");
-        setShowChargeForm(null); 
+      if (res.ok) {
+        setShowChargeForm(null);
         setChargeData({ service: '', quantity: 1 });
-        fetchAllData(); 
+        fetchAllData();
       }
-    } catch (error) { console.error(error); }
+    } catch (err) { console.error("POS API Fail:", err); }
   };
 
-  // 🖨️ LEGAL GRC PRINTING TRIGGER
-  const handlePrintGRC = (bookingId) => {
-    window.open(`/print-grc/${bookingId}`, '_blank');
-  };
-
-  // 🖨️ PROFESSIONAL TAX INVOICE PRINTING (Full Logic)
-  const handlePrintInvoice = (booking) => {
-    const printWindow = window.open('', '', 'width=900,height=800');
-    
-    // Summary Calculations
-    const roomSub = parseFloat(booking.subtotal_amount || 0);
-    const roomTax = parseFloat(booking.tax_amount || 0);
-    const serviceSub = booking.charges?.reduce((s, c) => s + parseFloat(c.subtotal || 0), 0) || 0;
-    const serviceTax = booking.charges?.reduce((s, c) => s + parseFloat(c.tax_amount || 0), 0) || 0;
-    const finalTotal = roomSub + roomTax + serviceSub + serviceTax;
-    const advance = parseFloat(booking.advance_paid || 0);
-    const totalPaid = parseFloat(booking.amount_paid || 0);
-
+  // --- DOCUMENT PRINTING LOGIC ---
+  const handlePrintGRC = (id) => {
+    const b = bookings.find(x => x.id === id);
+    const w = window.open('', '', 'width=800,height=900');
     const html = `
-      <html>
-        <head>
-          <title>Tax Invoice - ${booking.id}</title>
-          <style>
-            body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; line-height: 1.5; }
-            .header-flex { display: flex; justify-content: space-between; border-bottom: 3px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
-            .brand h1 { margin: 0; color: #2563eb; letter-spacing: -1px; }
-            .meta { text-align: right; font-size: 13px; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px; }
-            .box { padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
-            .box h4 { margin: 0 0 10px 0; font-size: 11px; text-transform: uppercase; color: #64748b; letter-spacing: 1px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            th { text-align: left; background: #0f172a; color: white; padding: 12px; font-size: 12px; }
-            td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
-            .total-section { width: 350px; margin-left: auto; background: #f8fafc; padding: 20px; border-radius: 12px; }
-            .total-row { display: flex; justify-content: space-between; padding: 5px 0; }
-            .grand-total { border-top: 2px solid #e2e8f0; margin-top: 10px; padding-top: 10px; font-weight: 900; font-size: 20px; color: #2563eb; }
-            .balance-row { color: #ef4444; font-weight: bold; }
-            .footer { margin-top: 60px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-            @media print { .no-print { display: none; } }
-          </style>
-        </head>
-        <body>
-          <div class="header-flex">
-            <div class="brand">
-              <h1>ATITHI HOTEL</h1>
-              <p>GSTIN: 27AABCA1234A1Z5<br>Contact: +91 98765 43210</p>
-            </div>
-            <div class="meta">
-              <h2 style="margin:0">TAX INVOICE</h2>
-              <p>Invoice #: INV-00${booking.id}<br>Date: ${new Date().toLocaleDateString()}</p>
-            </div>
+      <html><head><style>
+        body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; }
+        .h { text-align: center; border-bottom: 4px solid #0f172a; padding-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; }
+        .sec { border: 1px solid #e2e8f0; padding: 20px; border-radius: 12px; background: #f8fafc; }
+        .label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; }
+        .val { font-weight: 700; font-size: 16px; margin-top: 4px; }
+        .sig { margin-top: 80px; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; pt: 20px; }
+      </style></head><body>
+        <div class="h"><h1>ATITHI GUEST REGISTRATION</h1><p>Legal Form C Compliance Document</p></div>
+        <div class="grid">
+          <div class="sec">
+            <div class="label">Guest Full Name</div><div class="val">${b.guest_details.full_name}</div><br>
+            <div class="label">Passport / ID Number</div><div class="val">${b.guest_details.id_proof_number || 'REQUIRED'}</div><br>
+            <div class="label">Nationality</div><div class="val">${b.guest_details.nationality || 'Indian'}</div>
           </div>
-
-          <div class="info-grid">
-            <div class="box">
-              <h4>Guest Details</h4>
-              <strong>${booking.guest_details?.full_name}</strong><br>
-              ID: ${booking.guest_details?.id_proof_number || 'N/A'}<br>
-              ${booking.guest_details?.phone}
-            </div>
-            <div class="box">
-              <h4>Stay Info</h4>
-              Room: <strong>${booking.room_details?.room_number}</strong> (${booking.room_details?.room_type})<br>
-              Check-In: ${new Date(booking.check_in_date).toLocaleString()}<br>
-              Check-Out: ${new Date(booking.check_out_date).toLocaleString()}
-            </div>
+          <div class="sec">
+            <div class="label">Room Number</div><div class="val">${b.room_details.room_number}</div><br>
+            <div class="label">Arrival Date</div><div class="val">${new Date(b.check_in_date).toLocaleString()}</div><br>
+            <div class="label">Estimated Departure</div><div class="val">${new Date(b.check_out_date).toLocaleString()}</div>
           </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Qty/Nights</th>
-                <th>Base Price</th>
-                <th>GST %</th>
-                <th>Tax Amount</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Room Stay Charges</td>
-                <td>Stay</td>
-                <td>₹${roomSub.toLocaleString()}</td>
-                <td>12%</td>
-                <td>₹${roomTax.toLocaleString()}</td>
-                <td>₹${(roomSub + roomTax).toLocaleString()}</td>
-              </tr>
-              ${booking.charges?.map(c => `
-                <tr>
-                  <td>${c.service_name}</td>
-                  <td>${c.quantity}</td>
-                  <td>₹${parseFloat(c.subtotal).toLocaleString()}</td>
-                  <td>${c.service_category === 'FOOD' ? '5%' : '18%'}</td>
-                  <td>₹${parseFloat(c.tax_amount).toLocaleString()}</td>
-                  <td>₹${parseFloat(c.total_cost).toLocaleString()}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-
-          <div class="total-section">
-            <div class="total-row"><span>Net Subtotal:</span><span>₹${(roomSub + serviceSub).toLocaleString()}</span></div>
-            <div class="total-row"><span>Total Tax (GST):</span><span>₹${(roomTax + serviceTax).toLocaleString()}</span></div>
-            <div class="total-row grand-total"><span>Grand Total:</span><span>₹${finalTotal.toLocaleString()}</span></div>
-            <div class="total-row" style="margin-top:10px; opacity:0.7"><span>Advance Paid:</span><span>₹${advance.toLocaleString()}</span></div>
-            <div class="total-row balance-row"><span>Balance Due:</span><span>₹${(finalTotal - totalPaid).toLocaleString()}</span></div>
-          </div>
-
-          <div class="footer">
-            <p>Thank you for choosing Atithi Hotel. This is a computer-generated Tax Invoice.</p>
-          </div>
-        </body>
-      </html>
+        </div>
+        <div class="sec" style="margin-top:20px">
+          <div class="label">Arrival From</div><div class="val">${b.coming_from || 'N/A'}</div><br>
+          <div class="label">Proceeding To</div><div class="val">${b.going_to || 'N/A'}</div>
+        </div>
+        <div class="sig"><div>Guest Signature</div><div>Front Office Manager</div></div>
+      </body></html>
     `;
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.print();
+    w.document.write(html); w.document.close(); w.print();
   };
 
+  const handlePrintInvoice = (b) => {
+    const roomSub = parseFloat(b.subtotal_amount);
+    const roomTax = parseFloat(b.tax_amount);
+    const posSub = b.charges?.reduce((s, c) => s + parseFloat(c.subtotal), 0) || 0;
+    const posTax = b.charges?.reduce((s, c) => s + parseFloat(c.tax_amount), 0) || 0;
+    const total = roomSub + roomTax + posSub + posTax;
+    const w = window.open('', '', 'width=900,height=800');
+    const html = `
+      <html><head><style>
+        body { font-family: sans-serif; padding: 50px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8fafc; font-size: 12px; }
+        .total-sec { float: right; width: 350px; margin-top: 40px; background: #f1f5f9; padding: 20px; border-radius: 12px; }
+      </style></head><body>
+        <div class="header"><div><h1>ATITHI HOTEL</h1><p>GSTIN: 27AABCA1234A1Z5</p></div><div><h2>TAX INVOICE</h2><p>INV-${b.id}</p></div></div>
+        <p>Guest: ${b.guest_details.full_name}<br>Room: RM${b.room_details.room_number}</p>
+        <table><thead><tr><th>Item</th><th>Qty</th><th>Net</th><th>Tax</th><th>Total</th></tr></thead><tbody>
+          <tr><td>Room Stay</td><td>Stay</td><td>₹${roomSub}</td><td>₹${roomTax}</td><td>₹${roomSub+roomTax}</td></tr>
+          ${b.charges?.map(c => `<tr><td>${c.service_name}</td><td>${c.quantity}</td><td>₹${c.subtotal}</td><td>₹${c.tax_amount}</td><td>₹${c.total_cost}</td></tr>`).join('')}
+        </tbody></table>
+        <div class="total-sec">
+          <h3>Grand Total: ₹${total}</h3>
+          <p>Paid: ₹${b.amount_paid}</p><hr>
+          <h2 style="color:red">Final Balance: ₹${total - b.amount_paid}</h2>
+        </div>
+      </body></html>
+    `;
+    w.document.write(html); w.document.close(); w.print();
+  };
+
+  // --- WIZARD LOGIC ---
   const calculatePreview = () => {
-    if (bookingData.room && bookingData.check_in_date && bookingData.check_out_date) {
-      const room = rooms.find(r => r.id === parseInt(bookingData.room));
-      const start = new Date(bookingData.check_in_date);
-      const end = new Date(bookingData.check_out_date);
-      const days = Math.max(Math.ceil((end - start) / (1000 * 3600 * 24)), 1);
-      if (room) {
-        const sub = room.price_per_night * days;
-        const tax = sub * 0.12;
-        return { sub, tax, total: sub + tax };
-      }
-    }
-    return { sub: 0, tax: 0, total: 0 };
+    if (!bookingData.room || !bookingData.check_in_date || !bookingData.check_out_date) return { sub: 0, tax: 0, total: 0 };
+    const room = rooms.find(r => r.id === parseInt(bookingData.room));
+    const nights = Math.max(Math.ceil((new Date(bookingData.check_out_date) - new Date(bookingData.check_in_date)) / (1000 * 3600 * 24)), 1);
+    const sub = (room?.price_per_night || 0) * nights;
+    const tax = sub * 0.12;
+    return { sub, tax, total: sub + tax };
   };
 
   const handleBookingSubmit = async () => {
+    setIsSubmitting(true);
     try {
-      const response = await fetch(API_URL + '/api/bookings/', {
+      const res = await fetch(API_URL + '/api/bookings/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(bookingData)
       });
-      if (response.ok) { 
-        alert("Booking Confirmed & Email Sent! 🎉"); 
-        setShowWizard(false); 
-        fetchAllData(); 
-        setBookingData({ 
-            room: '', guest: '', check_in_date: '', check_out_date: '', 
-            status: 'CONFIRMED', advance_paid: 0, purpose_of_visit: 'Tourism', coming_from: '', going_to: ''
-        });
+      if (res.ok) {
+        alert("Booking Confirmed Successfully! 🎉");
+        setShowWizard(false);
+        fetchAllData();
         setCurrentStep(1);
+        setBookingData({ room: '', guest: '', check_in_date: '', check_out_date: '', status: 'CONFIRMED', advance_paid: 0, purpose_of_visit: 'Tourism', coming_from: '', going_to: '', nationality: 'Indian' });
       }
-    } catch (error) { console.error(error); }
+    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
 
+  // --- FILTERING ---
+  const filteredBookings = bookings.filter(b => {
+    const matchesSearch = b.guest_details?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          b.room_details?.room_number.includes(searchTerm);
+    const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
-      {/* HEADER SECTION */}
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+      
+      {/* 🔝 TOP HEADER BAR */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
         <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Reservations</h2>
-          <p className="text-slate-500 font-medium">Manage legal compliance and financial billing</p>
+          <h2 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Reservations</h2>
+          <div className="flex items-center gap-3 mt-2">
+            <span className="flex items-center gap-1 text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md uppercase tracking-widest">
+              <ClipboardList size={12}/> Live Guest Ledger
+            </span>
+            <span className="text-slate-400 font-bold text-xs">Total: {bookings.length} Bookings Found</span>
+          </div>
         </div>
-        <button onClick={() => setShowWizard(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl hover:bg-blue-700 flex items-center gap-2 shadow-lg transition-all active:scale-95 font-bold">
-          <Plus size={20}/> New Reservation
-        </button>
+
+        <div className="flex w-full lg:w-auto gap-4">
+          <div className="relative flex-1 lg:w-80">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
+            <input 
+              type="text" placeholder="Search by name or room..." 
+              className="w-full pl-14 pr-6 py-4 bg-white border-2 border-slate-100 rounded-[20px] font-bold text-slate-700 focus:border-blue-500 outline-none transition-all shadow-sm"
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button onClick={() => setShowWizard(true)} className="bg-slate-900 text-white px-8 py-4 rounded-[20px] font-black hover:bg-blue-600 transition-all flex items-center gap-3 shadow-2xl hover:scale-105 active:scale-95 uppercase tracking-widest text-xs">
+            <Plus size={20}/> New Booking
+          </button>
+        </div>
       </div>
 
-      {/* RESERVATION WIZARD MODAL (FULL STEPS) */}
+      {/* 🎛️ FILTER TABS */}
+      <div className="flex gap-4 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+        {["ALL", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED"].map(status => (
+          <button 
+            key={status} onClick={() => setStatusFilter(status)}
+            className={`px-6 py-2 rounded-full font-black text-[10px] tracking-[0.2em] transition-all border-2 
+              ${statusFilter === status ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}
+          >
+            {status}
+          </button>
+        ))}
+      </div>
+
+      {/* 🧙‍♂️ RESERVATION WIZARD */}
       {showWizard && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-[32px] w-[650px] shadow-2xl overflow-hidden animate-fade-in-up border border-white/20">
-            <div className="bg-slate-50 border-b border-slate-100 p-6 flex justify-between items-center">
-               <div className="flex items-center gap-2">
-                 <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
-                 <h3 className="font-black text-slate-700 uppercase tracking-tighter text-sm">Reservation Wizard</h3>
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-lg flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-[48px] w-full max-w-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 border border-white/20">
+            <div className="bg-slate-50 p-10 border-b border-slate-100 flex justify-between items-center">
+               <div className="flex items-center gap-6">
+                 <div className="w-16 h-16 bg-blue-600 text-white rounded-[24px] flex items-center justify-center font-black text-2xl shadow-xl shadow-blue-200">{currentStep}</div>
+                 <div>
+                   <h3 className="font-black text-slate-900 uppercase text-xl tracking-tighter">Reservation Wizard</h3>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Phase {currentStep} of 3 • Property Unit Allocation</p>
+                 </div>
                </div>
-               <button onClick={() => setShowWizard(false)}><X size={24} className="text-slate-400 hover:text-red-500"/></button>
+               <button onClick={() => setShowWizard(false)} className="w-12 h-12 bg-white shadow-sm border border-slate-100 rounded-2xl flex items-center justify-center hover:text-red-500 hover:bg-red-50 transition-all"><X size={28}/></button>
             </div>
 
-            <div className="p-8">
-              {/* Step 1: Dates & Room Selection */}
+            <div className="p-12">
+              {/* STEP 1: LOGISTICS */}
               {currentStep === 1 && (
-                <div className="space-y-6">
-                  <h4 className="text-lg font-black text-slate-800 flex items-center gap-2"><Calendar className="text-blue-500" size={20}/> Stay Duration</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Check-In</label>
-                      <input type="datetime-local" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-bold text-slate-700" 
-                        value={bookingData.check_in_date} onChange={(e) => setBookingData({...bookingData, check_in_date: e.target.value})}/>
+                <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Arrival Date & Time</label>
+                      <input type="datetime-local" className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 p-5 rounded-[24px] font-black outline-none transition-all" value={bookingData.check_in_date} onChange={(e) => setBookingData({...bookingData, check_in_date: e.target.value})}/>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Check-Out</label>
-                      <input type="datetime-local" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-bold text-slate-700" 
-                        value={bookingData.check_out_date} onChange={(e) => setBookingData({...bookingData, check_out_date: e.target.value})}/>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Departure Date & Time</label>
+                      <input type="datetime-local" className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 p-5 rounded-[24px] font-black outline-none transition-all" value={bookingData.check_out_date} onChange={(e) => setBookingData({...bookingData, check_out_date: e.target.value})}/>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Select Available Unit</label>
-                    <select className="w-full border-none bg-slate-100 p-4 rounded-2xl font-black text-slate-700" value={bookingData.room} onChange={(e) => setBookingData({...bookingData, room: e.target.value})} disabled={!bookingData.check_in_date}>
-                      <option value="">-- Choose Free Room --</option>
-                      {rooms.filter(room => {
-                        const hasConflict = bookings.some(b => b.room === room.id && b.status !== 'CANCELLED' && (new Date(bookingData.check_in_date) < new Date(b.check_out_date) && new Date(bookingData.check_out_date) > new Date(b.check_in_date)));
-                        return !hasConflict && room.status === 'AVAILABLE';
-                      }).map(r => <option key={r.id} value={r.id}>Room {r.room_number} ({r.room_type}) - ₹{r.price_per_night}</option>)}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Select Available Inventory</label>
+                    <div className="relative">
+                      <select className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 p-6 rounded-[24px] font-black outline-none transition-all appearance-none text-slate-700" value={bookingData.room} onChange={(e) => setBookingData({...bookingData, room: e.target.value})}>
+                        <option value="">-- Browse Vacant Ready Rooms --</option>
+                        {rooms.filter(r => r.status === 'AVAILABLE').map(r => <option key={r.id} value={r.id}>RM {r.room_number} • {r.room_type} • ₹{r.price_per_night}/night</option>)}
+                      </select>
+                      <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" size={24}/>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: GUEST PROFILE */}
+              {currentStep === 2 && (
+                <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Guest Selection</label>
+                    <select className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 p-6 rounded-[24px] font-black outline-none transition-all appearance-none" value={bookingData.guest} onChange={(e) => setBookingData({...bookingData, guest: e.target.value})}>
+                      <option value="">-- Select Registered Profile --</option>
+                      {guests.map(g => <option key={g.id} value={g.id}>{g.full_name} • {g.phone}</option>)}
                     </select>
                   </div>
-                </div>
-              )}
-
-              {/* Step 2: Guest & Legal GRC Info */}
-              {currentStep === 2 && (
-                <div className="space-y-6">
-                  <h4 className="text-lg font-black text-slate-800 flex items-center gap-2"><MapPin className="text-blue-500" size={20}/> GRC Legal Details</h4>
-                  <select className="w-full border-none bg-slate-100 p-4 rounded-2xl font-black text-slate-700" value={bookingData.guest} onChange={(e) => setBookingData({...bookingData, guest: e.target.value})}>
-                    <option value="">-- Select Registered Guest --</option>
-                    {guests.map(g => <option key={g.id} value={g.id}>{g.full_name} ({g.phone})</option>)}
-                  </select>
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Coming From" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-medium" value={bookingData.coming_from} onChange={e => setBookingData({...bookingData, coming_from: e.target.value})} />
-                    <input type="text" placeholder="Going To" className="w-full border-none bg-slate-100 p-4 rounded-2xl font-medium" value={bookingData.going_to} onChange={e => setBookingData({...bookingData, going_to: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-8">
+                    <input type="text" placeholder="Place of Arrival" className="bg-slate-50 p-6 rounded-[24px] font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" value={bookingData.coming_from} onChange={e => setBookingData({...bookingData, coming_from: e.target.value})} />
+                    <input type="text" placeholder="Place of Departure" className="bg-slate-50 p-6 rounded-[24px] font-black outline-none border-2 border-transparent focus:border-blue-500 transition-all" value={bookingData.going_to} onChange={e => setBookingData({...bookingData, going_to: e.target.value})} />
                   </div>
-                  <select className="w-full border-none bg-slate-100 p-4 rounded-2xl font-bold" value={bookingData.purpose_of_visit} onChange={e => setBookingData({...bookingData, purpose_of_visit: e.target.value})}>
-                    <option value="Tourism">Purpose: Tourism</option>
-                    <option value="Business">Purpose: Business</option>
-                    <option value="Medical">Purpose: Medical</option>
-                    <option value="Personal">Purpose: Personal</option>
-                  </select>
                 </div>
               )}
 
-              {/* Step 3: Advance & Billing Preview */}
+              {/* STEP 3: FINANCIAL SETTLEMENT */}
               {currentStep === 3 && (
-                <div className="space-y-6">
-                   <h4 className="text-lg font-black text-slate-800 flex items-center gap-2"><CreditCard className="text-blue-500" size={20}/> Payment & Review</h4>
-                   <div className="bg-slate-900 text-white p-6 rounded-[24px] space-y-3 shadow-xl">
-                      <div className="flex justify-between opacity-60 text-xs font-black uppercase tracking-widest"><span>Est. Room Total</span> <span>₹{calculatePreview().total}</span></div>
-                      <div className="flex justify-between items-center pt-2 border-t border-white/10">
-                        <span className="font-bold">Advance Deposit Received</span>
-                        <input type="number" className="bg-white/10 border-none w-32 p-2 rounded-xl text-right font-black" value={bookingData.advance_paid} onChange={e => setBookingData({...bookingData, advance_paid: e.target.value})} />
+                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                   <div className="bg-slate-900 text-white p-12 rounded-[40px] shadow-2xl relative overflow-hidden">
+                      <Landmark className="absolute -right-16 -bottom-16 w-64 h-64 opacity-5" />
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-400 mb-2">Quoted Folio Total</p>
+                          <h2 className="text-6xl font-black italic tracking-tighter">₹{calculatePreview().total.toLocaleString()}</h2>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Tax (12% GST)</p>
+                          <p className="font-bold text-lg">₹{calculatePreview().tax.toLocaleString()}</p>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-xl font-black text-blue-400 border-t border-white/10 pt-4">
-                        <span>Balance at Check-in</span> 
-                        <span>₹{calculatePreview().total - bookingData.advance_paid}</span>
+                      <div className="mt-12 border-t border-white/10 pt-10">
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-green-400">Advance Deposit Paid by Guest</label>
+                        <div className="relative mt-4">
+                          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black opacity-30">₹</span>
+                          <input type="number" className="w-full bg-white/5 border-2 border-white/10 p-6 pl-12 rounded-[24px] text-3xl font-black outline-none focus:border-blue-500 transition-all" value={bookingData.advance_paid} onChange={e => setBookingData({...bookingData, advance_paid: e.target.value})} />
+                        </div>
                       </div>
                    </div>
                 </div>
               )}
             </div>
 
-            {/* WIZARD FOOTER NAVIGATION */}
-            <div className="bg-slate-50 p-6 flex justify-between">
-              {currentStep > 1 && <button onClick={() => setCurrentStep(currentStep - 1)} className="text-slate-400 font-black uppercase text-xs tracking-widest hover:text-slate-800 transition">Back</button>}
-              <div className="ml-auto flex gap-3">
-                {currentStep < 3 ? (
-                  <button disabled={!bookingData.room} onClick={() => setCurrentStep(currentStep + 1)} className="bg-slate-800 text-white font-black px-8 py-3 rounded-2xl flex items-center gap-2 shadow-lg shadow-slate-200 uppercase text-xs tracking-widest disabled:opacity-30 transition-all">Next <ChevronRight size={16}/></button>
-                ) : (
-                  <button onClick={handleBookingSubmit} className="bg-blue-600 text-white font-black px-10 py-4 rounded-2xl flex items-center gap-2 shadow-xl shadow-blue-200 uppercase text-xs tracking-widest transition-all hover:scale-105">Confirm & Save <CheckCircle size={16}/></button>
-                )}
-              </div>
+            {/* FOOTER NAVIGATION */}
+            <div className="bg-slate-50 p-10 flex justify-between items-center">
+              {currentStep > 1 ? (
+                <button onClick={() => setCurrentStep(currentStep - 1)} className="flex items-center gap-3 font-black text-slate-400 hover:text-slate-900 transition-all uppercase text-xs tracking-widest group">
+                  <div className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center group-hover:bg-slate-100"><ChevronLeft size={20}/></div> Go Back
+                </button>
+              ) : <div></div>}
+              <button 
+                onClick={() => currentStep < 3 ? setCurrentStep(currentStep + 1) : handleBookingSubmit()} 
+                disabled={isSubmitting || (currentStep === 1 && !bookingData.room)}
+                className="bg-slate-900 text-white px-12 py-5 rounded-[24px] font-black flex items-center gap-4 shadow-xl hover:bg-blue-600 transition-all disabled:opacity-30 uppercase text-xs tracking-[0.2em]"
+              >
+                {isSubmitting ? 'Processing...' : currentStep === 3 ? 'Finalize Booking' : 'Next Step'} <ChevronRight size={20}/>
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* POS CHARGE MODAL */}
+      {/* 📋 POS CHARGE MODAL */}
       {showChargeForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-8 rounded-[32px] w-96 shadow-2xl animate-fade-in-up">
-            <h3 className="text-xl font-black mb-6 flex items-center gap-2 uppercase tracking-tighter"><ShoppingCart className="text-orange-500"/> Post POS Charge</h3>
-            <form onSubmit={handleAddCharge} className="flex flex-col gap-5">
-              <select className="bg-slate-50 border-none p-4 rounded-2xl font-bold text-slate-700" required value={chargeData.service} onChange={(e) => setChargeData({...chargeData, service: e.target.value})}>
-                <option value="">-- Select Item --</option>
-                {services.map(s => <option key={s.id} value={s.id}>{s.name} - ₹{s.price}</option>)}
-              </select>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Quantity</label>
-                <input type="number" min="1" className="bg-slate-50 border-none p-4 rounded-2xl w-full font-bold" required value={chargeData.quantity} onChange={(e) => setChargeData({...chargeData, quantity: e.target.value})}/>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-[110]">
+          <div className="bg-white p-12 rounded-[48px] w-[450px] shadow-2xl animate-in slide-in-from-bottom-10 duration-400">
+            <div className="flex justify-between items-start mb-10">
+              <h3 className="text-3xl font-black uppercase italic tracking-tighter leading-none"><ShoppingCart className="text-orange-500 mb-2" size={32}/><br/>Post Charge</h3>
+              <button onClick={() => setShowChargeForm(null)} className="text-slate-300 hover:text-slate-900"><X size={32}/></button>
+            </div>
+            <form onSubmit={handleAddCharge} className="space-y-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Product / Service</label>
+                <select className="w-full bg-slate-50 p-6 rounded-[24px] font-black outline-none border-2 border-transparent focus:border-orange-500 transition-all" required value={chargeData.service} onChange={(e) => setChargeData({...chargeData, service: e.target.value})}>
+                  <option value="">-- Browse Menu --</option>
+                  {services.map(s => <option key={s.id} value={s.id}>{s.name} • ₹{s.price}</option>)}
+                </select>
               </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => setShowChargeForm(null)} className="flex-1 text-slate-400 font-bold">Cancel</button>
-                <button type="submit" className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-100">Post Item</button>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Quantity</label>
+                <input type="number" min="1" className="w-full bg-slate-50 p-6 rounded-[24px] font-black text-2xl outline-none border-2 border-transparent focus:border-orange-500 transition-all" required value={chargeData.quantity} onChange={(e) => setChargeData({...chargeData, quantity: e.target.value})}/>
               </div>
+              <button type="submit" className="w-full bg-orange-500 text-white p-6 rounded-[24px] font-black shadow-xl shadow-orange-100 hover:bg-orange-600 hover:scale-105 transition-all uppercase tracking-widest text-xs">Confirm Addition</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MAIN DATA TABLE */}
-      <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-slate-50/50 text-slate-400 font-black uppercase text-[10px] tracking-widest border-b border-slate-100">
-            <tr><th className="p-6">Guest / Contact</th><th className="p-6">Room Details</th><th className="p-6">Stay Period</th><th className="p-6">Finance</th><th className="p-6 text-center">Actions</th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {bookings.length > 0 ? bookings.map(b => (
-              <tr key={b.id} className="hover:bg-slate-50 transition-colors group">
-                <td className="p-6">
-                    <p className="font-black text-slate-800">{b.guest_details?.full_name}</p>
-                    <p className="text-xs text-slate-400 font-bold">{b.guest_details?.phone}</p>
-                </td>
-                <td className="p-6">
-                    <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-black text-xs uppercase">Room {b.room_details?.room_number}</span>
-                    <p className="text-[10px] text-slate-400 mt-1 font-bold">{b.room_details?.room_type}</p>
-                </td>
-                <td className="p-6">
-                    <p className="text-xs font-black text-slate-700">{new Date(b.check_in_date).toLocaleDateString()}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">To {new Date(b.check_out_date).toLocaleDateString()}</p>
-                </td>
-                <td className="p-6">
-                    <p className="font-black text-slate-800">₹{parseFloat(b.total_amount).toLocaleString()}</p>
-                    {parseFloat(b.advance_paid) > 0 && <p className="text-[10px] text-green-500 font-black uppercase">Adv Paid: ₹{b.advance_paid}</p>}
-                </td>
-                <td className="p-6">
-                   <div className="flex justify-center items-center gap-2">
-                      <button onClick={() => setShowChargeForm(b.id)} className="p-3 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-xl transition-all" title="Add POS"><ShoppingCart size={18}/></button>
-                      <button onClick={() => handlePrintGRC(b.id)} className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Legal GRC Form"><FileText size={18}/></button>
-                      <button onClick={() => handlePrintInvoice(b)} className="p-3 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all" title="Tax Invoice"><Printer size={18}/></button>
-                      <button onClick={() => handleSendEmail(b.id)} className="p-3 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all" title="Resend Notification"><Mail size={18}/></button>
-                   </div>
-                </td>
+      {/* 📊 DATA LEDGER TABLE */}
+      <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] border-b border-slate-100">
+              <tr>
+                <th className="p-8">Guest Profile</th>
+                <th className="p-8 text-center">Unit</th>
+                <th className="p-8 text-center">Stay Duration</th>
+                <th className="p-8 text-center">Ledger Balance</th>
+                <th className="p-8 text-center">Status</th>
+                <th className="p-8 text-right">Actions</th>
               </tr>
-            )) : (
-              <tr><td colSpan="5" className="p-20 text-center text-slate-400 font-medium">No bookings found in the system.</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredBookings.length > 0 ? filteredBookings.map(b => (
+                <tr key={b.id} className="hover:bg-slate-50/80 transition-all group">
+                  <td className="p-8">
+                      <div className="flex items-center gap-5">
+                        <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-all duration-500"><User size={24}/></div>
+                        <div>
+                          <p className="font-black text-slate-900 text-xl tracking-tighter">{b.guest_details?.full_name}</p>
+                          <p className="text-[10px] text-slate-400 font-black tracking-widest uppercase mt-1">{b.guest_details?.phone} • {b.guest_details?.nationality || 'IND'}</p>
+                        </div>
+                      </div>
+                  </td>
+                  <td className="p-8 text-center">
+                      <span className="bg-blue-600 text-white px-5 py-2 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-blue-100">RM {b.room_details?.room_number}</span>
+                      <p className="text-[9px] text-slate-400 mt-2 font-black uppercase tracking-tighter">{b.room_details?.room_type}</p>
+                  </td>
+                  <td className="p-8 text-center">
+                      <div className="flex flex-col items-center">
+                        <p className="text-xs font-black text-slate-700 tracking-tighter italic">{new Date(b.check_in_date).toLocaleDateString()}</p>
+                        <ChevronRight className="text-slate-300 rotate-90 my-1" size={14}/>
+                        <p className="text-xs font-black text-slate-700 tracking-tighter italic">{new Date(b.check_out_date).toLocaleDateString()}</p>
+                      </div>
+                  </td>
+                  <td className="p-8 text-center">
+                      <div className="inline-block text-left">
+                        <p className="font-black text-slate-950 text-xl tracking-tighter">₹{parseFloat(b.total_amount).toLocaleString()}</p>
+                        {parseFloat(b.advance_paid) > 0 && (
+                          <div className="flex items-center gap-1 text-[9px] text-green-500 font-black uppercase tracking-tighter mt-1">
+                            <ArrowUpRight size={10}/> Paid: ₹{b.advance_paid}
+                          </div>
+                        )}
+                      </div>
+                  </td>
+                  <td className="p-8 text-center">
+                      <span className={`px-4 py-2 rounded-full font-black text-[9px] uppercase tracking-widest 
+                        ${b.status === 'CHECKED_IN' ? 'bg-blue-100 text-blue-700' : 
+                          b.status === 'CONFIRMED' ? 'bg-green-100 text-green-700' : 
+                          b.status === 'CHECKED_OUT' ? 'bg-slate-100 text-slate-600' : 'bg-red-100 text-red-700'}`}>
+                        {b.status}
+                      </span>
+                  </td>
+                  <td className="p-8">
+                     <div className="flex justify-end items-center gap-3">
+                        <button onClick={() => setShowChargeForm(b.id)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-orange-500 hover:border-orange-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="Post Charge"><ShoppingCart size={20}/></button>
+                        <button onClick={() => handlePrintGRC(b.id)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="GRC"><FileText size={20}/></button>
+                        <button onClick={() => handlePrintInvoice(b)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-slate-900 hover:border-slate-300 rounded-xl transition-all hover:scale-110 shadow-sm" title="Tax Invoice"><Printer size={20}/></button>
+                        <button onClick={() => handleSendEmail(b.id)} className="w-12 h-12 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-green-600 hover:border-green-200 rounded-xl transition-all hover:scale-110 shadow-sm" title="Email Receipt"><Mail size={20}/></button>
+                        
+                        {b.status === 'CHECKED_IN' && (
+                          <button onClick={() => handleCheckout(b.id)} className="h-12 px-6 flex items-center gap-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest shadow-sm hover:shadow-red-200" title="Finalize Settlement">
+                            <LogOut size={16}/> Checkout
+                          </button>
+                        )}
+                     </div>
+                  </td>
+                </tr>
+              )) : (
+                <tr><td colSpan="6" className="p-40 text-center">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-200"><Search size={40}/></div>
+                    <p className="text-slate-300 font-black uppercase tracking-[0.5em] italic">No Match Found in Ledger</p>
+                  </div>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* 📈 SUMMARY STATS FOOTER */}
+      <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-900 p-8 rounded-[40px] text-white">
+          <div className="border-r border-white/10 px-4">
+            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">In-House Guests</p>
+            <p className="text-3xl font-black">{bookings.filter(x => x.status === 'CHECKED_IN').length}</p>
+          </div>
+          <div className="border-r border-white/10 px-4">
+            <p className="text-[10px] font-black text-green-400 uppercase tracking-widest">Expected Today</p>
+            <p className="text-3xl font-black">{bookings.filter(x => x.check_in_date.startsWith(new Date().toISOString().split('T')[0])).length}</p>
+          </div>
+          <div className="px-4">
+            <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Pending Departures</p>
+            <p className="text-3xl font-black">{bookings.filter(x => x.status === 'CHECKED_IN' && x.check_out_date.startsWith(new Date().toISOString().split('T')[0])).length}</p>
+          </div>
+      </div>
+
     </div>
   );
 };

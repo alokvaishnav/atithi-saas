@@ -1,8 +1,8 @@
 from rest_framework import serializers
-from .models import Room, Guest, Booking, Service, BookingCharge
+from .models import Room, Guest, Booking, Service, BookingCharge, Expense, PropertySetting
 
 # ============================
-# 1. CORE SERIALIZERS
+# 1. CORE OPERATIONAL SERIALIZERS
 # ============================
 
 class RoomSerializer(serializers.ModelSerializer):
@@ -109,3 +109,35 @@ class BookingSerializer(serializers.ModelSerializer):
             if data['check_out_date'] <= data['check_in_date']:
                 raise serializers.ValidationError("Check-out must be after check-in.")
         return data
+
+# ============================
+# 4. ACCOUNTING & EXPENSE SERIALIZERS
+# ============================
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    """
+    Handles tracking of money flowing out of the business.
+    Includes the username of the staff who logged the expense.
+    """
+    paid_by_username = serializers.ReadOnlyField(source='paid_by.username')
+
+    class Meta:
+        model = Expense
+        fields = [
+            'id', 'title', 'category', 'amount', 
+            'date', 'description', 'paid_by', 
+            'paid_by_username', 'created_at'
+        ]
+        read_only_fields = ['paid_by', 'created_at']
+
+# ============================
+# 5. WHITE-LABEL SETTINGS SERIALIZER
+# ============================
+
+class PropertySettingSerializer(serializers.ModelSerializer):
+    """
+    Handles global property configuration like Hotel Name and GSTIN.
+    """
+    class Meta:
+        model = PropertySetting
+        fields = '__all__'
