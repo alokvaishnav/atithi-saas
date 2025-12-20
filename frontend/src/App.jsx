@@ -8,6 +8,7 @@ import Guests from './pages/Guests';
 import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
 import Services from './pages/Services';
+import Expenses from './pages/Expenses';
 
 // Additional Enterprise Features
 import CalendarView from './pages/CalendarView';
@@ -126,7 +127,8 @@ function App() {
                       <Route path="/pos" element={<POS />} />
                       <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
                       <Route path="/support" element={<Support />} /> {/* 👈 Open to all staff */}
-                      
+                      <Route path="/expenses" element={<Expenses />} />
+
                       {/* 🛡️ HR & Personnel Restricted Access */}
                       <Route path="/staff" element={
                         <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
