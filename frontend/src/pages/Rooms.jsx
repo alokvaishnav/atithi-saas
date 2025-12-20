@@ -36,7 +36,7 @@ const Rooms = () => {
 
   useEffect(() => { fetchRooms(); }, []);
 
-  // 👇 RESTORED: Delete Room Function
+  // Delete Room Function
   const handleDelete = async (roomId) => {
     if(!window.confirm("Are you sure you want to delete this room?")) return;
 
@@ -47,7 +47,7 @@ const Rooms = () => {
       });
 
       if (response.ok) {
-        alert("Room Deleted! 🗑️");
+        // alert("Room Deleted! 🗑️"); // Optional alert
         fetchRooms(); // Refresh the grid
       } else {
         alert("Cannot delete room. (Check if it has active bookings)");
@@ -57,7 +57,7 @@ const Rooms = () => {
 
   // Update Status Function
   const handleStatusChange = async (roomId, newStatus) => {
-    // Optimistic UI Update
+    // Optimistic UI Update (Instant change before server replies)
     setRooms(rooms.map(r => r.id === roomId ? { ...r, status: newStatus } : r));
 
     try {
@@ -89,9 +89,15 @@ const Rooms = () => {
     } catch (err) { console.error(err); }
   };
 
-  // 🎨 HELPER: Get Color & Icon based on Status
+  // 🎨 HELPER: Get Color & Icon based on Status (Case Insensitive Fix)
   const getStatusDesign = (status) => {
-    switch(status) {
+    // 🛡️ Fix: Handle undefined or null status safely
+    if (!status) return { color: 'border-slate-200', icon: <AlertCircle size={32}/>, text: 'text-slate-400' };
+
+    // 🛡️ Fix: Force Uppercase to match cases
+    const s = status.toUpperCase(); 
+
+    switch(s) {
       case 'AVAILABLE': 
         return { color: 'border-green-500 bg-white', icon: <Coffee size={32} className="text-green-500"/>, text: 'text-green-600' };
       case 'OCCUPIED': 
@@ -101,7 +107,7 @@ const Rooms = () => {
       case 'MAINTENANCE': 
         return { color: 'border-slate-500 bg-slate-100', icon: <Wrench size={32} className="text-slate-500"/>, text: 'text-slate-600' };
       default: 
-        return { color: 'border-slate-200', icon: <AlertCircle size={32}/>, text: 'text-slate-400' };
+        return { color: 'border-slate-200 bg-gray-50', icon: <AlertCircle size={32} className="text-gray-400"/>, text: 'text-slate-400' };
     }
   };
 
@@ -152,7 +158,6 @@ const Rooms = () => {
                 
                 <div className="flex items-center gap-2">
                    <span className="border border-slate-200 px-1 rounded">{room.room_type.substring(0, 3)}</span>
-                   {/* 👇 NEW DELETE BUTTON */}
                    <button onClick={() => handleDelete(room.id)} className="text-red-300 hover:text-red-500" title="Delete Room">
                      <X size={14} />
                    </button>
@@ -173,6 +178,7 @@ const Rooms = () => {
                     Mark Clean
                   </button>
                 )}
+                {/* 🛡️ Fix: Check for uppercase AVAILABLE */}
                 {room.status === 'AVAILABLE' && (
                    <button onClick={() => handleStatusChange(room.id, 'MAINTENANCE')} className="col-span-2 bg-slate-100 text-slate-600 text-xs py-1 rounded hover:bg-slate-200">
                     Maintenance

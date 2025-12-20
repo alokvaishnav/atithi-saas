@@ -141,9 +141,15 @@ class AnalyticsView(APIView):
         # 2. Expense Stats
         exp_total = Expense.objects.aggregate(total_exp=Sum('amount'))['total_exp'] or 0
 
-        # 3. Net Profit Calculation
-        total_revenue = rev_stats['total_rev'] or 0
-        net_profit = total_revenue - float(exp_total)
+        # 3. Safe Math Conversion (Decimal -> Float) 
+        # 🚨 FIX: This prevents the 500 Error when subtracting Decimal vs Float
+        total_revenue = float(rev_stats['total_rev'] or 0)
+        total_tax = float(rev_stats['total_tax'] or 0)
+        total_advance = float(rev_stats['total_advance'] or 0)
+        total_expenses = float(exp_total)
+
+        # Now subtraction works perfectly
+        net_profit = total_revenue - total_expenses
 
         # 4. Live Occupancy
         total_rooms = Room.objects.count()
@@ -159,9 +165,9 @@ class AnalyticsView(APIView):
         return Response({
             "financials": {
                 "total_rev": total_revenue,
-                "total_tax": rev_stats['total_tax'] or 0,
-                "total_advance": rev_stats['total_advance'] or 0,
-                "total_expenses": float(exp_total),
+                "total_tax": total_tax,
+                "total_advance": total_advance,
+                "total_expenses": total_expenses,
                 "net_profit": net_profit
             },
             "occupancy": round(occupancy_rate, 1),
