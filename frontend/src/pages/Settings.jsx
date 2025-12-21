@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
   Save, Building, CreditCard, Mail, Phone, MapPin, 
-  Percent, Globe, Loader2 
+  Percent, Globe, Loader2, Building2 
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
@@ -9,8 +9,7 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Matches the PropertySetting model in backend/hotel/models.py
-  // Initial state matches the expected fields. ID will be added if fetched.
+  // Initial state matches backend/hotel/models.py PropertySetting
   const [formData, setFormData] = useState({
     hotel_name: '',
     gstin: '',
@@ -20,6 +19,9 @@ const Settings = () => {
     currency_symbol: '₹',
     room_tax_rate: '12.00'
   });
+
+  // We store the ID to know if we are Updating (PUT) or Creating (POST)
+  const [settingId, setSettingId] = useState(null);
 
   const token = localStorage.getItem('access_token');
 
@@ -32,9 +34,11 @@ const Settings = () => {
       });
       const data = await res.json();
       
-      // If settings exist, populate form. If it's an array (default DRF list), take the first item.
+      // If settings exist, populate form. 
+      // The backend returns a list filtered by the logged-in Owner.
       if (Array.isArray(data) && data.length > 0) {
         setFormData(data[0]);
+        setSettingId(data[0].id);
       }
     } catch (err) {
       console.error("Failed to load settings:", err);
@@ -50,11 +54,10 @@ const Settings = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // We use POST to create a new record or PUT to update an existing one.
-      // We check if 'id' exists in the fetched formData to decide.
-      const method = formData.id ? 'PUT' : 'POST';
-      const url = formData.id 
-        ? `${API_URL}/api/settings/${formData.id}/` 
+      // Determine Method and URL
+      const method = settingId ? 'PUT' : 'POST';
+      const url = settingId 
+        ? `${API_URL}/api/settings/${settingId}/` 
         : `${API_URL}/api/settings/`;
 
       const res = await fetch(url, {
@@ -68,7 +71,7 @@ const Settings = () => {
 
       if (res.ok) {
         alert("✅ System Configuration Updated Successfully!");
-        // Reloading page ensures the Sidebar and Header update with the new Hotel Name immediately
+        // Reload page to reflect Hotel Name change in Sidebar/Header
         window.location.reload(); 
       } else {
         alert("Failed to save settings. Please try again.");
@@ -104,7 +107,7 @@ const Settings = () => {
         {/* SECTION 1: IDENTITY */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Building size={20}/></div>
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Building2 size={20}/></div>
             <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Property Identity</h3>
           </div>
           

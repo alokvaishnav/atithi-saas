@@ -8,13 +8,13 @@ from hotel.views import (
     BookingViewSet, 
     ServiceViewSet, 
     BookingChargeViewSet,
-    ExpenseViewSet,         # 👈 Accounting Module
-    SettingViewSet,         # 👈 NEW: Property Configuration (Hotel Name/Tax)
-    AnalyticsView,          # 👈 Executive Dashboard
-    PublicFolioView,        # 👈 Guest Mobile View
-    seed_data_trigger       # 👈 The Magic Seed Trigger
+    ExpenseViewSet,
+    SettingViewSet,
+    AnalyticsView,
+    PublicFolioView,
+    seed_data_trigger
 )
-from core.views import StaffViewSet # 👈 UPDATED: Renamed from UserViewSet
+from core.views import StaffViewSet, SaaSConfigView # 👈 ADDED SaaSConfigView
 
 # 🛡️ IMPORT FOR ROLE-BASED LOGIN
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -59,9 +59,10 @@ router.register(r'guests', GuestViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'services', ServiceViewSet)
 router.register(r'charges', BookingChargeViewSet)
-router.register(r'expenses', ExpenseViewSet)  # 👈 Accounting
-router.register(r'settings', SettingViewSet)  # 👈 NEW: System Settings
-router.register(r'staff', StaffViewSet)       # 👈 NEW: HR Management
+router.register(r'expenses', ExpenseViewSet)
+router.register(r'settings', SettingViewSet)
+router.register(r'staff', StaffViewSet)
+router.register(r'support-info', SaaSConfigView) # 👈 Added Support Info Route
 
 # ==========================================
 # 3. URL PATTERNS

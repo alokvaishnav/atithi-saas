@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User
+from .models import User, SaaSConfig
 
 # ==========================================
 # 1. SOFTWARE COMPANY BRANDING
@@ -34,3 +34,16 @@ class UserAdmin(BaseUserAdmin):
         ('SaaS Permissions', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser')}),
         ('Audit Log', {'fields': ('last_login', 'date_joined')}),
     )
+
+# ==========================================
+# 3. GLOBAL CONFIGURATION
+# ==========================================
+@admin.register(SaaSConfig)
+class SaaSConfigAdmin(admin.ModelAdmin):
+    list_display = ('company_name', 'support_email', 'software_version', 'last_updated')
+    
+    # Prevent creating multiple configs (Singleton pattern enforcement)
+    def has_add_permission(self, request):
+        if SaaSConfig.objects.exists():
+            return False
+        return True

@@ -1,8 +1,9 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
-from django.db.models import Q # 👈 Needed for complex queries
-from .serializers import UserSerializer
+from django.db.models import Q 
+from .models import SaaSConfig
+from .serializers import UserSerializer, SaaSConfigSerializer
 
 User = get_user_model()
 
@@ -43,7 +44,7 @@ class StaffViewSet(viewsets.ModelViewSet):
                 Q(hotel_owner=user) | Q(id=user.id)
             ).order_by('-date_joined')
         
-        # 3. Manager sees: Their Team (People with the same Boss)
+        # 3. Manager sees: Their Team (Same Boss)
         if user.role == 'MANAGER' and user.hotel_owner:
             return User.objects.filter(hotel_owner=user.hotel_owner).order_by('-date_joined')
             
@@ -98,3 +99,15 @@ class StaffViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         return super().destroy(request, *args, **kwargs)
+
+# ==========================================
+# SUPPORT PAGE CONFIG VIEW
+# ==========================================
+class SaaSConfigView(viewsets.ReadOnlyModelViewSet):
+    """
+    Publicly accessible (authenticated) view to get Support Info.
+    Fetched from the 'Software Company Settings' in Admin Panel.
+    """
+    queryset = SaaSConfig.objects.all()
+    serializer_class = SaaSConfigSerializer
+    permission_classes = [permissions.IsAuthenticated]

@@ -1,10 +1,15 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, SaaSConfig
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'role', 'phone', 'password']
+        # Added 'hotel_owner' and 'date_joined' to fields
+        fields = ['id', 'username', 'email', 'role', 'phone', 'password', 'hotel_owner', 'date_joined']
+        
+        # 'hotel_owner' is read-only because it's set automatically by the System (View), not the user
+        read_only_fields = ['id', 'date_joined', 'hotel_owner']
+        
         extra_kwargs = {
             'password': {'write_only': True},
             'email': {'required': True}
@@ -12,27 +17,36 @@ class UserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """
-        Create and return a new User instance, given the validated data.
+        Create and return a new User instance.
+        Handles password hashing and any extra fields (like hotel_owner) automatically.
         """
-        # Professional encryption for the password field using create_user
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data.get('email', ''),
-            password=validated_data['password'],
-            role=validated_data.get('role', 'RECEPTIONIST'),
-            phone=validated_data.get('phone', '')
-        )
-        return user
+        # Extract password to hash it securely
+        password = validated_data.pop('password', None)
+        
+        # Create user instance with all remaining data (username, email, role, hotel_owner, etc.)
+        instance = self.Meta.model(**validated_data)
+        
+        if password is not None:
+            instance.set_password(password)
+        
+        instance.save()
+        return instance
 
     def update(self, instance, validated_data):
         """
-        Update and return an existing User instance, given the validated data.
-        Handles password hashing if it is being changed.
+        Update User instance.
+        Hashes password if provided, otherwise leaves it unchanged.
         """
-        # 1. Handle Password Separate (if provided)
         if 'password' in validated_data:
             password = validated_data.pop('password')
-            instance.set_password(password) # Hashes the password securely
-
-        # 2. Update other fields standardly
+            instance.set_password(password)
+            
         return super().update(instance, validated_data)
+
+class SaaSConfigSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Software Company Settings (Support Page Info).
+    """
+    class Meta:
+        model = SaaSConfig
+        fields = '__all__'
