@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, SaaSConfig
+from .models import User, SaaSConfig, Subscription  # 👈 Added Subscription here
 
 # ==========================================
 # 1. SOFTWARE COMPANY BRANDING
@@ -47,3 +47,20 @@ class SaaSConfigAdmin(admin.ModelAdmin):
         if SaaSConfig.objects.exists():
             return False
         return True
+
+# ==========================================
+# 4. SUBSCRIPTION MANAGEMENT (New!)
+# ==========================================
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    """
+    Manage Client Licenses and Expiry Dates.
+    """
+    list_display = ('owner_username', 'plan_name', 'expiry_date', 'days_left', 'is_active')
+    list_filter = ('plan_name', 'is_active')
+    search_fields = ('owner__username', 'owner__email', 'license_key')
+    
+    # Helper to show the Owner's username clearly in the list
+    def owner_username(self, obj):
+        return obj.owner.username
+    owner_username.short_description = 'Hotel Owner'
