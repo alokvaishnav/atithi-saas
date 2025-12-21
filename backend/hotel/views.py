@@ -31,7 +31,14 @@ from core.models import Subscription
 import razorpay
 from django.conf import settings
 from core.models import Payment, Subscription
-# You will need to add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to your settings.py later
+
+from django.core.mail import EmailMessage
+from django.template.loader import render_to_string
+from io import BytesIO
+from xhtml2pdf import pisa
+
+from django.core.mail import EmailMessage, get_connection # 👈 Added get_connection
+from core.models import HotelSMTPSettings # 👈 Added Model
 
 # ==============================
 # 🔐 UTILITY: Get the Hotel Owner
@@ -584,3 +591,96 @@ class VerifyPaymentView(APIView):
         except Exception as e:
             print(e)
             return Response({"error": "Verification Failed"}, status=500)
+        
+
+# ==============================
+# 📧 EMAIL AUTOMATION
+# ==============================
+
+class EmailInvoiceView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            # 1. Fetch Booking
+            owner = get_hotel_owner(request.user)
+            booking = Booking.objects.get(id=pk, owner=owner)
+            charges = Charge.objects.filter(booking=booking)
+            
+            if not booking.guest_email:
+                return Response({"error": "Guest has no email address."}, status=400)
+
+            # 2. 🔍 FETCH HOTEL'S CUSTOM EMAIL SETTINGS
+            try:
+                smtp_config = HotelSMTPSettings.objects.get(owner=owner)
+                
+                # Create a custom connection using the HOTEL'S credentials
+                connection = get_connection(
+                    host=smtp_config.email_host,
+                    port=smtp_config.email_port,
+                    username=smtp_config.email_host_user,
+                    password=smtp_config.email_host_password,
+                    use_tls=True
+                )
+                sender_email = smtp_config.email_host_user
+            
+            except HotelSMTPSettings.DoesNotExist:
+                # Fallback to System Default (optional, or error out)
+                return Response({"error": "Please configure your Email Settings in the Settings Page first."}, status=400)
+
+            # 3. Generate PDF (Same as before)
+            template_path = 'invoice_template.html'
+            context = {'booking': booking, 'charges': charges, 'total': booking.total_amount, 'owner': booking.owner}
+            html = render_to_string(template_path, context)
+            result = BytesIO()
+            pdf = pisa.pisaDocument(BytesIO(html.encode("UTF-8")), result)
+            
+            if pdf.err: return Response({"error": "PDF Error"}, status=500)
+
+            # 4. Send Email using the CUSTOM CONNECTION
+            subject = f"Invoice from {owner.hotel_name or 'Hotel'}"
+            message = f"Dear {booking.guest_name},\n\nPlease find attached your invoice.\n\nRegards,\n{owner.hotel_name}"
+            
+            email = EmailMessage(
+                subject,
+                message,
+                sender_email, # From Hotel's Email
+                [booking.guest_email],
+                connection=connection # 👈 THE MAGIC: Uses Hotel's Password
+            )
+            email.attach(f'Invoice_{booking.id}.pdf', result.getvalue(), 'application/pdf')
+            email.send()
+
+            return Response({"status": "Email Sent from Hotel Account! 📧"})
+
+        except Exception as e:
+            print(e)
+            return Response({"error": str(e)}, status=500)
+        
+class HotelSMTPSettingsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Get current settings"""
+        try:
+            conf = HotelSMTPSettings.objects.get(owner=get_hotel_owner(request.user))
+            return Response({
+                "email": conf.email_host_user,
+                "has_password": True # Don't send back the real password for security
+            })
+        except HotelSMTPSettings.DoesNotExist:
+            return Response({"email": "", "has_password": False})
+
+    def post(self, request):
+        """Save settings"""
+        owner = get_hotel_owner(request.user)
+        email = request.data.get('email')
+        password = request.data.get('password') # App Password
+
+        obj, created = HotelSMTPSettings.objects.get_or_create(owner=owner)
+        obj.email_host_user = email
+        if password: # Only update if new password provided
+            obj.email_host_password = password
+        obj.save()
+
+        return Response({"status": "Email Settings Saved!"})

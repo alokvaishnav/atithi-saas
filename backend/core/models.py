@@ -105,3 +105,22 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.subscription.owner.username} - ₹{self.amount} - {self.status}"
+    
+
+# ... existing imports ...
+
+class HotelSMTPSettings(models.Model):
+    """
+    Stores email credentials for each specific hotel owner.
+    This allows 'Hotel A' to send emails from their own Gmail account.
+    """
+    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='smtp_settings')
+    email_host_user = models.EmailField(help_text="The Hotel's Gmail Address")
+    email_host_password = models.CharField(max_length=100, help_text="The Gmail App Password")
+    
+    # We default to Gmail for simplicity, but you can add Host/Port fields later if needed
+    email_host = models.CharField(max_length=100, default='smtp.gmail.com')
+    email_port = models.IntegerField(default=587)
+
+    def __str__(self):
+        return f"SMTP Config for {self.owner.username}"

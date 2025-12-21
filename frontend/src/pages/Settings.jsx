@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
   Save, Building, CreditCard, Mail, Phone, MapPin, 
-  Percent, Globe, Loader2, Building2 
+  Percent, Globe, Loader2, Building2, Key, ShieldCheck 
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 
@@ -9,7 +9,7 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Initial state matches backend/hotel/models.py PropertySetting
+  // 1. Property Settings State
   const [formData, setFormData] = useState({
     hotel_name: '',
     gstin: '',
@@ -20,47 +20,64 @@ const Settings = () => {
     room_tax_rate: '12.00'
   });
 
-  // We store the ID to know if we are Updating (PUT) or Creating (POST)
-  const [settingId, setSettingId] = useState(null);
+  // 2. Email Automation State (New)
+  const [emailData, setEmailData] = useState({
+    email: '',
+    password: ''
+  });
 
+  const [settingId, setSettingId] = useState(null);
   const token = localStorage.getItem('access_token');
 
-  // 1. Fetch Current Settings
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_URL}/api/settings/`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      
-      // If settings exist, populate form. 
-      // The backend returns a list filtered by the logged-in Owner.
-      if (Array.isArray(data) && data.length > 0) {
-        setFormData(data[0]);
-        setSettingId(data[0].id);
+  // --- FETCH DATA ---
+  useEffect(() => {
+    const loadAllSettings = async () => {
+      try {
+        setLoading(true);
+        
+        // A. Fetch Property Settings
+        const propRes = await fetch(`${API_URL}/api/settings/`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const propData = await propRes.json();
+        
+        if (Array.isArray(propData) && propData.length > 0) {
+          setFormData(propData[0]);
+          setSettingId(propData[0].id);
+        }
+
+        // B. Fetch Email Settings
+        const emailRes = await fetch(`${API_URL}/api/settings/email/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (emailRes.ok) {
+            const eData = await emailRes.json();
+            // We only get the email back, password is hidden for security
+            if (eData.email) setEmailData(prev => ({ ...prev, email: eData.email }));
+        }
+
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to load settings:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  useEffect(() => { fetchSettings(); }, []);
+    loadAllSettings();
+  }, [token]);
 
-  // 2. Save/Update Settings
+  // --- SAVE DATA ---
   const handleSave = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // Determine Method and URL
+      // 1. Save Property Settings
       const method = settingId ? 'PUT' : 'POST';
       const url = settingId 
         ? `${API_URL}/api/settings/${settingId}/` 
         : `${API_URL}/api/settings/`;
 
-      const res = await fetch(url, {
+      const propReq = fetch(url, {
         method: method,
         headers: { 
           'Content-Type': 'application/json',
@@ -69,12 +86,24 @@ const Settings = () => {
         body: JSON.stringify(formData)
       });
 
-      if (res.ok) {
-        alert("✅ System Configuration Updated Successfully!");
-        // Reload page to reflect Hotel Name change in Sidebar/Header
+      // 2. Save Email Settings
+      const emailReq = fetch(`${API_URL}/api/settings/email/`, {
+          method: 'POST',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}` 
+          },
+          body: JSON.stringify(emailData)
+      });
+
+      // Wait for both to finish
+      const [propRes, emailRes] = await Promise.all([propReq, emailReq]);
+
+      if (propRes.ok && emailRes.ok) {
+        alert("✅ All System Configurations Updated Successfully!");
         window.location.reload(); 
       } else {
-        alert("Failed to save settings. Please try again.");
+        alert("⚠️ Saved partially. Please check inputs.");
       }
     } catch (err) {
       console.error("Error saving settings:", err);
@@ -215,6 +244,50 @@ const Settings = () => {
                   placeholder="12.00"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 4: EMAIL AUTOMATION (NEW) */}
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Mail size={20}/></div>
+            <div>
+                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Email Automation</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">For Sending Invoices</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Sender Gmail Address</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                <input 
+                  type="email" 
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-purple-500 outline-none transition-all"
+                  value={emailData.email}
+                  onChange={e => setEmailData({...emailData, email: e.target.value})}
+                  placeholder="your-hotel@gmail.com"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Gmail App Password</label>
+              <div className="relative">
+                <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                <input 
+                  type="password" 
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-purple-500 outline-none transition-all"
+                  value={emailData.password}
+                  onChange={e => setEmailData({...emailData, password: e.target.value})}
+                  placeholder="xxxx xxxx xxxx xxxx"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1 font-bold ml-2">
+                 <ShieldCheck size={12}/> Security Note: Use a Google App Password, not your login password.
+              </p>
             </div>
           </div>
         </div>

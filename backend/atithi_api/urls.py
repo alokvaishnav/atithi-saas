@@ -32,6 +32,9 @@ from hotel.views import (
 )
 
 from hotel.views import CreatePaymentOrderView, VerifyPaymentView # Add imports
+from hotel.views import EmailInvoiceView
+
+from hotel.views import HotelSMTPSettingsView
 
 # ==========================================
 # 1. CUSTOM LOGIN LOGIC (To send User Role)
@@ -108,4 +111,8 @@ urlpatterns = [
 
     path('api/payment/create/', CreatePaymentOrderView.as_view()),
     path('api/payment/verify/', VerifyPaymentView.as_view()),
+
+    path('api/invoice/<int:pk>/email/', EmailInvoiceView.as_view()),
+
+    path('api/settings/email/', HotelSMTPSettingsView.as_view()),
 ]

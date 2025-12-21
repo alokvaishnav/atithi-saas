@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, Download, CreditCard, CheckCircle, 
   Clock, Calendar, User, ShieldCheck, Mail, Phone, 
-  Loader2, ArrowLeft, FileText, IndianRupee 
-} from 'lucide-react';
+  Loader2, ArrowLeft, FileText, IndianRupee, Send 
+} from 'lucide-react'; // 👈 Added 'Send' Icon
 import { API_URL } from '../config';
 
 const Folio = () => {
@@ -14,7 +14,10 @@ const Folio = () => {
   const [booking, setBooking] = useState(null);
   const [charges, setCharges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pdfLoading, setPdfLoading] = useState(false); // ⏳ State for PDF Button
+  
+  // ⏳ Loading States
+  const [pdfLoading, setPdfLoading] = useState(false); 
+  const [emailLoading, setEmailLoading] = useState(false); // 👈 New State for Email
 
   const token = localStorage.getItem('access_token');
 
@@ -31,7 +34,6 @@ const Folio = () => {
         const bookingData = await bookingRes.json();
         
         // B. Fetch Extra Charges (Services/Food)
-        // We fetch this separately to ensure we get all line items clearly
         const chargesRes = await fetch(`${API_URL}/api/charges/?booking=${bookingId}`, {
            headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -87,6 +89,40 @@ const Folio = () => {
     }
   };
 
+  // 3️⃣ Handle Email Invoice Logic 📧
+  const handleEmailInvoice = async () => {
+      // Check if email exists (handles flat or nested structure)
+      const targetEmail = booking.guest_email || booking.guest_details?.email;
+
+      if(!targetEmail) {
+          alert("⚠️ This guest does not have an email address saved.");
+          return;
+      }
+      
+      const confirmSend = window.confirm(`Send invoice to ${targetEmail}?`);
+      if(!confirmSend) return;
+
+      try {
+          setEmailLoading(true);
+          // Call the new Email Endpoint
+          const res = await fetch(`${API_URL}/api/invoice/${bookingId}/email/`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if(res.ok) {
+              alert("✅ Email Sent Successfully!");
+          } else {
+              alert("❌ Failed to send email. Check SMTP settings.");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network Error: Could not connect to server.");
+      } finally {
+          setEmailLoading(false);
+      }
+  };
+
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-slate-50">
        <div className="flex flex-col items-center gap-4">
@@ -114,6 +150,17 @@ const Folio = () => {
             <ArrowLeft size={16}/> Back to Reservations
         </button>
         <div className="flex gap-3">
+             
+             {/* 📧 EMAIL BUTTON (New) */}
+             <button 
+                onClick={handleEmailInvoice} 
+                disabled={emailLoading}
+                className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-black shadow-sm hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-70 uppercase text-xs tracking-widest"
+             >
+                {emailLoading ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
+                {emailLoading ? 'Sending...' : 'Email Invoice'}
+             </button>
+
              {/* 🖨️ PDF BUTTON */}
              <button 
                 onClick={handleDownloadPDF} 
@@ -163,6 +210,9 @@ const Folio = () => {
                     <div className="space-y-1 pl-7">
                         <p className="text-sm font-medium text-slate-500 flex items-center gap-2">
                             <Phone size={12}/> {booking.guest_phone || booking.guest_details?.phone || 'N/A'}
+                        </p>
+                        <p className="text-sm font-medium text-slate-500 flex items-center gap-2">
+                            <Mail size={12}/> {booking.guest_email || 'N/A'}
                         </p>
                     </div>
                 </div>
