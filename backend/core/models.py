@@ -14,8 +14,22 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='RECEPTIONIST')
     phone = models.CharField(max_length=15, blank=True, null=True)
     
+    # 🔗 SAAS ISOLATION: Link Staff to their Hotel Owner
+    # - If this user is an OWNER, this field is NULL.
+    # - If this user is STAFF (Manager, Receptionist), this points to their BOSS (Owner).
+    hotel_owner = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='employees',
+        help_text="The Owner who manages this staff member."
+    )
+
     # Ensures email and role are handled during user creation
     REQUIRED_FIELDS = ['email', 'role']
 
     def __str__(self):
-        return f"{self.username} ({self.get_role_display()})"
+        # Shows "Alice (Receptionist) - [Boss: Bob]" for easier debugging
+        boss_name = f" [Boss: {self.hotel_owner.username}]" if self.hotel_owner else ""
+        return f"{self.username} ({self.get_role_display()}){boss_name}"

@@ -8,9 +8,7 @@ from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.core.management import call_command
 
-# ✅ ADDED PropertySetting HERE
 from .models import Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting
-# ✅ ADDED PropertySettingSerializer HERE
 from .serializers import (
     GuestSerializer, 
     RoomSerializer, 
@@ -22,165 +20,260 @@ from .serializers import (
 )
 
 # ==============================
+# 🔐 UTILITY: Get the Hotel Owner
+# ==============================
+def get_hotel_owner(user):
+    """
+    Returns the Owner User instance based on the logged-in user's role.
+    - If user is OWNER -> returns self.
+    - If user is STAFF -> returns their boss (user.hotel_owner).
+    - If Superuser -> returns None (Handled separately).
+    """
+    if user.is_superuser:
+        return None
+    if user.role == 'OWNER':
+        return user
+    return user.hotel_owner
+
+# ==============================
 # 1. CORE HOTEL OPERATIONS
 # ==============================
 
 class GuestViewSet(viewsets.ModelViewSet):
+    # ✅ FIX: Router needs this to generate URLs
     queryset = Guest.objects.all()
     serializer_class = GuestSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Guest.objects.all()
+        
+        owner = get_hotel_owner(user)
+        if owner:
+            return Guest.objects.filter(owner=owner)
+        return Guest.objects.none()
+
+    def perform_create(self, serializer):
+        # Auto-assign the guest to the hotel owner
+        owner = get_hotel_owner(self.request.user)
+        serializer.save(owner=owner)
+
 class RoomViewSet(viewsets.ModelViewSet):
+    # ✅ FIX: Router needs this
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    # 🧹 ACTION: Housekeeping Mark Clean
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Room.objects.all()
+        
+        owner = get_hotel_owner(user)
+        if owner:
+            return Room.objects.filter(owner=owner)
+        return Room.objects.none()
+
+    def perform_create(self, serializer):
+        owner = get_hotel_owner(self.request.user)
+        serializer.save(owner=owner)
+
     @action(detail=True, methods=['post'], url_path='mark-clean')
     def mark_clean(self, request, pk=None):
-        """ Transitions a room from DIRTY or MAINTENANCE back to AVAILABLE. """
         room = self.get_object()
         room.status = 'AVAILABLE'
         room.save()
-        return Response(
-            {'status': f'Room {room.room_number} is now Clean and Available.'},
-            status=status.HTTP_200_OK
-        )
+        return Response({'status': f'Room {room.room_number} is now Clean.'})
 
 class BookingViewSet(viewsets.ModelViewSet):
+    # ✅ FIX: Router needs this
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_create(self, serializer):
-        # 1. Save the Booking with the user who created it
-        booking = serializer.save(created_by=self.request.user)
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Booking.objects.all()
         
-        # 2. Auto-occupy the room
+        owner = get_hotel_owner(user)
+        if owner:
+            return Booking.objects.filter(owner=owner)
+        return Booking.objects.none()
+
+    def perform_create(self, serializer):
+        owner = get_hotel_owner(self.request.user)
+        # Save with Owner AND Creator (Audit)
+        booking = serializer.save(owner=owner, created_by=self.request.user)
+        
         if booking.room:
             room = booking.room
             room.status = 'OCCUPIED'
             room.save()
 
-    # 📧 ACTION: Manually resend confirmation email
     @action(detail=True, methods=['post'], url_path='send-confirmation')
     def send_confirmation(self, request, pk=None):
         booking = self.get_object()
         if booking.guest.email:
             try:
                 booking.send_confirmation_email()
-                return Response({'status': 'Email sent successfully'}, status=status.HTTP_200_OK)
+                return Response({'status': 'Email sent successfully'})
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'error': 'Guest has no email address'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Guest has no email'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 🧹 ACTION: Professional Checkout Logic
     @action(detail=True, methods=['post'], url_path='checkout')
     def checkout(self, request, pk=None):
-        """ Finalizes stay and moves room to DIRTY for Housekeeping. """
         booking = self.get_object()
-        
         if booking.status != 'CHECKED_IN':
-            return Response(
-                {'error': 'Checkout only allowed for Checked-In guests.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({'error': 'Not Checked In'}, status=status.HTTP_400_BAD_REQUEST)
         
         booking.status = 'CHECKED_OUT'
         booking.save()
         
         if booking.room:
-            room = booking.room
-            room.status = 'DIRTY'
-            room.save()
+            booking.room.status = 'DIRTY'
+            booking.room.save()
             
-        return Response(
-            {'status': 'Checkout successful. Room RM{} moved to DIRTY status.'.format(booking.room.room_number)}, 
-            status=status.HTTP_200_OK
-        )
+        return Response({'status': 'Checkout successful.'})
 
 # ==============================
 # 2. POS, SERVICES & EXPENSES
 # ==============================
 
 class ServiceViewSet(viewsets.ModelViewSet):
+    # ✅ FIX: Router needs this
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Service.objects.all()
+        return Service.objects.filter(owner=get_hotel_owner(user))
+
+    def perform_create(self, serializer):
+        serializer.save(owner=get_hotel_owner(self.request.user))
+
 class BookingChargeViewSet(viewsets.ModelViewSet):
+    # ✅ FIX: Router needs this
     queryset = BookingCharge.objects.all()
     serializer_class = BookingChargeSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # Filter charges by the Booking's Owner
+        user = self.request.user
+        if user.is_superuser:
+            return BookingCharge.objects.all()
+        
+        owner = get_hotel_owner(user)
+        return BookingCharge.objects.filter(booking__owner=owner)
 
     def perform_create(self, serializer):
         serializer.save()
 
 class ExpenseViewSet(viewsets.ModelViewSet):
-    """ Manage Hotel Operational Costs (Salaries, Utilities, etc.) """
-    queryset = Expense.objects.all().order_by('-date')
+    # ✅ FIX: Router needs this
+    queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return Expense.objects.all()
+        return Expense.objects.filter(owner=get_hotel_owner(user))
+
     def perform_create(self, serializer):
-        serializer.save(paid_by=self.request.user)
+        serializer.save(
+            owner=get_hotel_owner(self.request.user),
+            paid_by=self.request.user
+        )
 
 # ==============================
-# 3. SETTINGS & CONFIGURATION (THE FIX)
+# 3. SETTINGS (SAAS ISOLATION)
 # ==============================
 
 class SettingViewSet(viewsets.ModelViewSet):
-    """
-    Manage Global Property Settings (Hotel Name, Tax, Currency, etc.)
-    """
+    # ✅ FIX: Router needs this
     queryset = PropertySetting.objects.all()
     serializer_class = PropertySettingSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return PropertySetting.objects.all()
+        
+        # Only OWNERS have settings. Staff generally read their Owner's settings.
+        owner = get_hotel_owner(user)
+        if owner:
+            return PropertySetting.objects.filter(owner=owner)
+        return PropertySetting.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
 # ==============================
-# 4. EXECUTIVE ANALYTICS (REVENUE + EXPENSES)
+# 4. EXECUTIVE ANALYTICS (SCOPED)
 # ==============================
 
 class AnalyticsView(APIView):
-    """ Provides Profit & Loss data and occupancy rates for the Owner. """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # 1. Revenue Stats
-        rev_stats = Booking.objects.aggregate(
+        user = request.user
+        owner = get_hotel_owner(user)
+        
+        # Base QuerySets (Scoped to Hotel)
+        if user.is_superuser:
+            bookings = Booking.objects.all()
+            expenses = Expense.objects.all()
+            rooms = Room.objects.all()
+        elif owner:
+            bookings = Booking.objects.filter(owner=owner)
+            expenses = Expense.objects.filter(owner=owner)
+            rooms = Room.objects.filter(owner=owner)
+        else:
+            # Fallback for unlinked staff
+            return Response({"error": "No Hotel Profile Linked"}, status=400)
+
+        # 1. Revenue
+        rev_stats = bookings.aggregate(
             total_rev=Sum('total_amount'),
             total_tax=Sum('tax_amount'),
             total_advance=Sum('advance_paid')
         )
 
-        # 2. Expense Stats
-        exp_total = Expense.objects.aggregate(total_exp=Sum('amount'))['total_exp'] or 0
+        # 2. Expense
+        exp_total = expenses.aggregate(total_exp=Sum('amount'))['total_exp'] or 0
 
-        # 3. Safe Math Conversion (Decimal -> Float)
+        # 3. Conversions
         total_revenue = float(rev_stats['total_rev'] or 0)
         total_tax = float(rev_stats['total_tax'] or 0)
         total_advance = float(rev_stats['total_advance'] or 0)
         total_expenses = float(exp_total)
         net_profit = total_revenue - total_expenses
 
-        # 4. Live Occupancy
-        total_rooms = Room.objects.count()
-        occupied_rooms = Room.objects.filter(status='OCCUPIED').count()
-        occupancy_rate = (occupied_rooms / total_rooms * 100) if total_rooms > 0 else 0
+        # 4. Occupancy
+        total_room_count = rooms.count()
+        occupied_count = rooms.filter(status='OCCUPIED').count()
+        occupancy_rate = (occupied_count / total_room_count * 100) if total_room_count > 0 else 0
 
-        # 5. Revenue Trend (Last 7 Days)
-        raw_trend = Booking.objects.annotate(date=TruncDate('check_in_date')) \
+        # 5. Trend (Scoped)
+        raw_trend = bookings.annotate(date=TruncDate('check_in_date')) \
             .values('date') \
             .annotate(daily_revenue=Sum('total_amount')) \
             .order_by('-date')[:7]
 
-        # 🚨 FIX: Convert Decimal to Float specifically for the Chart Library
-        formatted_trend = []
-        for item in raw_trend:
-            formatted_trend.append({
-                "date": item['date'],
-                "daily_revenue": float(item['daily_revenue'] or 0) # <--- The Magic Fix
-            })
+        formatted_trend = [{
+            "date": item['date'],
+            "daily_revenue": float(item['daily_revenue'] or 0)
+        } for item in raw_trend]
 
         return Response({
             "financials": {
@@ -191,43 +284,27 @@ class AnalyticsView(APIView):
                 "net_profit": net_profit
             },
             "occupancy": round(occupancy_rate, 1),
-            "trend": formatted_trend, # Sending the clean float data
-            "room_count": total_rooms
+            "trend": formatted_trend,
+            "room_count": total_room_count
         })
 
 # ==============================
-# 5. PUBLIC GUEST FOLIO
+# 5. PUBLIC / UTILITY
 # ==============================
 
 class PublicFolioView(APIView):
-    """ 🔓 Open link for guests to view their live bill. """
     permission_classes = [permissions.AllowAny] 
-
     def get(self, request, booking_id):
         try:
             booking = Booking.objects.get(id=booking_id)
             serializer = BookingSerializer(booking)
             return Response(serializer.data)
         except Booking.DoesNotExist:
-            return Response({"error": "Folio record not found"}, status=status.HTTP_404_NOT_FOUND)
-
-# ==============================
-# 6. 🪄 MAGIC SEED TRIGGER (Render Hack)
-# ==============================
+            return Response({"error": "Not Found"}, status=404)
 
 def seed_data_trigger(request):
-    """
-    Runs 'python manage.py seed_data' when visited.
-    This bypasses Render Free Tier shell restrictions.
-    """
     try:
         call_command('seed_data')
-        return JsonResponse({
-            "status": "Success", 
-            "message": "✅ Database has been populated with 50 bookings & rooms!"
-        })
+        return JsonResponse({"status": "Success", "message": "DB Seeded!"})
     except Exception as e:
-        return JsonResponse({
-            "status": "Error", 
-            "message": str(e)
-        })
+        return JsonResponse({"status": "Error", "message": str(e)})

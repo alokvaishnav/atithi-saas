@@ -22,11 +22,18 @@ class Room(models.Model):
         ('MAINTENANCE', 'Maintenance')
     )
     
-    room_number = models.CharField(max_length=10, unique=True)
+    # 🔗 SAAS ISOLATION: Link Room to Specific Hotel Owner
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='rooms', null=True, blank=True)
+    
+    room_number = models.CharField(max_length=10) # Removed unique=True globally, logic will handle per-owner uniqueness
     room_type = models.CharField(max_length=10, choices=ROOM_TYPES)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
     
+    class Meta:
+        # Ensures room number is unique ONLY within the same hotel (Owner)
+        unique_together = ('owner', 'room_number')
+
     def __str__(self):
         return f"Room {self.room_number} [{self.get_status_display()}]"
 
@@ -34,6 +41,9 @@ class Room(models.Model):
 # 2. GUEST DATA (Enterprise Identity Profile)
 # ==========================================
 class Guest(models.Model):
+    # 🔗 SAAS ISOLATION: Guests belong to a specific Hotel Database
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='guests', null=True, blank=True)
+
     full_name = models.CharField(max_length=100)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15)
@@ -61,6 +71,9 @@ class Booking(models.Model):
         ('CANCELLED', 'Cancelled')
     )
 
+    # 🔗 SAAS ISOLATION
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bookings', null=True, blank=True)
+
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     check_in_date = models.DateTimeField() 
@@ -81,7 +94,8 @@ class Booking(models.Model):
     advance_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0) 
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)  
     
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    # Audit Trail
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='bookings_created')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
@@ -89,7 +103,9 @@ class Booking(models.Model):
             if self.check_out_date <= self.check_in_date:
                 raise ValidationError("Check-out must be after check-in.")
 
+            # Filter overlap ONLY for rooms belonging to this booking's owner
             overlap = Booking.objects.filter(
+                owner=self.owner,  # 👈 Crucial SaaS Filter
                 room=self.room,
                 status__in=['CONFIRMED', 'CHECKED_IN']
             ).exclude(pk=self.pk).filter(
@@ -121,7 +137,7 @@ class Booking(models.Model):
             self.send_confirmation_email()
 
     def send_confirmation_email(self):
-        subject = f"Booking Confirmed at Atithi Hotel - ID: {self.id}"
+        subject = f"Booking Confirmed at {self.owner.hotel_profile.hotel_name if hasattr(self.owner, 'hotel_profile') else 'Atithi Hotel'} - ID: {self.id}"
         message = (
             f"Dear {self.guest.full_name},\n\n"
             f"Your reservation is confirmed! Stay Details:\n\n"
@@ -157,6 +173,9 @@ class Service(models.Model):
         ('OTHER', 'Other')
     )
     
+    # 🔗 SAAS ISOLATION
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='services', null=True, blank=True)
+
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2) 
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='FOOD')
@@ -166,6 +185,7 @@ class Service(models.Model):
         return f"{self.name} (₹{self.price})"
 
 class BookingCharge(models.Model):
+    # Linked to Booking, which is already Linked to Owner. So we are safe here.
     booking = models.ForeignKey(Booking, related_name='charges', on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True)
     description = models.CharField(max_length=200, blank=True)
@@ -197,6 +217,9 @@ class Expense(models.Model):
         ('OTHER', 'Miscellaneous'),
     ]
 
+    # 🔗 SAAS ISOLATION
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
+
     title = models.CharField(max_length=200)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OTHER')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -212,6 +235,9 @@ class Expense(models.Model):
 # 6. PROPERTY SETTINGS (White-Label Config)
 # ==========================================
 class PropertySetting(models.Model):
+    # 🔗 SAAS ISOLATION: The Master Link
+    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='hotel_profile', null=True, blank=True)
+
     hotel_name = models.CharField(max_length=200, default="Atithi Hotel")
     gstin = models.CharField(max_length=15, blank=True, verbose_name="GST Identification Number")
     contact_number = models.CharField(max_length=15, blank=True)
@@ -227,4 +253,4 @@ class PropertySetting(models.Model):
         verbose_name_plural = "Property Settings"
 
     def __str__(self):
-        return self.hotel_name
+        return f"{self.hotel_name} ({self.owner.username if self.owner else 'No Owner'})"
