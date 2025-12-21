@@ -76,7 +76,7 @@ const Sidebar = () => {
       title: "Finance & HR",
       roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
-        { icon: <Wallet size={18} />, label: 'Accounting', path: '/accounting' },
+        { icon: <Wallet size={18} />, label: 'Expenses & Costs', path: '/expenses' }, // 🆕 ADDED THIS
         { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' },
         { icon: <FileText size={18} />, label: 'Tax & Audit Reports', path: '/reports' },
       ]

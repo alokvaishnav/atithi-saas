@@ -1,107 +1,221 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Save, Globe, ShieldCheck, Building2, Mail, Phone } from 'lucide-react';
-import { API_URL } from '../config';
+import { 
+  Save, Building, CreditCard, Mail, Phone, MapPin, 
+  Percent, Globe, Loader2 
+} from 'lucide-react'; 
+import { API_URL } from '../config'; 
 
 const Settings = () => {
-  const [settings, setSettings] = useState({
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Matches the PropertySetting model in backend/hotel/models.py
+  const [formData, setFormData] = useState({
     hotel_name: '',
     gstin: '',
     contact_number: '',
     email: '',
-    address: ''
+    address: '',
+    currency_symbol: '₹',
+    room_tax_rate: '12.00'
   });
-  const [loading, setLoading] = useState(true);
+
   const token = localStorage.getItem('access_token');
 
+  // 1. Fetch Current Settings
   const fetchSettings = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`${API_URL}/api/settings/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.length > 0) setSettings(data[0]);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
+      
+      // If settings exist, populate form. If array, take first item.
+      if (Array.isArray(data) && data.length > 0) {
+        setFormData(data[0]);
+      }
+    } catch (err) {
+      console.error("Failed to load settings:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchSettings(); }, []);
 
-  const handleUpdate = async (e) => {
+  // 2. Save/Update Settings
+  const handleSave = async (e) => {
     e.preventDefault();
-    const method = settings.id ? 'PATCH' : 'POST';
-    const url = settings.id ? `${API_URL}/api/settings/${settings.id}/` : `${API_URL}/api/settings/`;
-    
-    const res = await fetch(url, {
-      method: method,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify(settings)
-    });
+    setIsSaving(true);
+    try {
+      // We use POST to create or PUT to update. 
+      // For simplicity, we'll assume the backend handles the singleton logic or we send ID if needed.
+      // Ideally, check if ID exists in formData to decide method.
+      const method = formData.id ? 'PUT' : 'POST';
+      const url = formData.id 
+        ? `${API_URL}/api/settings/${formData.id}/` 
+        : `${API_URL}/api/settings/`;
 
-    if (res.ok) alert("Global Settings Updated! 🚀");
+      const res = await fetch(url, {
+        method: method,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (res.ok) {
+        alert("✅ System Configuration Updated Successfully!");
+        // Optional: Refresh page to update Sidebar branding immediately
+        window.location.reload(); 
+      } else {
+        alert("Failed to save settings.");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  if (loading) return <div className="p-20 text-center font-black animate-pulse text-blue-600">Loading Configuration...</div>;
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center">
+      <Loader2 className="animate-spin text-blue-600" size={40} />
+    </div>
+  );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
-      <div className="flex justify-between items-center mb-10">
-        <div>
-          <h2 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase">Property Settings</h2>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-1">White-Label & Legal Configuration</p>
+    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+      
+      {/* HEADER */}
+      <div className="mb-10">
+        <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">System Configuration</h2>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Global Property Settings & Branding</p>
+      </div>
+
+      <form onSubmit={handleSave} className="max-w-4xl">
+        
+        {/* SECTION 1: IDENTITY */}
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Building size={20}/></div>
+            <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Property Identity</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Hotel Name</label>
+              <input 
+                type="text" 
+                required
+                className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all"
+                value={formData.hotel_name}
+                onChange={e => setFormData({...formData, hotel_name: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">GSTIN / Tax ID</label>
+              <input 
+                type="text" 
+                className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all"
+                value={formData.gstin}
+                onChange={e => setFormData({...formData, gstin: e.target.value})}
+              />
+            </div>
+          </div>
         </div>
+
+        {/* SECTION 2: CONTACT */}
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center"><Globe size={20}/></div>
+            <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Contact & Location</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Official Email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                <input 
+                  type="email" 
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Phone Number</label>
+              <div className="relative">
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                <input 
+                  type="text" 
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all"
+                  value={formData.contact_number}
+                  onChange={e => setFormData({...formData, contact_number: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Full Address</label>
+            <textarea 
+              rows="3"
+              className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all resize-none"
+              value={formData.address}
+              onChange={e => setFormData({...formData, address: e.target.value})}
+            />
+          </div>
+        </div>
+
+        {/* SECTION 3: FINANCIALS */}
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center"><CreditCard size={20}/></div>
+            <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Financial Configuration</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Currency Symbol</label>
+              <input 
+                type="text" 
+                className="w-full bg-slate-50 p-4 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
+                value={formData.currency_symbol}
+                onChange={e => setFormData({...formData, currency_symbol: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Default Room GST (%)</label>
+              <div className="relative">
+                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
+                  value={formData.room_tax_rate}
+                  onChange={e => setFormData({...formData, room_tax_rate: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ACTION BUTTON */}
         <button 
-          onClick={handleUpdate}
-          className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl hover:bg-black transition-all uppercase tracking-widest text-xs"
+          type="submit" 
+          disabled={isSaving}
+          className="bg-slate-900 text-white w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
         >
-          <Save size={18}/> Deploy Changes
+          {isSaving ? <Loader2 className="animate-spin" /> : <Save size={20}/>}
+          {isSaving ? 'Saving Changes...' : 'Update System Configuration'}
         </button>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LEFT: BRANDING */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200">
-            <h3 className="text-xl font-black mb-8 flex items-center gap-3 italic"><Building2 className="text-blue-600"/> Identity Branding</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Hotel Display Name</label>
-                <input type="text" className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500 transition-all" value={settings.hotel_name} onChange={e => setSettings({...settings, hotel_name: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Legal GSTIN</label>
-                <input type="text" className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500 transition-all" value={settings.gstin} onChange={e => setSettings({...settings, gstin: e.target.value})} />
-              </div>
-            </div>
-            <div className="mt-6 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Registered Address</label>
-              <textarea className="w-full bg-slate-50 p-5 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-500 transition-all h-32" value={settings.address} onChange={e => setSettings({...settings, address: e.target.value})} />
-            </div>
-          </div>
-
-          <div className="bg-white p-10 rounded-[40px] shadow-sm border border-slate-200">
-             <h3 className="text-xl font-black mb-8 flex items-center gap-3 italic"><Globe className="text-blue-600"/> Contact Information</h3>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl">
-                  <Phone className="text-slate-400" />
-                  <input type="text" className="bg-transparent font-bold outline-none w-full" placeholder="Front Desk Number" value={settings.contact_number} onChange={e => setSettings({...settings, contact_number: e.target.value})} />
-                </div>
-                <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl">
-                  <Mail className="text-slate-400" />
-                  <input type="email" className="bg-transparent font-bold outline-none w-full" placeholder="Official Email" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} />
-                </div>
-             </div>
-          </div>
-        </div>
-
-        {/* RIGHT: SYSTEM STATUS */}
-        <div className="space-y-8">
-          <div className="bg-blue-600 p-10 rounded-[40px] text-white shadow-2xl">
-            <ShieldCheck size={48} className="mb-6 opacity-40" />
-            <h4 className="text-2xl font-black leading-tight mb-4 tracking-tighter uppercase italic">Security & Compliance</h4>
-            <p className="text-sm opacity-80 leading-relaxed font-bold">Your system is currently running on the Atithi Enterprise v2.1 Engine. All tax calculations are based on the latest GST regulations.</p>
-          </div>
-        </div>
-      </div>
+      </form>
     </div>
   );
 };
