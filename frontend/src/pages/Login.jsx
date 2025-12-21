@@ -1,110 +1,115 @@
 import { useState } from 'react';
-import axios from 'axios';
-import { API_URL } from '../config'; 
+import { useNavigate, Link } from 'react-router-dom';
+import { Loader2, Lock, User, ShieldCheck } from 'lucide-react';
+import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 👈 Import the Brain
 
-export default function Login() {
-  const [email, setEmail] = useState('');
+const Login = () => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  
+  // 🧠 Use Context Login function
+  const { login } = useAuth(); 
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
-    
-    // Combine base URL with login endpoint
-    const LOGIN_ENDPOINT = `${API_URL}/api/token/`; 
 
     try {
-      const response = await axios.post(LOGIN_ENDPOINT, {
-        username: email,    // Sending input as 'username' to match Django backend
-        password: password
+      const response = await fetch(`${API_URL}/api/token/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
       });
 
-      console.log("Login Success!");
-      
-      // 🛡️ PROFESSIONAL ROLE STORAGE
-      // We store the access token, refresh token, and the user's role.
-      // Note: Ensure your Backend 'token' view includes the user's role in the response.
-      localStorage.setItem('access_token', response.data.access);
-      localStorage.setItem('refresh_token', response.data.refresh);
-      
-      // We assume your backend returns user info like: response.data.user_role
-      // If your backend isn't sending role yet, we default to RECEPTIONIST for safety
-      const role = response.data.user_role || 'RECEPTIONIST';
-      localStorage.setItem('user_role', role);
-      
-      // Redirect to Dashboard
-      window.location.href = '/'; 
+      const data = await response.json();
 
-    } catch (err) {
-      console.error(err);
-      if (err.response && err.response.data) {
-        setError(err.response.data.detail || "Invalid Username or Password.");
+      if (response.ok) {
+        // 🧠 CALL CONTEXT LOGIN
+        // This function inside AuthContext handles:
+        // 1. LocalStorage saving
+        // 2. State updates (Role, User, HotelName)
+        // 3. Setting isAuthenticated = true
+        login(data);
+
+        navigate('/');
       } else {
-        setError("Connection failed. Check if server is running.");
+        alert(data.detail || 'Invalid Credentials. Please check your username and password.');
       }
+    } catch (error) {
+      console.error('Login Error:', error);
+      alert('Network Error. Please check if the server is running.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="bg-white p-10 rounded-3xl shadow-2xl w-[400px] border-t-8 border-blue-600 animate-fade-in">
-        <div className="flex flex-col items-center mb-8">
-            <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black text-2xl mb-2 shadow-lg shadow-blue-200">A</div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Atithi HMS</h2>
-            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">Property Management</p>
-        </div>
+    <div className="flex h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
+      
+      {/* Background Decor */}
+      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[100px] opacity-10"></div>
+      
+      <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-4 border-slate-100 relative z-10">
         
-        {error && (
-            <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded-lg mb-6 text-sm font-medium animate-shake">
-                {error}
-            </div>
-        )}
+        <div className="flex justify-center mb-6">
+          <div className="bg-blue-50 p-4 rounded-3xl text-blue-600 shadow-inner">
+            <ShieldCheck size={40} />
+          </div>
+        </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">Username or Email</label>
-            <input 
-              type="text" 
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium text-slate-700"
-              placeholder="Enter your username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+        <h1 className="text-3xl font-black text-center text-slate-800 tracking-tighter italic uppercase mb-2">
+          Atithi Enterprise
+        </h1>
+        <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">
+          Secure Personnel Access
+        </p>
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="relative group">
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+            <input
+              type="text"
+              placeholder="Operator ID / Username"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>
-          
-          <div>
-            <label className="block text-slate-500 text-[10px] font-black uppercase tracking-wider mb-2">Password</label>
-            <input 
-              type="password" 
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all font-medium text-slate-700"
-              placeholder="••••••••"
+
+          <div className="relative group">
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+            <input
+              type="password"
+              placeholder="Access Key / Password"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={loading}
-            className={`w-full bg-blue-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 transition-all duration-200 flex items-center justify-center gap-2 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 active:scale-95 text-xs flex justify-center items-center gap-2"
           >
-            {loading ? "Verifying Credentials..." : "Sign In to HMS"}
+            {loading ? <Loader2 className="animate-spin" /> : 'Authenticate System'}
           </button>
         </form>
 
-        <div className="mt-8 text-center">
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-              Secure Cloud Access • 2025
-            </p>
+        <div className="mt-8 text-center border-t border-slate-100 pt-6">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">New Property?</p>
+            <Link to="/register" className="text-blue-600 font-black uppercase text-xs tracking-widest hover:underline hover:text-blue-800 transition-colors">
+                Create Owner Account
+            </Link>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default Login;

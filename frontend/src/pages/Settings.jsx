@@ -4,11 +4,15 @@ import {
   Percent, Globe, Loader2, Building2, Key, ShieldCheck 
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
+import { useAuth } from '../context/AuthContext'; // 👈 Import the Brain
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
+  // 🧠 Use Context to update Global State instantly
+  const { updateGlobalProfile } = useAuth(); 
+
   // 1. Property Settings State
   const [formData, setFormData] = useState({
     hotel_name: '',
@@ -20,7 +24,7 @@ const Settings = () => {
     room_tax_rate: '12.00'
   });
 
-  // 2. Email Automation State (New)
+  // 2. Email Automation State
   const [emailData, setEmailData] = useState({
     email: '',
     password: ''
@@ -41,6 +45,7 @@ const Settings = () => {
         });
         const propData = await propRes.json();
         
+        // If settings exist, populate form
         if (Array.isArray(propData) && propData.length > 0) {
           setFormData(propData[0]);
           setSettingId(propData[0].id);
@@ -96,12 +101,17 @@ const Settings = () => {
           body: JSON.stringify(emailData)
       });
 
-      // Wait for both to finish
+      // Wait for both requests to finish
       const [propRes, emailRes] = await Promise.all([propReq, emailReq]);
 
       if (propRes.ok && emailRes.ok) {
+        
+        // 🧠 THE MAGIC: Update Global Context Instantly
+        updateGlobalProfile(formData.hotel_name);
+
         alert("✅ All System Configurations Updated Successfully!");
-        window.location.reload(); 
+        // ❌ Removed window.location.reload() - Not needed anymore!
+        
       } else {
         alert("⚠️ Saved partially. Please check inputs.");
       }
@@ -248,7 +258,7 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* SECTION 4: EMAIL AUTOMATION (NEW) */}
+        {/* SECTION 4: EMAIL AUTOMATION */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Mail size={20}/></div>

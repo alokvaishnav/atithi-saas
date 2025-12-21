@@ -1,12 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import LicenseLock from './components/LicenseLock'; // 👈 ADDED: Import License Lock
+import LicenseLock from './components/LicenseLock'; 
 import { ShieldAlert, LogOut } from 'lucide-react';
 
 // ✅ 1. IMPORT ALL REAL PAGES
 import Login from './pages/Login';
+import Register from './pages/Register'; 
 import Dashboard from './pages/Dashboard';
 import Guests from './pages/Guests';
+import EditGuest from './pages/EditGuest'; // 👈 ADDED MISSING IMPORT
 import Rooms from './pages/Rooms';
 import Bookings from './pages/Bookings';
 import Services from './pages/Services';
@@ -25,7 +27,6 @@ import DigitalFolio from './pages/DigitalFolio';
 import Accounting from './pages/Accounting'; 
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
-
 import Pricing from './pages/Pricing';
 
 // 🔒 THE PROFESSIONAL GUARD (Role & Token Security)
@@ -70,8 +71,9 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 🔓 PUBLIC ROUTES (Guests & Login) */}
+        {/* 🔓 PUBLIC ROUTES (Guests & Login & Register) */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} /> 
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
         {/* 🔒 PROTECTED APP ARCHITECTURE */}
@@ -128,6 +130,7 @@ function App() {
                         <Route path="/front-desk" element={<FrontDesk />} />
                         <Route path="/rooms" element={<Rooms />} />
                         <Route path="/guests" element={<Guests />} />
+                        <Route path="/guests/edit/:id" element={<EditGuest />} /> {/* 👈 ADDED ROUTE */}
                         <Route path="/bookings" element={<Bookings />} />
                         <Route path="/calendar" element={<CalendarView />} />
                         <Route path="/folio/:bookingId" element={<Folio />} />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { 
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
@@ -7,16 +7,20 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 👈 Import the Brain
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [hotelName, setHotelName] = useState("ATITHI HMS");
   
-  // 🛡️ Retrieve the role stored during the login process
-  const userRole = localStorage.getItem('user_role') || 'RECEPTIONIST';
+  // 🛡️ USE CONTEXT (The Brain)
+  // 'hotelName' comes from global state (updates instantly)
+  // 'role' comes from global state (secure)
+  const { hotelName, role, logout, updateGlobalProfile } = useAuth(); 
 
-  // 🏨 Fetch dynamic branding from Property Settings
+  // 🏨 RESTORED LOGIC: Fetch dynamic branding from Server
+  // We keep this to ensure that if the user refreshes the page, 
+  // we fetch the latest name from the DB and update the Context.
   useEffect(() => {
     const fetchBranding = async () => {
       try {
@@ -25,16 +29,25 @@ const Sidebar = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
+        
         // Backend returns a list; take the first one if available
         if (Array.isArray(data) && data.length > 0) {
-          setHotelName(data[0].hotel_name.toUpperCase());
+            // 👇 THIS IS THE KEY: Update the Global Context, not just local state
+            updateGlobalProfile(data[0].hotel_name.toUpperCase());
         }
       } catch (err) {
-        console.log("Using default branding");
+        console.log("Using cached/default branding");
       }
     };
     fetchBranding();
-  }, []);
+  }, []); // Run once on mount
+
+  // 🛡️ RESTORED LOGIC: Logout Confirmation
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to logout?")) {
+      logout(); // Call the Context logout (clears state + redirects)
+    }
+  };
 
   // Define Groups with Professional Role-Based Access Control (RBAC)
   const groups = [
@@ -59,7 +72,8 @@ const Sidebar = () => {
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        ...(userRole !== 'HOUSEKEEPING' ? [
+        // 🛡️ YOUR LOGIC: Hide POS/Services if role is Housekeeping
+        ...(role !== 'HOUSEKEEPING' ? [
             { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
             { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' }
         ] : [])
@@ -98,22 +112,18 @@ const Sidebar = () => {
     }
   ];
 
-  const handleLogout = () => {
-    if (window.confirm("Are you sure you want to logout?")) {
-      localStorage.clear(); 
-      window.location.href = '/login';
-    }
-  };
-
   return (
     <div className="h-screen w-72 bg-slate-950 text-white flex flex-col shrink-0 overflow-hidden border-r border-slate-800 shadow-2xl">
+      
       {/* Brand Header */}
       <div className="p-8 border-b border-white/5 flex items-center gap-3 bg-slate-950">
         <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20">
-          {hotelName.charAt(0)}
+          {hotelName ? hotelName.charAt(0).toUpperCase() : 'A'}
         </div>
         <div>
-          <h1 className="text-sm font-black text-white italic tracking-tighter leading-none">{hotelName}</h1>
+          <h1 className="text-sm font-black text-white italic tracking-tighter leading-none uppercase truncate max-w-[150px]">
+            {hotelName || "ATITHI HMS"}
+          </h1>
           <p className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">Enterprise Cloud HMS</p>
         </div>
       </div>
@@ -121,7 +131,7 @@ const Sidebar = () => {
       {/* Navigation Groups */}
       <nav className="flex-1 p-4 space-y-8 overflow-y-auto scrollbar-hide py-8">
         {groups.map((group, index) => (
-          group.roles.includes(userRole) && (
+          group.roles.includes(role) && (
             <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
               <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
                 {group.title}
@@ -160,11 +170,11 @@ const Sidebar = () => {
             </div>
             <div>
                <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
-               <p className="text-[11px] font-black text-white tracking-tight">{userRole}</p>
+               <p className="text-[11px] font-black text-white tracking-tight">{role}</p>
             </div>
         </div>
         <button 
-          onClick={handleLogout}
+          onClick={handleLogout} // 👈 Calls the updated handler with confirm dialog
           className="w-full flex items-center space-x-3 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest border border-transparent hover:border-red-500/20 group"
         >
           <LogOut size={18} className="group-hover:scale-110 transition-transform" />
