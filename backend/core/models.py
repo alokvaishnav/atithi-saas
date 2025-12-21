@@ -1,5 +1,10 @@
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+import uuid
+from datetime import timedelta
+from django.utils import timezone
 
 class User(AbstractUser):
     # Professional Roles for Enterprise HMS
@@ -55,3 +60,31 @@ class SaaSConfig(models.Model):
     class Meta:
         verbose_name = "Software Company Settings"
         verbose_name_plural = "Software Company Settings"
+
+
+class Subscription(models.Model):
+    """
+    Control SaaS Access. If expired, the Owner cannot login.
+    """
+    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
+    plan_name = models.CharField(max_length=50, default="TRIAL") # TRIAL, PRO, ENTERPRISE
+    license_key = models.CharField(max_length=100, unique=True, blank=True)
+    start_date = models.DateTimeField(auto_now_add=True)
+    expiry_date = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+
+    def save(self, *args, **kwargs):
+        # Default to 14 days trial if no date set
+        if not self.expiry_date:
+            self.expiry_date = timezone.now() + timedelta(days=14)
+        super().save(*args, **kwargs)
+
+    @property
+    def days_left(self):
+        now = timezone.now()
+        if self.expiry_date < now:
+            return 0
+        return (self.expiry_date - now).days
+
+    def __str__(self):
+        return f"{self.owner.username} - {self.plan_name} ({self.days_left} Days Left)"

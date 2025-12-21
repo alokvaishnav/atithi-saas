@@ -22,6 +22,12 @@ from .serializers import (
     PropertySettingSerializer
 )
 
+import csv
+from datetime import timedelta
+from django.http import HttpResponse
+from django.utils.dateparse import parse_date
+from core.models import Subscription
+
 # ==============================
 # 🔐 UTILITY: Get the Hotel Owner
 # ==============================
@@ -377,3 +383,116 @@ def seed_data_trigger(request):
         return JsonResponse({"status": "Success", "message": "DB Seeded!"})
     except Exception as e:
         return JsonResponse({"status": "Error", "message": str(e)})
+    
+# ==============================
+# 📊 REPORTS & EXCEL EXPORT
+# ==============================
+
+class AdvancedAnalyticsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        owner = get_hotel_owner(user)
+        
+        # Date Filter (Default: Last 30 Days)
+        start_date_str = request.query_params.get('start')
+        end_date_str = request.query_params.get('end')
+        
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=30)
+
+        if start_date_str and end_date_str:
+            start_date = parse_date(start_date_str)
+            end_date = parse_date(end_date_str)
+
+        # Scoped Data
+        if user.is_superuser:
+            bookings = Booking.objects.filter(created_at__range=[start_date, end_date])
+            expenses = Expense.objects.filter(date__range=[start_date, end_date])
+        elif owner:
+            bookings = Booking.objects.filter(owner=owner, created_at__range=[start_date, end_date])
+            expenses = Expense.objects.filter(owner=owner, date__range=[start_date, end_date])
+        else:
+            return Response({"error": "No Access"}, status=400)
+
+        # 1. Financial Pie Chart Data
+        income = bookings.aggregate(sum=Sum('total_amount'))['sum'] or 0
+        expense = expenses.aggregate(sum=Sum('amount'))['sum'] or 0
+        profit = income - expense
+
+        # 2. Daily Bar Chart Data
+        daily_income = bookings.annotate(day=TruncDate('created_at')).values('day').annotate(amount=Sum('total_amount')).order_by('day')
+        daily_expense = expenses.annotate(day=TruncDate('date')).values('day').annotate(amount=Sum('amount')).order_by('day')
+        
+        # Merge Data for Chart
+        chart_data = []
+        # (Simplified merging logic for the frontend to handle)
+        for i in daily_income:
+            chart_data.append({"date": i['day'], "income": i['amount'], "expense": 0})
+        
+        return Response({
+            "summary": {"income": income, "expense": expense, "profit": profit},
+            "chart_data": chart_data
+        })
+
+class ExportReportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        owner = get_hotel_owner(user)
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="daily_report.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['Date', 'Type', 'Description', 'Amount', 'Payment Mode'])
+
+        if owner:
+            bookings = Booking.objects.filter(owner=owner)
+            expenses = Expense.objects.filter(owner=owner)
+
+            for b in bookings:
+                writer.writerow([b.created_at.date(), 'INCOME', f'Booking #{b.id} - {b.guest_name}', b.total_amount, b.payment_status])
+            
+            for e in expenses:
+                writer.writerow([e.date, 'EXPENSE', e.description, e.amount, e.category])
+
+        return response
+
+# ==============================
+# 💳 LICENSE MANAGEMENT
+# ==============================
+class ActivateLicenseView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        key = request.data.get('license_key')
+        user = request.user
+        
+        # Simple Validation Logic (You can make this complex later)
+        # Format: ATITHI-PRO-365 (Adds 365 days)
+        if key == "ATITHI-PRO-365":
+            sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
+            sub.plan_name = "PRO"
+            sub.expiry_date = timezone.now() + timedelta(days=365)
+            sub.is_active = True
+            sub.save()
+            return Response({"status": "Activated", "days": 365})
+        
+        return Response({"error": "Invalid License Key"}, status=400)
+
+class CheckLicenseView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        owner = get_hotel_owner(request.user)
+        if not owner: return Response({"status": "Active", "days": 999}) # Superuser
+        
+        sub, created = Subscription.objects.get_or_create(owner=owner)
+        return Response({
+            "is_active": sub.is_active and sub.days_left > 0,
+            "days_left": sub.days_left,
+            "plan": sub.plan_name
+        })

@@ -22,6 +22,15 @@ from hotel.views import InvoicePDFView # Add this to the list
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from hotel.views import (
+    # ... existing imports ...
+    InvoicePDFView, 
+    AdvancedAnalyticsView, 
+    ExportReportView, 
+    ActivateLicenseView, 
+    CheckLicenseView
+)
+
 # ==========================================
 # 1. CUSTOM LOGIN LOGIC (To send User Role)
 # ==========================================
@@ -87,4 +96,11 @@ urlpatterns = [
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/invoice/<int:booking_id>/pdf/', InvoicePDFView.as_view(), name='invoice_pdf'),
+    # 📊 Reports
+    path('api/reports/analytics/', AdvancedAnalyticsView.as_view()),
+    path('api/reports/export/', ExportReportView.as_view()),
+
+    # 💳 License
+    path('api/license/activate/', ActivateLicenseView.as_view()),
+    path('api/license/check/', CheckLicenseView.as_view()),
 ]

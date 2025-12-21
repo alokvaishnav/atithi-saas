@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
-  TrendingUp, FileBarChart, Printer, ArrowRightCircle, 
-  ShieldCheck, Landmark, Wallet, Percent, PieChart, Activity
+  TrendingUp, FileBarChart, Printer, ShieldCheck, 
+  Landmark, Wallet, PieChart, Activity
 } from 'lucide-react';
 import { API_URL } from '../config'; 
 
@@ -17,10 +17,13 @@ const Reports = () => {
       try {
         setLoading(true);
         const headers = { 'Authorization': `Bearer ${token}` };
+        
+        // Parallel Fetching for speed
         const [resB, resR] = await Promise.all([
-          fetch(API_URL + '/api/bookings/', { headers }),
-          fetch(API_URL + '/api/rooms/', { headers })
+          fetch(`${API_URL}/api/bookings/`, { headers }),
+          fetch(`${API_URL}/api/rooms/`, { headers })
         ]);
+
         const bData = await resB.json();
         const rData = await resR.json();
         

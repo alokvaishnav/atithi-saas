@@ -18,7 +18,10 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      // ⚡ SMART LOADING: Only show the full screen spinner on the FIRST load.
+      // If we already have data, we update silently in the background.
+      if (rooms.length === 0 && bookings.length === 0) setLoading(true);
+      
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const [resRooms, resBookings, resAnalytics] = await Promise.all([
@@ -38,7 +41,18 @@ const Dashboard = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); // 1. Initial Load immediately
+    
+    // 2. ⚡ REAL-TIME POLLING: Auto-refresh every 10 seconds
+    const interval = setInterval(() => {
+        // console.log("⚡ Live Dashboard Sync...");
+        fetchData(); 
+    }, 10000);
+
+    // Cleanup interval when user leaves the dashboard
+    return () => clearInterval(interval);
+  }, []);
 
   // 🧮 EXTENDED OPERATIONAL LOGIC
   const todayStr = new Date().toISOString().split('T')[0];
