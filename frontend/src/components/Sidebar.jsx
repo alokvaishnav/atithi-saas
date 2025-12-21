@@ -55,7 +55,8 @@ const Sidebar = () => {
       title: "Main",
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT'],
       items: [
-        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/' },
+        // 👇 UPDATED PATH: Points to /dashboard instead of /
+        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
       ]
     },
     {

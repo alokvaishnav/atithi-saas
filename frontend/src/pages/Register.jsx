@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Mail, Lock, Phone, Building2, Loader2, CheckCircle } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 👈 Import the Brain
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -13,6 +14,9 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  
+  // 🧠 Use Context Login function
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,18 +30,20 @@ const Register = () => {
       const data = await res.json();
 
       if (res.ok) {
-        // ✅ Auto Login Logic
-        localStorage.setItem('access_token', data.access);
-        localStorage.setItem('refresh_token', data.refresh);
-        localStorage.setItem('user_role', 'OWNER'); 
+        // ✅ CRITICAL FIX: Preserve Old Logic
+        // In the old code, you forced the role to be 'OWNER'. 
+        // We must ensure the Context receives this role, or it might default to 'RECEPTIONIST'.
+        const authData = {
+            ...data,
+            user_role: 'OWNER', // 👈 Forced Owner Role (Like Old Logic)
+            hotel_name: formData.hotel_name // Ensure Hotel Name is passed
+        };
+
+        // 🧠 Update Global State Instantly
+        login(authData); 
         
-        // Store Hotel Name for Sidebar/Header display
-        if(data.hotel_name) {
-            localStorage.setItem('hotel_name', data.hotel_name);
-        }
-        
-        // Redirect to Dashboard
-        window.location.href = '/';
+        // 🚀 Redirect to the new Dashboard route
+        navigate('/dashboard');
       } else {
         // ❌ Handle Validation Errors gracefully
         let errorMsg = "Registration failed.";
