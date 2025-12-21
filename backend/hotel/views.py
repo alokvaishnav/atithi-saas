@@ -40,14 +40,14 @@ from xhtml2pdf import pisa
 from django.core.mail import EmailMessage, get_connection # 👈 Added get_connection
 from core.models import HotelSMTPSettings # 👈 Added Model
 
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
+
+
+
 from rest_framework.permissions import AllowAny
-from django.contrib.auth import get_user_model
+
 from rest_framework_simplejwt.tokens import RefreshToken
 from core.models import Subscription, User
-from hotel.models import Setting
+
 from django.db import transaction
 
 
