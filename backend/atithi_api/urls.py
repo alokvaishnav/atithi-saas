@@ -8,12 +8,13 @@ from hotel.views import (
     BookingViewSet, 
     ServiceViewSet, 
     BookingChargeViewSet,
-    ExpenseViewSet,         # 👈 Added ExpenseViewSet (Critical for Accounting)
+    ExpenseViewSet,         # 👈 Accounting Module
+    SettingViewSet,         # 👈 NEW: Property Configuration (Hotel Name/Tax)
     AnalyticsView,          # 👈 Executive Dashboard
     PublicFolioView,        # 👈 Guest Mobile View
     seed_data_trigger       # 👈 The Magic Seed Trigger
 )
-from core.views import UserViewSet
+from core.views import StaffViewSet # 👈 UPDATED: Renamed from UserViewSet
 
 # 🛡️ IMPORT FOR ROLE-BASED LOGIN
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -48,7 +49,7 @@ def home_view(request):
     return JsonResponse({
         "message": "Welcome to Atithi SaaS API 🏨",
         "status": "Running",
-        "version": "2.2 (Analytics, Guest Folio & Seeding Enabled)",
+        "version": "2.5 (Full Enterprise Features)",
         "admin_panel": "/admin/"
     })
 
@@ -58,8 +59,9 @@ router.register(r'guests', GuestViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'services', ServiceViewSet)
 router.register(r'charges', BookingChargeViewSet)
-router.register(r'expenses', ExpenseViewSet) # 👈 Added Expenses Endpoint
-router.register(r'users', UserViewSet)
+router.register(r'expenses', ExpenseViewSet)  # 👈 Accounting
+router.register(r'settings', SettingViewSet)  # 👈 NEW: System Settings
+router.register(r'staff', StaffViewSet)       # 👈 NEW: HR Management
 
 # ==========================================
 # 3. URL PATTERNS

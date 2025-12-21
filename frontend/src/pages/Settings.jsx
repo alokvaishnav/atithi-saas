@@ -10,6 +10,7 @@ const Settings = () => {
   const [isSaving, setIsSaving] = useState(false);
   
   // Matches the PropertySetting model in backend/hotel/models.py
+  // Initial state matches the expected fields. ID will be added if fetched.
   const [formData, setFormData] = useState({
     hotel_name: '',
     gstin: '',
@@ -31,7 +32,7 @@ const Settings = () => {
       });
       const data = await res.json();
       
-      // If settings exist, populate form. If array, take first item.
+      // If settings exist, populate form. If it's an array (default DRF list), take the first item.
       if (Array.isArray(data) && data.length > 0) {
         setFormData(data[0]);
       }
@@ -49,9 +50,8 @@ const Settings = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // We use POST to create or PUT to update. 
-      // For simplicity, we'll assume the backend handles the singleton logic or we send ID if needed.
-      // Ideally, check if ID exists in formData to decide method.
+      // We use POST to create a new record or PUT to update an existing one.
+      // We check if 'id' exists in the fetched formData to decide.
       const method = formData.id ? 'PUT' : 'POST';
       const url = formData.id 
         ? `${API_URL}/api/settings/${formData.id}/` 
@@ -68,21 +68,25 @@ const Settings = () => {
 
       if (res.ok) {
         alert("✅ System Configuration Updated Successfully!");
-        // Optional: Refresh page to update Sidebar branding immediately
+        // Reloading page ensures the Sidebar and Header update with the new Hotel Name immediately
         window.location.reload(); 
       } else {
-        alert("Failed to save settings.");
+        alert("Failed to save settings. Please try again.");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error saving settings:", err);
+      alert("An error occurred while saving.");
     } finally {
       setIsSaving(false);
     }
   };
 
   if (loading) return (
-    <div className="flex h-screen items-center justify-center">
-      <Loader2 className="animate-spin text-blue-600" size={40} />
+    <div className="flex h-screen items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Loading Configuration...</p>
+      </div>
     </div>
   );
 
@@ -113,6 +117,7 @@ const Settings = () => {
                 className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all"
                 value={formData.hotel_name}
                 onChange={e => setFormData({...formData, hotel_name: e.target.value})}
+                placeholder="e.g. Grand Palace Hotel"
               />
             </div>
             <div className="space-y-2">
@@ -122,6 +127,7 @@ const Settings = () => {
                 className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all"
                 value={formData.gstin}
                 onChange={e => setFormData({...formData, gstin: e.target.value})}
+                placeholder="e.g. 22AAAAA0000A1Z5"
               />
             </div>
           </div>
@@ -144,6 +150,7 @@ const Settings = () => {
                   className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all"
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
+                  placeholder="admin@hotel.com"
                 />
               </div>
             </div>
@@ -156,6 +163,7 @@ const Settings = () => {
                   className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all"
                   value={formData.contact_number}
                   onChange={e => setFormData({...formData, contact_number: e.target.value})}
+                  placeholder="+91 98765 43210"
                 />
               </div>
             </div>
@@ -168,6 +176,7 @@ const Settings = () => {
               className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all resize-none"
               value={formData.address}
               onChange={e => setFormData({...formData, address: e.target.value})}
+              placeholder="Full street address..."
             />
           </div>
         </div>
@@ -187,6 +196,7 @@ const Settings = () => {
                 className="w-full bg-slate-50 p-4 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
                 value={formData.currency_symbol}
                 onChange={e => setFormData({...formData, currency_symbol: e.target.value})}
+                placeholder="₹"
               />
             </div>
             <div className="space-y-2">
@@ -199,6 +209,7 @@ const Settings = () => {
                   className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
                   value={formData.room_tax_rate}
                   onChange={e => setFormData({...formData, room_tax_rate: e.target.value})}
+                  placeholder="12.00"
                 />
               </div>
             </div>

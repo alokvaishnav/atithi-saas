@@ -20,10 +20,11 @@ const Staff = () => {
   const token = localStorage.getItem('access_token');
   const currentUserRole = localStorage.getItem('user_role');
 
+  // ✅ CORRECTED ENDPOINT: /api/staff/ (Matches urls.py)
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/users/`, {
+      const res = await fetch(`${API_URL}/api/staff/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -40,7 +41,8 @@ const Staff = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_URL}/api/users/`, {
+      // ✅ CORRECTED ENDPOINT: /api/staff/
+      const res = await fetch(`${API_URL}/api/staff/`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
@@ -55,7 +57,7 @@ const Staff = () => {
         alert("Staff account created successfully! 🔑");
       } else {
         const errorData = await res.json();
-        alert(errorData.error || "Failed to create account.");
+        alert(errorData.error || "Failed to create account. Username may be taken.");
       }
     } catch (err) {
       console.error(err);
@@ -65,7 +67,8 @@ const Staff = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to revoke system access for this user? This cannot be undone.")) {
       try {
-        const res = await fetch(`${API_URL}/api/users/${id}/`, {
+        // ✅ CORRECTED ENDPOINT: /api/staff/
+        const res = await fetch(`${API_URL}/api/staff/${id}/`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -83,8 +86,11 @@ const Staff = () => {
   };
 
   if (loading && users.length === 0) return (
-    <div className="p-20 text-center font-black animate-pulse text-blue-600 uppercase tracking-widest text-xs">
-      <Loader2 className="animate-spin inline-block mr-2" /> Accessing Staff Database...
+    <div className="flex h-screen items-center justify-center bg-slate-50">
+       <div className="flex flex-col items-center gap-4">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Accessing Staff Database...</p>
+      </div>
     </div>
   );
 
@@ -144,13 +150,17 @@ const Staff = () => {
 
             <div className="mt-8 pt-6 border-t border-slate-50 flex justify-between items-center">
               <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">ID: PMS-00{user.id}</span>
-              <button 
-                onClick={() => handleDelete(user.id)}
-                className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-300 hover:bg-red-50 hover:text-red-500 transition-all"
-                title="Revoke Access"
-              >
-                <Trash2 size={18}/>
-              </button>
+              
+              {/* Security: Prevent deleting yourself or Owners */}
+              {user.role !== 'OWNER' && (
+                <button 
+                  onClick={() => handleDelete(user.id)}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-300 hover:bg-red-50 hover:text-red-500 transition-all"
+                  title="Revoke Access"
+                >
+                  <Trash2 size={18}/>
+                </button>
+              )}
             </div>
           </div>
         ))}
