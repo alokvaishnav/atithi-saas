@@ -8,14 +8,17 @@ from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.core.management import call_command
 
-from .models import Guest, Room, Booking, Service, BookingCharge, Expense
+# ✅ ADDED PropertySetting HERE
+from .models import Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting
+# ✅ ADDED PropertySettingSerializer HERE
 from .serializers import (
     GuestSerializer, 
     RoomSerializer, 
     BookingSerializer, 
     ServiceSerializer, 
     BookingChargeSerializer,
-    ExpenseSerializer
+    ExpenseSerializer,
+    PropertySettingSerializer
 )
 
 # ==============================
@@ -123,7 +126,19 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         serializer.save(paid_by=self.request.user)
 
 # ==============================
-# 3. EXECUTIVE ANALYTICS (REVENUE + EXPENSES)
+# 3. SETTINGS & CONFIGURATION (THE FIX)
+# ==============================
+
+class SettingViewSet(viewsets.ModelViewSet):
+    """
+    Manage Global Property Settings (Hotel Name, Tax, Currency, etc.)
+    """
+    queryset = PropertySetting.objects.all()
+    serializer_class = PropertySettingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+# ==============================
+# 4. EXECUTIVE ANALYTICS (REVENUE + EXPENSES)
 # ==============================
 
 class AnalyticsView(APIView):
@@ -181,7 +196,7 @@ class AnalyticsView(APIView):
         })
 
 # ==============================
-# 4. PUBLIC GUEST FOLIO
+# 5. PUBLIC GUEST FOLIO
 # ==============================
 
 class PublicFolioView(APIView):
@@ -197,7 +212,7 @@ class PublicFolioView(APIView):
             return Response({"error": "Folio record not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # ==============================
-# 5. 🪄 MAGIC SEED TRIGGER (Render Hack)
+# 6. 🪄 MAGIC SEED TRIGGER (Render Hack)
 # ==============================
 
 def seed_data_trigger(request):
