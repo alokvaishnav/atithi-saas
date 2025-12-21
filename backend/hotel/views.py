@@ -7,6 +7,9 @@ from django.db.models import Sum, Count, Q
 from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.core.management import call_command
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+from django.http import HttpResponse
 
 from .models import Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting
 from .serializers import (
@@ -301,6 +304,72 @@ class PublicFolioView(APIView):
             return Response(serializer.data)
         except Booking.DoesNotExist:
             return Response({"error": "Not Found"}, status=404)
+
+# ==============================
+# 📄 PDF INVOICE GENERATOR
+# ==============================
+class InvoicePDFView(APIView):
+    permission_classes = [permissions.AllowAny] # Or IsAuthenticated if you prefer strictness
+
+    def get(self, request, booking_id):
+        try:
+            # 1. Fetch Data
+            booking = Booking.objects.get(id=booking_id)
+            charges = BookingCharge.objects.filter(booking=booking)
+            
+            # 2. Get Hotel Settings (Owner of the booking)
+            hotel_settings = PropertySetting.objects.filter(owner=booking.owner).first()
+            
+            # 3. Prepare Context for HTML
+            context = {
+                'hotel_name': hotel_settings.hotel_name if hotel_settings else "Atithi Hotel",
+                'hotel_address': hotel_settings.address if hotel_settings else "",
+                'hotel_phone': hotel_settings.contact_number if hotel_settings else "",
+                'hotel_email': hotel_settings.email if hotel_settings else "",
+                'hotel_gstin': hotel_settings.gstin if hotel_settings else "Unregistered",
+                'currency': hotel_settings.currency_symbol if hotel_settings else "₹",
+                
+                'booking_id': booking.id,
+                'date_now': timezone.now().strftime("%d %b %Y"),
+                'guest_name': booking.guest.full_name,
+                'guest_phone': booking.guest.phone,
+                'guest_address': booking.guest.address,
+                
+                'room_number': booking.room.room_number if booking.room else "N/A",
+                'room_type': booking.room.room_type if booking.room else "-",
+                'check_in': booking.check_in_date.strftime("%d %b %Y"),
+                'check_out': booking.check_out_date.strftime("%d %b %Y"),
+                'nights': (booking.check_out_date - booking.check_in_date).days or 1,
+                
+                'room_total': booking.total_amount, # Assuming this stores room cost + tax
+                'charges': charges,
+                'subtotal': booking.subtotal_amount + sum(c.subtotal for c in charges),
+                'tax': booking.tax_amount + sum(c.tax_amount for c in charges),
+                'advance': booking.advance_paid,
+                'balance': booking.balance_due
+            }
+
+            # 4. Render HTML
+            template_path = 'hotel/templates/invoice.html'
+            template = get_template(template_path)
+            html = template.render(context)
+
+            # 5. Convert to PDF
+            response = HttpResponse(content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="invoice_{booking_id}.pdf"'
+            
+            pisa_status = pisa.CreatePDF(html, dest=response)
+            
+            if pisa_status.err:
+                return HttpResponse('We had some errors <pre>' + html + '</pre>')
+            return response
+
+        except Booking.DoesNotExist:
+            return HttpResponse("Booking not found", status=404)
+        except Exception as e:
+            return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
+        
+
 
 def seed_data_trigger(request):
     try:

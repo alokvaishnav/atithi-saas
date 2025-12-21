@@ -16,6 +16,8 @@ from hotel.views import (
 )
 from core.views import StaffViewSet, SaaSConfigView # 👈 ADDED SaaSConfigView
 
+from hotel.views import InvoicePDFView # Add this to the list   
+
 # 🛡️ IMPORT FOR ROLE-BASED LOGIN
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -84,4 +86,5 @@ urlpatterns = [
     # 🔑 AUTHENTICATION
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/invoice/<int:booking_id>/pdf/', InvoicePDFView.as_view(), name='invoice_pdf'),
 ]

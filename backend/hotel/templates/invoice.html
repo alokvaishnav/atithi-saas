@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @page { size: A4; margin: 1cm; }
+        body { font-family: Helvetica, sans-serif; color: #333; line-height: 1.5; }
+        .header-box { background-color: #f8fafc; padding: 20px; border-bottom: 2px solid #3b82f6; }
+        .title { font-size: 24px; font-weight: bold; color: #1e293b; text-transform: uppercase; }
+        .subtitle { font-size: 12px; color: #64748b; margin-top: 5px; }
+        .invoice-details { margin-top: 20px; width: 100%; }
+        .invoice-details td { padding: 5px; vertical-align: top; }
+        .bill-to { font-weight: bold; color: #3b82f6; font-size: 14px; margin-bottom: 5px; }
+        
+        .table-box { margin-top: 30px; width: 100%; border-collapse: collapse; }
+        .table-box th { background-color: #1e293b; color: white; padding: 10px; font-size: 12px; text-align: left; }
+        .table-box td { border-bottom: 1px solid #e2e8f0; padding: 10px; font-size: 12px; }
+        
+        .totals-box { margin-top: 20px; width: 100%; text-align: right; }
+        .total-row { font-size: 14px; padding: 5px; }
+        .grand-total { font-size: 18px; font-weight: bold; color: #3b82f6; border-top: 2px solid #3b82f6; padding-top: 10px; }
+        
+        .footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header-box">
+        <div class="title">{{ hotel_name }}</div>
+        <div class="subtitle">{{ hotel_address }} | {{ hotel_email }} | {{ hotel_phone }}</div>
+        <div class="subtitle">GSTIN: {{ hotel_gstin }}</div>
+    </div>
+
+    <table class="invoice-details">
+        <tr>
+            <td width="50%">
+                <div class="bill-to">BILLED TO GUEST</div>
+                <strong>{{ guest_name }}</strong><br>
+                {{ guest_phone }}<br>
+                {{ guest_address }}
+            </td>
+            <td width="50%" style="text-align: right;">
+                <div class="bill-to">INVOICE DETAILS</div>
+                <strong>Invoice #:</strong> INV-{{ booking_id }}<br>
+                <strong>Date:</strong> {{ date_now }}<br>
+                <strong>Room:</strong> {{ room_number }} ({{ room_type }})<br>
+                <strong>Stay:</strong> {{ check_in }} to {{ check_out }}
+            </td>
+        </tr>
+    </table>
+
+    <table class="table-box">
+        <thead>
+            <tr>
+                <th>DESCRIPTION</th>
+                <th>CATEGORY</th>
+                <th>QTY</th>
+                <th style="text-align: right;">AMOUNT</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Room Charges ({{ nights }} Nights)</td>
+                <td>ACCOMMODATION</td>
+                <td>{{ nights }}</td>
+                <td style="text-align: right;">{{ currency }}{{ room_total }}</td>
+            </tr>
+            {% for item in charges %}
+            <tr>
+                <td>{{ item.service.name }}</td>
+                <td>{{ item.service.category }}</td>
+                <td>{{ item.quantity }}</td>
+                <td style="text-align: right;">{{ currency }}{{ item.total_cost }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totals-box">
+        <div class="total-row">Subtotal: {{ currency }}{{ subtotal }}</div>
+        <div class="total-row">Tax (GST): {{ currency }}{{ tax }}</div>
+        <div class="total-row">Advance Paid: -{{ currency }}{{ advance }}</div>
+        <div class="grand-total">BALANCE DUE: {{ currency }}{{ balance }}</div>
+    </div>
+
+    <div class="footer">
+        Thank you for staying at {{ hotel_name }}. This is a computer-generated invoice.
+    </div>
+</body>
+</html>
