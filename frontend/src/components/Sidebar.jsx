@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
-  BookOpen, ChevronRight 
+  BookOpen, ChevronRight, Settings 
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -25,6 +25,7 @@ const Sidebar = () => {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
+        // Backend returns a list; take the first one if available
         if (Array.isArray(data) && data.length > 0) {
           setHotelName(data[0].hotel_name.toUpperCase());
         }
@@ -76,9 +77,16 @@ const Sidebar = () => {
       title: "Finance & HR",
       roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
-        { icon: <Wallet size={18} />, label: 'Expenses & Costs', path: '/expenses' }, // 🆕 ADDED THIS
+        { icon: <Wallet size={18} />, label: 'Expenses & Costs', path: '/expenses' },
         { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' },
         { icon: <FileText size={18} />, label: 'Tax & Audit Reports', path: '/reports' },
+      ]
+    },
+    {
+      title: "Configuration",
+      roles: ['OWNER'], // 👈 Restricted to OWNER only
+      items: [
+        { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
       ]
     },
     {
