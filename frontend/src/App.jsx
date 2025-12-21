@@ -26,6 +26,8 @@ import Accounting from './pages/Accounting';
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
 
+import Pricing from './pages/Pricing';
+
 // 🔒 THE PROFESSIONAL GUARD (Role & Token Security)
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem('access_token');
@@ -138,6 +140,13 @@ function App() {
                         <Route path="/staff" element={
                           <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                             <Staff />
+                          </ProtectedRoute>
+                        } />
+
+                        {/* 💳 PRICING PAGE (Accessible to authenticated users) */}
+                        <Route path="/pricing" element={
+                          <ProtectedRoute>
+                            <Pricing />
                           </ProtectedRoute>
                         } />
 

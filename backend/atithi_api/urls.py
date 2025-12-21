@@ -31,6 +31,8 @@ from hotel.views import (
     CheckLicenseView
 )
 
+from hotel.views import CreatePaymentOrderView, VerifyPaymentView # Add imports
+
 # ==========================================
 # 1. CUSTOM LOGIN LOGIC (To send User Role)
 # ==========================================
@@ -103,4 +105,7 @@ urlpatterns = [
     # 💳 License
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
+
+    path('api/payment/create/', CreatePaymentOrderView.as_view()),
+    path('api/payment/verify/', VerifyPaymentView.as_view()),
 ]

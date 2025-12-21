@@ -172,3 +172,9 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# RAZORPAY SETTINGS
+# Replace these with your actual keys from Razorpay Dashboard
+RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_HERE" 
+RAZORPAY_KEY_SECRET = "YOUR_SECRET_HERE"

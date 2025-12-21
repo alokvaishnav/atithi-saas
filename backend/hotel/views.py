@@ -28,6 +28,11 @@ from django.http import HttpResponse
 from django.utils.dateparse import parse_date
 from core.models import Subscription
 
+import razorpay
+from django.conf import settings
+from core.models import Payment, Subscription
+# You will need to add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to your settings.py later
+
 # ==============================
 # 🔐 UTILITY: Get the Hotel Owner
 # ==============================
@@ -496,3 +501,86 @@ class CheckLicenseView(APIView):
             "days_left": sub.days_left,
             "plan": sub.plan_name
         })
+    
+
+# ==============================
+# 💳 PAYMENT GATEWAY (RAZORPAY)
+# ==============================
+
+class CreatePaymentOrderView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            plan_price = request.data.get('amount') # e.g., 999
+            plan_name = request.data.get('plan_name') # e.g., 'STARTER'
+            
+            # Initialize Razorpay Client (We will set keys in settings.py next)
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            
+            # Razorpay expects amount in PAISE (multiply by 100)
+            data = {
+                "amount": int(plan_price) * 100,
+                "currency": "INR",
+                "receipt": f"sub_{request.user.id}",
+                "payment_capture": 1
+            }
+            order = client.order.create(data=data)
+            
+            # Save a pending payment record
+            sub = Subscription.objects.get(owner=get_hotel_owner(request.user))
+            Payment.objects.create(
+                subscription=sub,
+                razorpay_order_id=order['id'],
+                amount=plan_price,
+                status='PENDING'
+            )
+
+            return Response(order)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+class VerifyPaymentView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            data = request.data
+            # Verify Signature
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            
+            check = {
+                'razorpay_order_id': data['razorpay_order_id'],
+                'razorpay_payment_id': data['razorpay_payment_id'],
+                'razorpay_signature': data['razorpay_signature']
+            }
+            
+            if client.utility.verify_payment_signature(check):
+                # ✅ PAYMENT SUCCESS!
+                
+                # 1. Update Payment Record
+                payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
+                payment.razorpay_payment_id = data['razorpay_payment_id']
+                payment.status = 'SUCCESS'
+                payment.save()
+                
+                # 2. AUTO-ACTIVATE SUBSCRIPTION
+                sub = payment.subscription
+                sub.is_active = True
+                
+                # Logic: Add 30 days to existing expiry, or reset if already expired
+                now = timezone.now()
+                if sub.expiry_date and sub.expiry_date > now:
+                    sub.expiry_date += timedelta(days=30) # Extend
+                else:
+                    sub.expiry_date = now + timedelta(days=30) # Reset/Start Fresh
+                
+                sub.save()
+                
+                return Response({"status": "Payment Verified & License Extended!"})
+            else:
+                return Response({"error": "Signature Verification Failed"}, status=400)
+                
+        except Exception as e:
+            print(e)
+            return Response({"error": "Verification Failed"}, status=500)

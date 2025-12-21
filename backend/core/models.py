@@ -88,3 +88,20 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.owner.username} - {self.plan_name} ({self.days_left} Days Left)"
+    
+
+# ... existing imports ...
+
+class Payment(models.Model):
+    """
+    Records every successful transaction via Razorpay.
+    """
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='payments')
+    razorpay_order_id = models.CharField(max_length=100)
+    razorpay_payment_id = models.CharField(max_length=100, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2) # In Rupees
+    status = models.CharField(max_length=20, default='PENDING') # PENDING, SUCCESS, FAILED
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.subscription.owner.username} - ₹{self.amount} - {self.status}"
