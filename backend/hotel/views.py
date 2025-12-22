@@ -21,6 +21,7 @@ from django.utils.dateparse import parse_date
 
 import csv
 import razorpay
+import uuid # 👈 ADDED THIS IMPORT
 from datetime import timedelta
 from io import BytesIO
 from xhtml2pdf import pisa
@@ -684,12 +685,14 @@ def register_user(request):
                 hotel_name=hotel_name if hotel_name else "My Hotel"
             )
 
-            # 4. Create Subscription (Prevents 401 License errors)
+            # 4. Create Subscription (Prevents 401 License errors & Duplicate Key Error)
+            # ✅ FIX: Generates a UNIQUE license key using UUID
             Subscription.objects.create(
                 owner=user,
                 plan_name='TRIAL',
                 is_active=True,
-                expiry_date=timezone.now() + timedelta(days=14)
+                expiry_date=timezone.now() + timedelta(days=14),
+                license_key=str(uuid.uuid4()) # 👈 THIS PREVENTS THE CRASH
             )
 
             # 5. Generate Tokens
