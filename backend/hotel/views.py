@@ -11,6 +11,8 @@ from django.template.loader import get_template
 from xhtml2pdf import pisa
 from django.http import HttpResponse
 
+from django.contrib.auth import get_user_model
+
 from .models import Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting
 from .serializers import (
     GuestSerializer, 
@@ -52,7 +54,7 @@ from core.models import Subscription, User
 
 from django.db import transaction
 
-
+User = get_user_model()
 
 # ==============================
 # 🔐 UTILITY: Get the Hotel Owner
@@ -699,7 +701,6 @@ class HotelSMTPSettingsView(APIView):
 
         return Response({"status": "Email Settings Saved!"})
     
-
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
@@ -711,13 +712,15 @@ def register_user(request):
         phone = data.get('phone')
         hotel_name = data.get('hotel_name')
 
-        if User.objects.filter(username=username).exists():
-            return Response({'username': ['Username already exists']}, status=400)
-        if User.objects.filter(email=email).exists():
-            return Response({'email': ['Email already exists']}, status=400)
+        # 1. Validation check
+        if not username or not email or not password:
+            return Response({'detail': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if User.objects.filter(username=username).exists():
+            return Response({'username': ['Username already exists']}, status=status.HTTP_400_BAD_REQUEST)
+        
         with transaction.atomic():
-            # 1. Create User
+            # 2. Create User
             user = User.objects.create_user(
                 username=username, 
                 email=email, 
@@ -726,31 +729,36 @@ def register_user(request):
                 role='OWNER' 
             )
 
-            # 2. Create Property Settings
+            # 3. Create Property Settings (Ensures Sidebar has a name to show)
             PropertySetting.objects.create(
                 owner=user,
                 hotel_name=hotel_name if hotel_name else "My Hotel"
             )
 
-            # 3. Create Subscription
+            # 4. Create Subscription (Prevents 401 License errors)
             Subscription.objects.create(
                 owner=user,
-                plan_name='TRIAL'
+                plan_name='TRIAL',
+                is_active=True,
+                expiry_date=timezone.now() + timedelta(days=14)
             )
 
-            # 4. Generate Tokens
+            # 5. Generate Tokens
             refresh = RefreshToken.for_user(user)
             
+            # 6. Final Safe Response (Fixes the 500 Error)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user_role': user.role,
+                'user_role': 'OWNER', # Hardcoded for safety during registration
                 'username': user.username,
                 'hotel_name': hotel_name if hotel_name else "My Hotel"
             }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({'detail': str(e)}, status=500)
+        # This will print the actual hidden error in your Render logs
+        print(f"REGISTRATION CRASH: {str(e)}") 
+        return Response({'detail': f'Registration failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 
 
