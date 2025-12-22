@@ -1,18 +1,33 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from django.utils import timezone
 from django.db.models import Sum, Count, Q
 from django.db.models.functions import TruncDate
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.core.management import call_command
-from django.template.loader import get_template
-from xhtml2pdf import pisa
-from django.http import HttpResponse
-
+from django.template.loader import get_template, render_to_string
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from django.conf import settings
+from django.core.mail import EmailMessage, get_connection
+from django.utils.dateparse import parse_date
 
+import csv
+import razorpay
+from datetime import timedelta
+from io import BytesIO
+from xhtml2pdf import pisa
+
+# ==============================
+# 📦 IMPORT MODELS & SERIALIZERS
+# ==============================
 from .models import Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting
 from .serializers import (
     GuestSerializer, 
@@ -23,37 +38,9 @@ from .serializers import (
     ExpenseSerializer,
     PropertySettingSerializer
 )
+from core.models import Subscription, Payment, HotelSMTPSettings
 
-import csv
-from datetime import timedelta
-from django.http import HttpResponse
-from django.utils.dateparse import parse_date
-
-
-import razorpay
-from django.conf import settings
-from core.models import Payment
-
-from django.core.mail import EmailMessage
-from django.template.loader import render_to_string
-from io import BytesIO
-from xhtml2pdf import pisa
-
-from django.core.mail import EmailMessage, get_connection # 👈 Added get_connection
-from core.models import HotelSMTPSettings # 👈 Added Model
-
-
-from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
-from rest_framework.permissions import AllowAny
-
-from rest_framework_simplejwt.tokens import RefreshToken
-from core.models import Subscription, User
-
-from django.db import transaction
-
+# Initialize User Model
 User = get_user_model()
 
 # ==============================
@@ -77,7 +64,6 @@ def get_hotel_owner(user):
 # ==============================
 
 class GuestViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this to generate URLs
     queryset = Guest.objects.all()
     serializer_class = GuestSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -93,12 +79,10 @@ class GuestViewSet(viewsets.ModelViewSet):
         return Guest.objects.none()
 
     def perform_create(self, serializer):
-        # Auto-assign the guest to the hotel owner
         owner = get_hotel_owner(self.request.user)
         serializer.save(owner=owner)
 
 class RoomViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this
     queryset = Room.objects.all()
     serializer_class = RoomSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -125,7 +109,6 @@ class RoomViewSet(viewsets.ModelViewSet):
         return Response({'status': f'Room {room.room_number} is now Clean.'})
 
 class BookingViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -181,7 +164,6 @@ class BookingViewSet(viewsets.ModelViewSet):
 # ==============================
 
 class ServiceViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -196,13 +178,11 @@ class ServiceViewSet(viewsets.ModelViewSet):
         serializer.save(owner=get_hotel_owner(self.request.user))
 
 class BookingChargeViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this
     queryset = BookingCharge.objects.all()
     serializer_class = BookingChargeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Filter charges by the Booking's Owner
         user = self.request.user
         if user.is_superuser:
             return BookingCharge.objects.all()
@@ -214,7 +194,6 @@ class BookingChargeViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 class ExpenseViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -236,7 +215,6 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 # ==============================
 
 class SettingViewSet(viewsets.ModelViewSet):
-    # ✅ FIX: Router needs this
     queryset = PropertySetting.objects.all()
     serializer_class = PropertySettingSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -246,7 +224,6 @@ class SettingViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return PropertySetting.objects.all()
         
-        # Only OWNERS have settings. Staff generally read their Owner's settings.
         owner = get_hotel_owner(user)
         if owner:
             return PropertySetting.objects.filter(owner=owner)
@@ -266,7 +243,6 @@ class AnalyticsView(APIView):
         user = request.user
         owner = get_hotel_owner(user)
         
-        # Base QuerySets (Scoped to Hotel)
         if user.is_superuser:
             bookings = Booking.objects.all()
             expenses = Expense.objects.all()
@@ -276,7 +252,6 @@ class AnalyticsView(APIView):
             expenses = Expense.objects.filter(owner=owner)
             rooms = Room.objects.filter(owner=owner)
         else:
-            # Fallback for unlinked staff
             return Response({"error": "No Hotel Profile Linked"}, status=400)
 
         # 1. Revenue
@@ -343,18 +318,15 @@ class PublicFolioView(APIView):
 # 📄 PDF INVOICE GENERATOR
 # ==============================
 class InvoicePDFView(APIView):
-    permission_classes = [permissions.AllowAny] # Or IsAuthenticated if you prefer strictness
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request, booking_id):
         try:
-            # 1. Fetch Data
             booking = Booking.objects.get(id=booking_id)
             charges = BookingCharge.objects.filter(booking=booking)
             
-            # 2. Get Hotel Settings (Owner of the booking)
             hotel_settings = PropertySetting.objects.filter(owner=booking.owner).first()
             
-            # 3. Prepare Context for HTML
             context = {
                 'hotel_name': hotel_settings.hotel_name if hotel_settings else "Atithi Hotel",
                 'hotel_address': hotel_settings.address if hotel_settings else "",
@@ -375,7 +347,7 @@ class InvoicePDFView(APIView):
                 'check_out': booking.check_out_date.strftime("%d %b %Y"),
                 'nights': (booking.check_out_date - booking.check_in_date).days or 1,
                 
-                'room_total': booking.total_amount, # Assuming this stores room cost + tax
+                'room_total': booking.total_amount,
                 'charges': charges,
                 'subtotal': booking.subtotal_amount + sum(c.subtotal for c in charges),
                 'tax': booking.tax_amount + sum(c.tax_amount for c in charges),
@@ -383,12 +355,10 @@ class InvoicePDFView(APIView):
                 'balance': booking.balance_due
             }
 
-            # 4. Render HTML
             template_path = 'hotel/templates/invoice.html'
             template = get_template(template_path)
             html = template.render(context)
 
-            # 5. Convert to PDF
             response = HttpResponse(content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="invoice_{booking_id}.pdf"'
             
@@ -402,8 +372,6 @@ class InvoicePDFView(APIView):
             return HttpResponse("Booking not found", status=404)
         except Exception as e:
             return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
-        
-
 
 def seed_data_trigger(request):
     try:
@@ -423,7 +391,6 @@ class AdvancedAnalyticsView(APIView):
         user = request.user
         owner = get_hotel_owner(user)
         
-        # Date Filter (Default: Last 30 Days)
         start_date_str = request.query_params.get('start')
         end_date_str = request.query_params.get('end')
         
@@ -434,7 +401,6 @@ class AdvancedAnalyticsView(APIView):
             start_date = parse_date(start_date_str)
             end_date = parse_date(end_date_str)
 
-        # Scoped Data
         if user.is_superuser:
             bookings = Booking.objects.filter(created_at__range=[start_date, end_date])
             expenses = Expense.objects.filter(date__range=[start_date, end_date])
@@ -444,18 +410,13 @@ class AdvancedAnalyticsView(APIView):
         else:
             return Response({"error": "No Access"}, status=400)
 
-        # 1. Financial Pie Chart Data
         income = bookings.aggregate(sum=Sum('total_amount'))['sum'] or 0
         expense = expenses.aggregate(sum=Sum('amount'))['sum'] or 0
         profit = income - expense
 
-        # 2. Daily Bar Chart Data
         daily_income = bookings.annotate(day=TruncDate('created_at')).values('day').annotate(amount=Sum('total_amount')).order_by('day')
-        daily_expense = expenses.annotate(day=TruncDate('date')).values('day').annotate(amount=Sum('amount')).order_by('day')
         
-        # Merge Data for Chart
         chart_data = []
-        # (Simplified merging logic for the frontend to handle)
         for i in daily_income:
             chart_data.append({"date": i['day'], "income": i['amount'], "expense": 0})
         
@@ -499,8 +460,6 @@ class ActivateLicenseView(APIView):
         key = request.data.get('license_key')
         user = request.user
         
-        # Simple Validation Logic (You can make this complex later)
-        # Format: ATITHI-PRO-365 (Adds 365 days)
         if key == "ATITHI-PRO-365":
             sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
             sub.plan_name = "PRO"
@@ -516,7 +475,7 @@ class CheckLicenseView(APIView):
     
     def get(self, request):
         owner = get_hotel_owner(request.user)
-        if not owner: return Response({"status": "Active", "days": 999}) # Superuser
+        if not owner: return Response({"status": "Active", "days": 999})
         
         sub, created = Subscription.objects.get_or_create(owner=owner)
         return Response({
@@ -524,7 +483,6 @@ class CheckLicenseView(APIView):
             "days_left": sub.days_left,
             "plan": sub.plan_name
         })
-    
 
 # ==============================
 # 💳 PAYMENT GATEWAY (RAZORPAY)
@@ -535,13 +493,10 @@ class CreatePaymentOrderView(APIView):
 
     def post(self, request):
         try:
-            plan_price = request.data.get('amount') # e.g., 999
-            plan_name = request.data.get('plan_name') # e.g., 'STARTER'
+            plan_price = request.data.get('amount')
             
-            # Initialize Razorpay Client (We will set keys in settings.py next)
             client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
             
-            # Razorpay expects amount in PAISE (multiply by 100)
             data = {
                 "amount": int(plan_price) * 100,
                 "currency": "INR",
@@ -550,7 +505,6 @@ class CreatePaymentOrderView(APIView):
             }
             order = client.order.create(data=data)
             
-            # Save a pending payment record
             sub = Subscription.objects.get(owner=get_hotel_owner(request.user))
             Payment.objects.create(
                 subscription=sub,
@@ -569,7 +523,6 @@ class VerifyPaymentView(APIView):
     def post(self, request):
         try:
             data = request.data
-            # Verify Signature
             client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
             
             check = {
@@ -579,24 +532,19 @@ class VerifyPaymentView(APIView):
             }
             
             if client.utility.verify_payment_signature(check):
-                # ✅ PAYMENT SUCCESS!
-                
-                # 1. Update Payment Record
                 payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
                 payment.razorpay_payment_id = data['razorpay_payment_id']
                 payment.status = 'SUCCESS'
                 payment.save()
                 
-                # 2. AUTO-ACTIVATE SUBSCRIPTION
                 sub = payment.subscription
                 sub.is_active = True
                 
-                # Logic: Add 30 days to existing expiry, or reset if already expired
                 now = timezone.now()
                 if sub.expiry_date and sub.expiry_date > now:
-                    sub.expiry_date += timedelta(days=30) # Extend
+                    sub.expiry_date += timedelta(days=30)
                 else:
-                    sub.expiry_date = now + timedelta(days=30) # Reset/Start Fresh
+                    sub.expiry_date = now + timedelta(days=30)
                 
                 sub.save()
                 
@@ -607,7 +555,6 @@ class VerifyPaymentView(APIView):
         except Exception as e:
             print(e)
             return Response({"error": "Verification Failed"}, status=500)
-        
 
 # ==============================
 # 📧 EMAIL AUTOMATION
@@ -618,19 +565,18 @@ class EmailInvoiceView(APIView):
 
     def post(self, request, pk):
         try:
-            # 1. Fetch Booking
             owner = get_hotel_owner(request.user)
             booking = Booking.objects.get(id=pk, owner=owner)
+            
+            # ✅ CORRECTED: Use BookingCharge, not Charge
             charges = BookingCharge.objects.filter(booking=booking)
             
+            # ✅ CORRECTED: Access .guest.email properly
             if not booking.guest.email:
                 return Response({"error": "Guest has no email address."}, status=400)
 
-            # 2. 🔍 FETCH HOTEL'S CUSTOM EMAIL SETTINGS
             try:
                 smtp_config = HotelSMTPSettings.objects.get(owner=owner)
-                
-                # Create a custom connection using the HOTEL'S credentials
                 connection = get_connection(
                     host=smtp_config.email_host,
                     port=smtp_config.email_port,
@@ -641,11 +587,9 @@ class EmailInvoiceView(APIView):
                 sender_email = smtp_config.email_host_user
             
             except HotelSMTPSettings.DoesNotExist:
-                # Fallback to System Default (optional, or error out)
                 return Response({"error": "Please configure your Email Settings in the Settings Page first."}, status=400)
 
-            # 3. Generate PDF (Same as before)
-            template_path = 'invoice_template.html'
+            template_path = 'hotel/templates/invoice.html'
             context = {'booking': booking, 'charges': charges, 'total': booking.total_amount, 'owner': booking.owner}
             html = render_to_string(template_path, context)
             result = BytesIO()
@@ -653,16 +597,15 @@ class EmailInvoiceView(APIView):
             
             if pdf.err: return Response({"error": "PDF Error"}, status=500)
 
-            # 4. Send Email using the CUSTOM CONNECTION
-            subject = f"Invoice from {owner.hotel_name or 'Hotel'}"
-            message = f"Dear {booking.guest_name},\n\nPlease find attached your invoice.\n\nRegards,\n{owner.hotel_name}"
+            subject = f"Invoice from {owner.hotel_name if hasattr(owner, 'hotel_name') else 'Hotel'}"
+            message = f"Dear {booking.guest.full_name},\n\nPlease find attached your invoice.\n\nRegards,\n{owner.hotel_name if hasattr(owner, 'hotel_name') else 'Hotel'}"
             
             email = EmailMessage(
                 subject,
                 message,
-                sender_email, # From Hotel's Email
+                sender_email,
                 [booking.guest.email],
-                connection=connection # 👈 THE MAGIC: Uses Hotel's Password
+                connection=connection
             )
             email.attach(f'Invoice_{booking.id}.pdf', result.getvalue(), 'application/pdf')
             email.send()
@@ -670,7 +613,7 @@ class EmailInvoiceView(APIView):
             return Response({"status": "Email Sent from Hotel Account! 📧"})
 
         except Exception as e:
-            print(e)
+            print(f"EMAIL ERROR: {e}")
             return Response({"error": str(e)}, status=500)
         
 class HotelSMTPSettingsView(APIView):
@@ -682,7 +625,7 @@ class HotelSMTPSettingsView(APIView):
             conf = HotelSMTPSettings.objects.get(owner=get_hotel_owner(request.user))
             return Response({
                 "email": conf.email_host_user,
-                "has_password": True # Don't send back the real password for security
+                "has_password": True
             })
         except HotelSMTPSettings.DoesNotExist:
             return Response({"email": "", "has_password": False})
@@ -691,16 +634,20 @@ class HotelSMTPSettingsView(APIView):
         """Save settings"""
         owner = get_hotel_owner(request.user)
         email = request.data.get('email')
-        password = request.data.get('password') # App Password
+        password = request.data.get('password')
 
         obj, created = HotelSMTPSettings.objects.get_or_create(owner=owner)
         obj.email_host_user = email
-        if password: # Only update if new password provided
+        if password:
             obj.email_host_password = password
         obj.save()
 
         return Response({"status": "Email Settings Saved!"})
-    
+
+# ==============================
+# 🚀 REGISTRATION & AUTH
+# ==============================
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
@@ -718,6 +665,8 @@ def register_user(request):
 
         if User.objects.filter(username=username).exists():
             return Response({'username': ['Username already exists']}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email=email).exists():
+            return Response({'email': ['Email already exists']}, status=status.HTTP_400_BAD_REQUEST)
         
         with transaction.atomic():
             # 2. Create User
@@ -729,7 +678,7 @@ def register_user(request):
                 role='OWNER' 
             )
 
-            # 3. Create Property Settings (Ensures Sidebar has a name to show)
+            # 3. Create Property Settings (CRITICAL FIX: PropertySetting)
             PropertySetting.objects.create(
                 owner=user,
                 hotel_name=hotel_name if hotel_name else "My Hotel"
@@ -746,28 +695,22 @@ def register_user(request):
             # 5. Generate Tokens
             refresh = RefreshToken.for_user(user)
             
-            # 6. Final Safe Response (Fixes the 500 Error)
+            # 6. Final Safe Response (Fixes the 500 Error by NOT relying on DB read-back)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'user_role': 'OWNER', # Hardcoded for safety during registration
+                'user_role': 'OWNER', 
                 'username': user.username,
                 'hotel_name': hotel_name if hotel_name else "My Hotel"
             }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        # This will print the actual hidden error in your Render logs
         print(f"REGISTRATION CRASH: {str(e)}") 
         return Response({'detail': f'Registration failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
 
-
-
-# Add these lines to the bottom of backend/hotel/views.py
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Add extra data to response
         data['user_role'] = self.user.role
         data['username'] = self.user.username
         data['hotel_name'] = self.user.get_hotel_name()
