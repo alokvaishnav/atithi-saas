@@ -746,8 +746,8 @@ def register_user(request):
                 'refresh': str(refresh),
                 'user_role': user.role,
                 'username': user.username,
-                'hotel_name': hotel_name
-            }, status=201)
+                'hotel_name': hotel_name if hotel_name else "My Hotel"
+            }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response({'detail': str(e)}, status=500)

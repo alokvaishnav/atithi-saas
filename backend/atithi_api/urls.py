@@ -125,7 +125,6 @@ urlpatterns = [
 
     # 🪄 MAGIC SEED LINK (Run this to populate DB)
     path('seed-db-now/', seed_data_trigger, name='seed_data_trigger'),
-
-    path('api/auth/register/', register_user),
+    
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
 ]
