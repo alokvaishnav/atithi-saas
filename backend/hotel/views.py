@@ -26,11 +26,11 @@ import csv
 from datetime import timedelta
 from django.http import HttpResponse
 from django.utils.dateparse import parse_date
-from core.models import Subscription
+
 
 import razorpay
 from django.conf import settings
-from core.models import Payment, Subscription
+from core.models import Payment
 
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -40,8 +40,10 @@ from xhtml2pdf import pisa
 from django.core.mail import EmailMessage, get_connection # 👈 Added get_connection
 from core.models import HotelSMTPSettings # 👈 Added Model
 
-from rest_framework.decorators import action, api_view, permission_classes
 
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from rest_framework.permissions import AllowAny
 
@@ -617,9 +619,9 @@ class EmailInvoiceView(APIView):
             # 1. Fetch Booking
             owner = get_hotel_owner(request.user)
             booking = Booking.objects.get(id=pk, owner=owner)
-            charges = Charge.objects.filter(booking=booking)
+            charges = BookingCharge.objects.filter(booking=booking)
             
-            if not booking.guest_email:
+            if not booking.guest.email:
                 return Response({"error": "Guest has no email address."}, status=400)
 
             # 2. 🔍 FETCH HOTEL'S CUSTOM EMAIL SETTINGS
@@ -657,7 +659,7 @@ class EmailInvoiceView(APIView):
                 subject,
                 message,
                 sender_email, # From Hotel's Email
-                [booking.guest_email],
+                [booking.guest.email],
                 connection=connection # 👈 THE MAGIC: Uses Hotel's Password
             )
             email.attach(f'Invoice_{booking.id}.pdf', result.getvalue(), 'application/pdf')
@@ -760,5 +762,3 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['hotel_name'] = self.user.get_hotel_name()
         return data
 
-class CustomTokenObtainPairView(TokenObtainPairView):
-    serializer_class = CustomTokenObtainPairSerializer
