@@ -40,7 +40,7 @@ from xhtml2pdf import pisa
 from django.core.mail import EmailMessage, get_connection # 👈 Added get_connection
 from core.models import HotelSMTPSettings # 👈 Added Model
 
-
+from rest_framework.decorators import action, api_view, permission_classes
 
 
 from rest_framework.permissions import AllowAny
@@ -721,26 +721,24 @@ def register_user(request):
                 email=email, 
                 password=password, 
                 phone=phone,
-                role='OWNER' # Force Owner role for new registrations
+                role='OWNER' 
             )
 
             # 2. Create Property Settings
-            # ✅ CORRECTED: Using PropertySetting instead of Setting
             PropertySetting.objects.create(
                 owner=user,
                 hotel_name=hotel_name if hotel_name else "My Hotel"
             )
 
-            # 3. Create Subscription (14-Day Trial)
+            # 3. Create Subscription
             Subscription.objects.create(
                 owner=user,
                 plan_name='TRIAL'
             )
 
-            # 4. Generate Tokens Manually
+            # 4. Generate Tokens
             refresh = RefreshToken.for_user(user)
             
-            # 5. Return JSON (Fixes the Network Error)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
@@ -750,7 +748,6 @@ def register_user(request):
             }, status=201)
 
     except Exception as e:
-        print(f"Register Error: {e}")
         return Response({'detail': str(e)}, status=500)
     
 

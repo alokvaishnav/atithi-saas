@@ -30,6 +30,12 @@ from hotel.views import (
     HotelSMTPSettingsView
 )
 
+from hotel.views import (
+    # ... your other viewset imports ...
+    register_user, # 👈 Add this
+    CustomTokenObtainPairView # 👈 Ensure this is also here
+)
+
 # 🏢 CORE APP IMPORTS
 from core.views import StaffViewSet, SaaSConfigView  # 👈 Added RegisterView
 from hotel.views import register_user
@@ -119,4 +125,7 @@ urlpatterns = [
 
     # 🪄 MAGIC SEED LINK (Run this to populate DB)
     path('seed-db-now/', seed_data_trigger, name='seed_data_trigger'),
+
+    path('api/auth/register/', register_user),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
 ]
