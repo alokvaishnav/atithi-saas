@@ -33,7 +33,7 @@ from hotel.views import (
 from hotel.views import (
     # ... your other viewset imports ...
     register_user, # 👈 Add this
-    CustomTokenObtainPairView # 👈 Ensure this is also here
+    CustomTokenObtainPairView, # 👈 Ensure this is also here
 )
 
 # 🏢 CORE APP IMPORTS

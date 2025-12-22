@@ -753,12 +753,17 @@ def register_user(request):
         return Response({'detail': str(e)}, status=500)
     
 
+
+
+# Add these lines to the bottom of backend/hotel/views.py
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Add extra data to response for the Frontend Sidebar/Header
+        # Add extra data to response
         data['user_role'] = self.user.role
         data['username'] = self.user.username
         data['hotel_name'] = self.user.get_hotel_name()
         return data
 
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
