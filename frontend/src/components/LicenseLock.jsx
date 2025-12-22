@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Lock, Key, CreditCard, LogOut } from 'lucide-react'; // 👈 Added LogOut icon
+import { Lock, Key, CreditCard, LogOut, ShieldAlert } from 'lucide-react'; // 👈 Added Icons
 import { useNavigate, useLocation } from 'react-router-dom'; // 👈 Added useLocation
 import { API_URL } from '../config';
 
 const LicenseLock = ({ children }) => {
   const [status, setStatus] = useState(null);
   const [key, setKey] = useState('');
+  const [loading, setLoading] = useState(false);
   const token = localStorage.getItem('access_token');
   const navigate = useNavigate();
-  const location = useLocation(); // 👈 Track current URL
+  const location = useLocation(); // 👈 Track current URL to allow bypass
 
   // 1. Check License Status
   const checkLicense = async () => {
@@ -17,7 +18,7 @@ const LicenseLock = ({ children }) => {
             headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        // ✅ AUTO-LOGOUT on Bad Token (Fixes 401 loops)
+        // ✅ AUTO-LOGOUT on Bad Token (Fixes 401 loops/White Screen)
         if (res.status === 401) {
             handleLogout();
             return;
@@ -27,6 +28,8 @@ const LicenseLock = ({ children }) => {
         setStatus(data);
     } catch (e) { 
         console.error("License Check Failed:", e); 
+        // If API fails completely, assume locked to be safe, but allow logout
+        setStatus({ is_active: false, error: true });
     }
   };
 
@@ -36,9 +39,9 @@ const LicenseLock = ({ children }) => {
       } else {
           navigate('/login');
       }
-  }, [token]);
+  }, [token, navigate]);
 
-  // Helper: Handle Logout
+  // Helper: Handle Logout (Escape Hatch)
   const handleLogout = () => {
       localStorage.clear();
       window.location.href = '/login';
@@ -51,6 +54,7 @@ const LicenseLock = ({ children }) => {
           return;
       }
       
+      setLoading(true);
       try {
           const res = await fetch(`${API_URL}/api/license/activate/`, {
               method: 'POST',
@@ -70,38 +74,48 @@ const LicenseLock = ({ children }) => {
           }
       } catch (err) {
           console.error(err);
-          alert("Activation Error.");
+          alert("Activation Error. Check your connection.");
+      } finally {
+          setLoading(false);
       }
   };
 
-  // 3. Render Logic
+  // 3. RENDER LOGIC
   
-  // ✅ BYPASS: Always render children if user is on the Pricing Page
+  // ✅ BYPASS: Always render children (App) if user is trying to go to the Pricing Page
+  // This fixes the "View Subscription Plans" button not working.
   if (location.pathname === '/pricing') return children;
 
   // Loading State
   if (!status) return (
-      <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-400 animate-pulse">
-          Verifying License...
+      <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-400 gap-4">
+          <div className="animate-pulse flex items-center gap-2">
+             <ShieldAlert size={20}/> Verifying License...
+          </div>
+          {/* Safety Logout in case it gets stuck loading */}
+          <button onClick={handleLogout} className="text-xs uppercase font-bold tracking-widest hover:text-white underline">
+              Logout
+          </button>
       </div>
   );
 
-  // Active License? Render App
+  // ✅ Active License? Render the App (children)
   if (status.is_active) return children;
 
-  // 🔒 LOCK SCREEN (With Logout & Pricing Fixes)
+  // 🔒 LOCK SCREEN (If Expired)
   return (
     <div className="h-screen bg-slate-900 flex items-center justify-center p-4 relative">
         
-        {/* ✅ LOGOUT BUTTON (Escape Hatch) */}
+        {/* ✅ LOGOUT BUTTON (Crucial Escape Hatch) */}
         <button 
             onClick={handleLogout}
-            className="absolute top-6 right-6 flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest"
+            className="absolute top-6 right-6 flex items-center gap-2 text-slate-500 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest"
         >
-            <LogOut size={18} /> Logout
+            <LogOut size={16}/> Logout
         </button>
 
         <div className="bg-white p-10 rounded-[40px] max-w-md w-full text-center shadow-2xl relative overflow-hidden animate-in zoom-in duration-300">
+            {/* Top Bar Decoration */}
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 to-orange-500"></div>
 
             <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-red-100">
@@ -110,7 +124,7 @@ const LicenseLock = ({ children }) => {
             
             <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">Access Restricted</h1>
             <p className="text-slate-500 mb-8 font-medium leading-relaxed text-sm">
-                Your subscription has expired. Please upgrade your plan or enter a valid license key.
+                Your subscription has expired. Please upgrade your plan or enter a valid license key to continue using <span className="font-bold text-slate-700">Atithi Enterprise</span>.
             </p>
             
             {/* Input Section */}
@@ -128,11 +142,13 @@ const LicenseLock = ({ children }) => {
             <div className="space-y-3">
                 <button 
                     onClick={handleActivate} 
-                    className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-slate-200"
+                    disabled={loading}
+                    className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-slate-200 disabled:opacity-70"
                 >
-                    Unlock System
+                    {loading ? "Verifying..." : "Unlock System"}
                 </button>
 
+                {/* ✅ PRICING BUTTON (Now Works because of Bypass Logic above) */}
                 <button 
                     onClick={() => navigate('/pricing')} 
                     className="w-full bg-blue-50 text-blue-600 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-blue-100 transition-all flex items-center justify-center gap-2"
