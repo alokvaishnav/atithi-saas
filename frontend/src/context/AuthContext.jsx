@@ -1,4 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // 👈 IMPORT HOOK
 
 // Create the Context
 const AuthContext = createContext();
@@ -8,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(null);
   const [hotelName, setHotelName] = useState('Atithi HMS');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate(); // 👈 INITIALIZE HOOK
 
   // 1️⃣ Load Data on App Start
   useEffect(() => {
@@ -40,14 +42,14 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(true);
   };
 
-  // 3️⃣ Logout Function
+  // 3️⃣ Logout Function (FIXED: Uses Client-Side Navigation)
   const logout = () => {
     localStorage.clear();
     setUser(null);
     setRole(null);
     setHotelName('Atithi HMS');
     setIsAuthenticated(false);
-    window.location.href = '/login';
+    navigate('/login'); // 👈 USE NAVIGATE (No more 404 Error)
   };
 
   // 4️⃣ Live Update Helper (For Settings Page)

@@ -41,9 +41,10 @@ const LicenseLock = ({ children }) => {
       }
   }, [token, navigate]);
 
+  // ✅ FIXED: Soft Logout (No 404 Error)
   const handleLogout = () => {
       localStorage.clear();
-      window.location.href = '/login';
+      navigate('/login'); // 👈 Use navigate hook instead of window reload
   };
 
   const handleActivate = async () => {

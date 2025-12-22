@@ -1,11 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom'; // 👈 REMOVED BrowserRouter
 import Sidebar from './components/Sidebar';
 import LicenseLock from './components/LicenseLock'; 
 import { ShieldAlert, LogOut } from 'lucide-react';
-import { useAuth } from './context/AuthContext'; // 👈 IMPORT CONTEXT
+import { useAuth } from './context/AuthContext'; 
 
 // ✅ 1. IMPORT ALL REAL PAGES
-import Home from './pages/Home'; // 👈 NEW LANDING PAGE
+import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register'; 
 import Dashboard from './pages/Dashboard';
@@ -31,9 +31,9 @@ import Support from './pages/Support';
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
 
-// 🔒 THE PROFESSIONAL GUARD (Updated to use Context)
+// 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isAuthenticated, role } = useAuth(); // 👈 Use Brain instead of localStorage
+  const { isAuthenticated, role } = useAuth(); 
 
   // A. Check if logged in
   if (!isAuthenticated) {
@@ -66,9 +66,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// 🏗️ THE APP LAYOUT (Preserving your Header & Sidebar Logic)
+// 🏗️ THE APP LAYOUT
 const AppLayout = () => {
-    const { role, logout } = useAuth(); // 👈 Use Context for Header Data
+    const { role, logout } = useAuth(); 
 
     return (
       <ProtectedRoute>
@@ -81,7 +81,7 @@ const AppLayout = () => {
             
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
               
-              {/* GLOBAL PROFESSIONAL HEADER (Your Original Logic) */}
+              {/* GLOBAL PROFESSIONAL HEADER */}
               <header className="bg-white border-b border-slate-200 p-5 px-10 flex justify-between items-center z-10 shadow-sm">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800 tracking-tighter italic leading-none">ATITHI ENTERPRISE</h2>
@@ -96,7 +96,7 @@ const AppLayout = () => {
                   
                   <div className="flex items-center gap-3 border-l pl-8 border-slate-100">
                     <button 
-                      onClick={logout} // 👈 Use Context Logout
+                      onClick={logout} 
                       className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
                       title="System Logout"
                     >
@@ -188,13 +188,12 @@ const AppLayout = () => {
 };
 
 function App() {
-  const { isAuthenticated } = useAuth(); // 👈 Use Brain
+  const { isAuthenticated } = useAuth(); 
 
   return (
-    <BrowserRouter>
-      <Routes>
+    // ❌ REMOVED BrowserRouter (It is now in main.jsx)
+    <Routes>
         {/* 🔓 PUBLIC ROUTES */}
-        {/* If logged in, "/" goes to Dashboard. If not, it shows the Landing Page */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
         
         <Route path="/login" element={<Login />} />
@@ -202,11 +201,9 @@ function App() {
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
         {/* 🔒 PROTECTED APP ARCHITECTURE */}
-        {/* Matches anything NOT caught above and renders the Layout */}
         <Route path="/*" element={<AppLayout />} />
 
-      </Routes>
-    </BrowserRouter>
+    </Routes>
   );
 }
 
