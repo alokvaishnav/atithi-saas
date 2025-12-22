@@ -698,4 +698,70 @@ class HotelSMTPSettingsView(APIView):
         return Response({"status": "Email Settings Saved!"})
     
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    try:
+        data = request.data
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        phone = data.get('phone')
+        hotel_name = data.get('hotel_name')
+
+        if User.objects.filter(username=username).exists():
+            return Response({'username': ['Username already exists']}, status=400)
+        if User.objects.filter(email=email).exists():
+            return Response({'email': ['Email already exists']}, status=400)
+
+        with transaction.atomic():
+            # 1. Create User
+            user = User.objects.create_user(
+                username=username, 
+                email=email, 
+                password=password, 
+                phone=phone,
+                role='OWNER' # Force Owner role for new registrations
+            )
+
+            # 2. Create Property Settings
+            # ✅ CORRECTED: Using PropertySetting instead of Setting
+            PropertySetting.objects.create(
+                owner=user,
+                hotel_name=hotel_name if hotel_name else "My Hotel"
+            )
+
+            # 3. Create Subscription (14-Day Trial)
+            Subscription.objects.create(
+                owner=user,
+                plan_name='TRIAL'
+            )
+
+            # 4. Generate Tokens Manually
+            refresh = RefreshToken.for_user(user)
+            
+            # 5. Return JSON (Fixes the Network Error)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user_role': user.role,
+                'username': user.username,
+                'hotel_name': hotel_name
+            }, status=201)
+
+    except Exception as e:
+        print(f"Register Error: {e}")
+        return Response({'detail': str(e)}, status=500)
     
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        # Add extra data to response for the Frontend Sidebar/Header
+        data['user_role'] = self.user.role
+        data['username'] = self.user.username
+        data['hotel_name'] = self.user.get_hotel_name()
+        return data
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer

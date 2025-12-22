@@ -31,8 +31,8 @@ from hotel.views import (
 )
 
 # 🏢 CORE APP IMPORTS
-from core.views import StaffViewSet, SaaSConfigView, RegisterView  # 👈 Added RegisterView
-
+from core.views import StaffViewSet, SaaSConfigView  # 👈 Added RegisterView
+from hotel.views import register_user
 # ==========================================
 # 1. CUSTOM LOGIN LOGIC (To send User Role)
 # ==========================================
@@ -92,7 +92,7 @@ urlpatterns = [
     path('api/', include(router.urls)),
     
     # 🔐 AUTHENTICATION & REGISTRATION
-    path('api/auth/register/', RegisterView.as_view()), # 👈 NEW: Public Sign Up
+    path('api/auth/register/', register_user), # 👈 NEW: Public Sign Up
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
