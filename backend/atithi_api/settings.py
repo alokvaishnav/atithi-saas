@@ -134,6 +134,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://atithi-saas-frontend.vercel.app", # Your Frontend URL
+    "https://atithi-saas-8yopcvwvq-aloks-projects-6839c285.vercel.app"
 ]
 
 # 🚀 Allow all origins in production if strict list fails (Optional but helpful for beta)
@@ -145,6 +146,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://atithi-saas.onrender.com",
     "https://atithi-saas-frontend.vercel.app",
+    "https://atithi-saas-8yopcvwvq-aloks-projects-6839c285.vercel.app"
 ]
 
 # 🛡️ FIX FOR RENDER HTTPS (Prevents Redirect Loops & Admin Login Issues)
