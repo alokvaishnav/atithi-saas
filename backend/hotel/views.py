@@ -561,7 +561,7 @@ razorpay_client = razorpay.Client(auth=(RAZORPAY_LIVE_ID, RAZORPAY_LIVE_SECRET))
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def create_payment_order(request):
-    """Step 1: Create an Order ID on Razorpay"""
+    """Step 1: Create an Order ID on Razorpay (Booking)"""
     try:
         amount = float(request.data.get('amount'))
         booking_id = request.data.get('booking_id')
@@ -587,7 +587,7 @@ def create_payment_order(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def verify_payment(request):
-    """Step 2: Verify the Signature sent by Frontend"""
+    """Step 2: Verify the Signature sent by Frontend (Booking)"""
     try:
         data = request.data
         
@@ -599,13 +599,11 @@ def verify_payment(request):
         }
         razorpay_client.utility.verify_payment_signature(params_dict)
 
-        # 2. Update Database if Verified
+        # 2. Update Database
         booking_id = data.get('booking_id')
         amount_paid = float(data.get('amount'))
         
         booking = Booking.objects.get(id=booking_id)
-        # Check if booking amount_paid is stored as Decimal or Float in your model
-        # Assuming DecimalField or FloatField:
         booking.amount_paid = float(booking.amount_paid) + amount_paid
         booking.save()
 
@@ -613,8 +611,15 @@ def verify_payment(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
-# Also keeping the Class-Based Views for subscription payments if needed by other parts of your app
+# ==============================
+# 💳 SUBSCRIPTION PAYMENT VIEWS (Updated Logic)
+# ==============================
+
 class CreatePaymentOrderView(APIView):
+    """
+    Creates an Order ID for SUBSCRIPTIONS.
+    👉 FIXED: Now returns 'key_id' to prevent frontend 401 error.
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -637,17 +642,23 @@ class CreatePaymentOrderView(APIView):
                 status='PENDING'
             )
 
-            return Response(order)
+            # 👇 CRITICAL FIX: Return Key ID
+            response_data = order
+            response_data['key_id'] = RAZORPAY_LIVE_ID 
+
+            return Response(response_data)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
 class VerifyPaymentView(APIView):
+    """
+    Verifies Subscription Payment Signature
+    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         try:
             data = request.data
-            
             check = {
                 'razorpay_order_id': data['razorpay_order_id'],
                 'razorpay_payment_id': data['razorpay_payment_id'],
@@ -665,10 +676,11 @@ class VerifyPaymentView(APIView):
                 
                 now = timezone.now()
                 if sub.expiry_date and sub.expiry_date > now:
-                    sub.expiry_date += timedelta(days=30)
+                    sub.expiry_date += timedelta(days=365) # Add 1 year
                 else:
-                    sub.expiry_date = now + timedelta(days=30)
+                    sub.expiry_date = now + timedelta(days=365)
                 
+                sub.plan_name = "PRO"
                 sub.save()
                 
                 return Response({"status": "Payment Verified & License Extended!"})
@@ -741,7 +753,6 @@ class HotelSMTPSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """Get current settings"""
         try:
             conf = HotelSMTPSettings.objects.get(owner=get_hotel_owner(request.user))
             return Response({
@@ -752,7 +763,6 @@ class HotelSMTPSettingsView(APIView):
             return Response({"email": "", "has_password": False})
 
     def post(self, request):
-        """Save settings"""
         owner = get_hotel_owner(request.user)
         email = request.data.get('email')
         password = request.data.get('password')
@@ -789,7 +799,6 @@ def register_user(request):
             return Response({'email': ['Email already exists']}, status=status.HTTP_400_BAD_REQUEST)
         
         with transaction.atomic():
-            # 1. Create User
             user = User.objects.create_user(
                 username=username, 
                 email=email, 
@@ -797,14 +806,10 @@ def register_user(request):
                 phone=phone,
                 role='OWNER' 
             )
-
-            # 2. Create Property Settings
             PropertySetting.objects.create(
                 owner=user,
                 hotel_name=hotel_name if hotel_name else "My Hotel"
             )
-
-            # 3. Create Subscription with Unique Key
             Subscription.objects.create(
                 owner=user,
                 plan_name='TRIAL',
@@ -812,8 +817,6 @@ def register_user(request):
                 expiry_date=timezone.now() + timedelta(days=14),
                 license_key=str(uuid.uuid4())
             )
-
-            # 4. Generate Tokens
             refresh = RefreshToken.for_user(user)
             
             return Response({
