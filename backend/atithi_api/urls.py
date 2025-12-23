@@ -23,8 +23,9 @@ from hotel.views import (
     ExportReportView, 
     ActivateLicenseView, 
     CheckLicenseView,
-    CreatePaymentOrderView, 
-    VerifyPaymentView,
+    # 👇 UPDATED: Imported as Functions, not Classes
+    create_payment_order, 
+    verify_payment,
     EmailInvoiceView,
     HotelSMTPSettingsView,
     register_user,
@@ -76,7 +77,7 @@ urlpatterns = [
     
     # 🔐 AUTHENTICATION & REGISTRATION
     path('api/auth/register/', register_user),
-    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'), # 👈 Fixed: Uses hotel/views.py logic
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # 📈 EXECUTIVE ANALYTICS
@@ -91,11 +92,13 @@ urlpatterns = [
     path('api/invoice/<int:booking_id>/pdf/', InvoicePDFView.as_view(), name='invoice_pdf'),
     path('api/invoice/<int:pk>/email/', EmailInvoiceView.as_view()),
 
-    # 💳 LICENSE & PAYMENTS
+    # 💳 LICENSE & PAYMENTS (UPDATED)
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
-    path('api/payment/create/', CreatePaymentOrderView.as_view()),
-    path('api/payment/verify/', VerifyPaymentView.as_view()),
+    
+    # 👇 UPDATED: Removed .as_view() because these are functions
+    path('api/payment/create/', create_payment_order),
+    path('api/payment/verify/', verify_payment),
 
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),

@@ -1,6 +1,6 @@
 """
 Django settings for atithi_api project.
-Updated for Atithi HMS Enterprise v2.1 - Deployment Optimized
+Updated for Atithi HMS Enterprise v2.5 - Production Ready
 """
 
 from pathlib import Path
@@ -11,39 +11,48 @@ from datetime import timedelta
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# --------------------------------------------------------
+# 🔐 SECURITY CONFIGURATION
+# --------------------------------------------------------
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*kyl6lbp(%f@79b_+tp*bo6_ppe(0m=v')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# On Render, set the Environment Variable DEBUG = False
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-# 🚀 SECURITY FIX: Restrict hosts in production
+# 🚀 SECURITY FIX: Allow specific hosts
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
-# Application definition
+# --------------------------------------------------------
+# 📦 INSTALLED APPS
+# --------------------------------------------------------
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'whitenoise.runserver_nostatic', # Must be before staticfiles
+    'whitenoise.runserver_nostatic', # Optimized Static Files
     'django.contrib.staticfiles',
     
-    # 📦 Professional SaaS Stack
+    # ⚡ 3rd Party SaaS Apps
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     
-    # 🏨 Internal Apps
+    # 🏨 Atithi Internal Apps
     'core',
     'hotel',
 ]
 
+# --------------------------------------------------------
+# ⚙️ MIDDLEWARE
+# --------------------------------------------------------
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # 👈 Priority #1
+    'corsheaders.middleware.CorsMiddleware',  # 👈 Must be at the very top
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', # 👈 Priority #2
+    'whitenoise.middleware.WhiteNoiseMiddleware', # 👈 Optimized Static File Serving
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -51,27 +60,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
-# --------------------------------------------------------
-# 🔒 AUTHENTICATION & REST SECURITY
-# --------------------------------------------------------
-AUTH_USER_MODEL = 'core.User'
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-}
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': False,
-}
 
 ROOT_URLCONF = 'atithi_api.urls'
 
@@ -93,25 +81,25 @@ TEMPLATES = [
 WSGI_APPLICATION = 'atithi_api.wsgi.application'
 
 # --------------------------------------------------------
-# 🗄️ DATABASE CONFIGURATION
+# 🗄️ DATABASE CONFIGURATION (Render.com)
 # --------------------------------------------------------
+# Default to SQLite for safety, overridden by PostgreSQL below
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'atithi_db',
-        'USER': 'atithi_admin',
-        'PASSWORD': os.environ.get('DB_PASS', 'secure_password_123'), # 👈 SECURITY FIX: Use Env Var
-        'HOST': 'db', 
-        'PORT': 5432,
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
-# Render.com External URL
+# 🚀 PRODUCTION DATABASE CONNECTION
+# This handles both Local Development (connecting to Cloud DB) and Production Deployment
 MANUAL_DB_URL = "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr"
 
 if os.environ.get('DATABASE_URL'):
+    # Production Environment (Render automatically sets DATABASE_URL)
     DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
 else:
+    # Local Development (Connect to Cloud DB manually)
     DATABASES['default'] = dj_database_url.config(
         default=MANUAL_DB_URL,
         conn_max_age=600,
@@ -119,13 +107,49 @@ else:
     )
 
 # --------------------------------------------------------
-# 📧 EMAIL AUTOMATION CONFIGURATION
+# 🔒 AUTH & JWT SETTINGS
 # --------------------------------------------------------
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+AUTH_USER_MODEL = 'core.User'
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7), # Extended for better UX
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+}
+
+# --------------------------------------------------------
+# 🌐 CORS & CSRF (Critical for Frontend Connection)
+# --------------------------------------------------------
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://atithi-saas-frontend.vercel.app", # Your Frontend URL
+]
+
+# 🚀 Allow all origins in production if strict list fails (Optional but helpful for beta)
+CORS_ALLOW_ALL_ORIGINS = True 
+
+# 🛡️ CSRF Trusted Origins (Required for Django 4.0+)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "https://atithi-saas.onrender.com",
+    "https://atithi-saas-frontend.vercel.app",
+]
+
+# --------------------------------------------------------
+# 📧 EMAIL AUTOMATION
+# --------------------------------------------------------
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
@@ -141,35 +165,22 @@ TIME_ZONE = 'Asia/Kolkata' # 🇮🇳 Indian Standard Time
 USE_I18N = True
 USE_TZ = True 
 
+# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
+# Media files (ID Proofs, Invoices)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# WhiteNoise storage optimized for production
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
-
-# 🌐 CORS CONFIGURATION
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    # Add your Vercel frontend URL here
-    "https://atithi-saas-frontend.vercel.app", 
-]
-
-# ☁️ CLOUD OVERRIDE (Render.com Logic)
-if os.environ.get('RENDER'):
-    # 🔒 SECURITY FIX: Disable Allow All in Production if possible, 
-    # but for beta testing, we can keep it True temporarily.
-    # Recommended: Set this to False and populate CORS_ALLOWED_ORIGINS above.
-    CORS_ALLOW_ALL_ORIGINS = True 
-    DEBUG = False
-    RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-    if RENDER_EXTERNAL_HOSTNAME:
-        ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-else:
-    CORS_ALLOW_ALL_ORIGINS = True
+# --------------------------------------------------------
+# 💳 RAZORPAY CONFIGURATION (Live Mode Active)
+# --------------------------------------------------------
+# We check environment variables first for security.
+# If not found (local testing), we fallback to the hardcoded keys.
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_live_RvBOgLN1rxP9zd")
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "LhT40VfsBxIX5VUJjrTE2W9h")
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -180,9 +191,3 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# --------------------------------------------------------
-# 💳 RAZORPAY CONFIGURATION
-# --------------------------------------------------------
-RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_test_YOUR_KEY_HERE")
-RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "YOUR_SECRET_HERE")
