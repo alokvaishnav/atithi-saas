@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { 
   Save, Building, CreditCard, Mail, Phone, MapPin, 
-  Percent, Globe, Loader2, Building2, Key, ShieldCheck 
+  Percent, Globe, Loader2, Building2, Key, ShieldCheck, Utensils 
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
-import { useAuth } from '../context/AuthContext'; // 👈 Import the Brain
+import { useAuth } from '../context/AuthContext'; 
 
 const Settings = () => {
   const [loading, setLoading] = useState(true);
@@ -13,7 +13,7 @@ const Settings = () => {
   // 🧠 Use Context to update Global State instantly
   const { updateGlobalProfile } = useAuth(); 
 
-  // 1. Property Settings State
+  // 1. Property Settings State (Updated with NEW TAX FIELDS)
   const [formData, setFormData] = useState({
     hotel_name: '',
     gstin: '',
@@ -21,7 +21,9 @@ const Settings = () => {
     email: '',
     address: '',
     currency_symbol: '₹',
-    room_tax_rate: '12.00'
+    room_tax_rate: '12.00',    // Existing
+    food_tax_rate: '5.00',     // 👈 NEW
+    service_tax_rate: '18.00'  // 👈 NEW
   });
 
   // 2. Email Automation State
@@ -110,7 +112,6 @@ const Settings = () => {
         updateGlobalProfile(formData.hotel_name);
 
         alert("✅ All System Configurations Updated Successfully!");
-        // ❌ Removed window.location.reload() - Not needed anymore!
         
       } else {
         alert("⚠️ Saved partially. Please check inputs.");
@@ -141,10 +142,10 @@ const Settings = () => {
         <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Global Property Settings & Branding</p>
       </div>
 
-      <form onSubmit={handleSave} className="max-w-4xl">
+      <form onSubmit={handleSave} className="max-w-4xl space-y-8">
         
         {/* SECTION 1: IDENTITY */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Building2 size={20}/></div>
             <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Property Identity</h3>
@@ -175,8 +176,77 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* SECTION 2: CONTACT */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+        {/* SECTION 2: FINANCIALS (UPDATED WITH TAXES) */}
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
+          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+            <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center"><CreditCard size={20}/></div>
+            <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Financial & Tax Configuration</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Currency</label>
+              <input 
+                type="text" 
+                className="w-full bg-slate-50 p-4 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
+                value={formData.currency_symbol}
+                onChange={e => setFormData({...formData, currency_symbol: e.target.value})}
+                placeholder="₹"
+              />
+            </div>
+            
+            {/* 🆕 ROOM TAX */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Room GST %</label>
+              <div className="relative">
+                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
+                  value={formData.room_tax_rate}
+                  onChange={e => setFormData({...formData, room_tax_rate: e.target.value})}
+                  placeholder="12.00"
+                />
+              </div>
+            </div>
+
+            {/* 🆕 FOOD TAX */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Food GST %</label>
+              <div className="relative">
+                <Utensils className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
+                  value={formData.food_tax_rate}
+                  onChange={e => setFormData({...formData, food_tax_rate: e.target.value})}
+                  placeholder="5.00"
+                />
+              </div>
+            </div>
+
+            {/* 🆕 SERVICE TAX */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Other Service GST %</label>
+              <div className="relative">
+                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
+                  value={formData.service_tax_rate}
+                  onChange={e => setFormData({...formData, service_tax_rate: e.target.value})}
+                  placeholder="18.00"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SECTION 3: CONTACT */}
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center"><Globe size={20}/></div>
             <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Contact & Location</h3>
@@ -223,43 +293,8 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* SECTION 3: FINANCIALS */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
-          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-            <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center"><CreditCard size={20}/></div>
-            <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Financial Configuration</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Currency Symbol</label>
-              <input 
-                type="text" 
-                className="w-full bg-slate-50 p-4 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
-                value={formData.currency_symbol}
-                onChange={e => setFormData({...formData, currency_symbol: e.target.value})}
-                placeholder="₹"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Default Room GST (%)</label>
-              <div className="relative">
-                <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
-                  value={formData.room_tax_rate}
-                  onChange={e => setFormData({...formData, room_tax_rate: e.target.value})}
-                  placeholder="12.00"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* SECTION 4: EMAIL AUTOMATION */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8">
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Mail size={20}/></div>
             <div>

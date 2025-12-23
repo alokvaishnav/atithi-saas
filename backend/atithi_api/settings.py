@@ -17,7 +17,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*ky
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*'] # Render handles specific host security via environment
+# 🚀 SECURITY FIX: Restrict hosts in production
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -99,7 +100,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'atithi_db',
         'USER': 'atithi_admin',
-        'PASSWORD': 'secure_password_123',
+        'PASSWORD': os.environ.get('DB_PASS', 'secure_password_123'), # 👈 SECURITY FIX: Use Env Var
         'HOST': 'db', 
         'PORT': 5432,
     }
@@ -153,15 +154,22 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    # Add your Vercel frontend URL here
+    "https://atithi-saas-frontend.vercel.app", 
 ]
 
 # ☁️ CLOUD OVERRIDE (Render.com Logic)
 if os.environ.get('RENDER'):
-    CORS_ALLOW_ALL_ORIGINS = True  # Allows your frontend to talk to backend
+    # 🔒 SECURITY FIX: Disable Allow All in Production if possible, 
+    # but for beta testing, we can keep it True temporarily.
+    # Recommended: Set this to False and populate CORS_ALLOWED_ORIGINS above.
+    CORS_ALLOW_ALL_ORIGINS = True 
     DEBUG = False
     RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
     if RENDER_EXTERNAL_HOSTNAME:
         ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -176,6 +184,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # --------------------------------------------------------
 # 💳 RAZORPAY CONFIGURATION
 # --------------------------------------------------------
-# Reads from Environment Variables on Render, or falls back to Test Keys locally.
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_test_YOUR_KEY_HERE")
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "YOUR_SECRET_HERE")

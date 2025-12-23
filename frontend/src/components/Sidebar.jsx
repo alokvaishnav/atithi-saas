@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
-  BookOpen, ChevronRight, Settings 
+  BookOpen, ChevronRight, Settings, Package // 👈 Added Package Icon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -76,7 +76,8 @@ const Sidebar = () => {
         // 🛡️ YOUR LOGIC: Hide POS/Services if role is Housekeeping
         ...(role !== 'HOUSEKEEPING' ? [
             { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
-            { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' }
+            { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
+            { icon: <Package size={18} />, label: 'Inventory', path: '/inventory' } // 👈 NEW: Added Inventory
         ] : [])
       ]
     },

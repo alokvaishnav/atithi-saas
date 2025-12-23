@@ -3,36 +3,44 @@ import {
   Building, Users, Loader2, LogIn, LogOut, 
   CheckCircle, XCircle, AlertTriangle, Briefcase,
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, AlertCircle, TrendingDown,
-  ArrowUpRight, MapPin, Calendar, ShieldCheck
+  ArrowUpRight, MapPin, Calendar, ShieldCheck,
+  Package, Broom // 👈 Added New Icons
 } from 'lucide-react'; 
+import { useNavigate } from 'react-router-dom'; // 👈 Added for navigation
 import { API_URL } from '../config'; 
 
 const Dashboard = () => {
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [analytics, setAnalytics] = useState(null);
+  const [inventory, setInventory] = useState([]); // 👈 New State
+  const [tasks, setTasks] = useState([]);         // 👈 New State
   const [loading, setLoading] = useState(true);
 
+  const navigate = useNavigate(); // 👈 For clicking alerts
   const token = localStorage.getItem('access_token');
   const userRole = localStorage.getItem('user_role');
 
   const fetchData = async () => {
     try {
-      // ⚡ SMART LOADING: Only show the full screen spinner on the FIRST load.
-      // If we already have data, we update silently in the background.
       if (rooms.length === 0 && bookings.length === 0) setLoading(true);
       
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [resRooms, resBookings, resAnalytics] = await Promise.all([
+      // ⚡ FETCH EVERYTHING IN PARALLEL
+      const [resRooms, resBookings, resAnalytics, resInv, resTasks] = await Promise.all([
         fetch(API_URL + '/api/rooms/', { headers }),
         fetch(API_URL + '/api/bookings/', { headers }),
-        fetch(API_URL + '/api/analytics/', { headers })
+        fetch(API_URL + '/api/analytics/', { headers }),
+        fetch(API_URL + '/api/inventory/', { headers }),    // 👈 Fetch Inventory
+        fetch(API_URL + '/api/housekeeping/', { headers })  // 👈 Fetch Tasks
       ]);
 
       if (resRooms.ok) setRooms(await resRooms.json());
       if (resBookings.ok) setBookings(await resBookings.json());
       if (resAnalytics.ok) setAnalytics(await resAnalytics.json());
+      if (resInv.ok) setInventory(await resInv.json());
+      if (resTasks.ok) setTasks(await resTasks.json());
 
     } catch (err) { 
       console.error("Critical System Fetch Error:", err);
@@ -42,19 +50,12 @@ const Dashboard = () => {
   };
 
   useEffect(() => { 
-    fetchData(); // 1. Initial Load immediately
-    
-    // 2. ⚡ REAL-TIME POLLING: Auto-refresh every 10 seconds
-    const interval = setInterval(() => {
-        // console.log("⚡ Live Dashboard Sync...");
-        fetchData(); 
-    }, 10000);
-
-    // Cleanup interval when user leaves the dashboard
+    fetchData(); 
+    const interval = setInterval(() => { fetchData(); }, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // 🧮 EXTENDED OPERATIONAL LOGIC
+  // 🧮 OPERATIONAL LOGIC
   const todayStr = new Date().toISOString().split('T')[0];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
@@ -73,14 +74,17 @@ const Dashboard = () => {
   const cleanVacant = safeRooms.filter(r => r.status === 'AVAILABLE').length; 
   const maintenance = safeRooms.filter(r => r.status === 'MAINTENANCE').length;
   
-  // Logic for Inventory Efficiency
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
   const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
-  // 📊 Chart Logic: Robust Max Calculation
+  // 📊 Chart Logic
   const trendData = analytics?.trend || [];
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
-  const maxRevenue = Math.max(...revenueValues, 5000); // Default scale to 5000 if empty
+  const maxRevenue = Math.max(...revenueValues, 5000);
+
+  // 🚨 NEW: Alert Logic
+  const lowStockItems = Array.isArray(inventory) ? inventory.filter(i => i.current_stock <= i.min_stock_alert) : [];
+  const pendingTasks = Array.isArray(tasks) ? tasks.filter(t => t.status !== 'COMPLETED') : [];
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -120,6 +124,43 @@ const Dashboard = () => {
         </div>
       </div>
 
+      {/* 🚨 NEW: CRITICAL ALERTS ROW (Inventory & Tasks) */}
+      {(lowStockItems.length > 0 || pendingTasks.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+            {lowStockItems.length > 0 && (
+                <div 
+                    onClick={() => navigate('/inventory')}
+                    className="bg-orange-50 border-2 border-orange-100 p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-orange-100 transition-colors"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="bg-orange-200 p-3 rounded-2xl text-orange-700"><Package size={24}/></div>
+                        <div>
+                            <h3 className="font-black text-slate-800 text-lg">Low Stock Alert</h3>
+                            <p className="text-xs font-bold text-slate-500">{lowStockItems.length} items need restocking</p>
+                        </div>
+                    </div>
+                    <ArrowUpRight size={24} className="text-orange-400"/>
+                </div>
+            )}
+
+            {pendingTasks.length > 0 && (
+                <div 
+                    onClick={() => navigate('/housekeeping')}
+                    className="bg-purple-50 border-2 border-purple-100 p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Broom size={24}/></div>
+                        <div>
+                            <h3 className="font-black text-slate-800 text-lg">Pending Cleaning</h3>
+                            <p className="text-xs font-bold text-slate-500">{pendingTasks.length} tasks assigned</p>
+                        </div>
+                    </div>
+                    <ArrowUpRight size={24} className="text-purple-400"/>
+                </div>
+            )}
+        </div>
+      )}
+
       {/* 📊 CORE FINANCIAL INTELLIGENCE */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {/* REVENUE */}
@@ -142,7 +183,7 @@ const Dashboard = () => {
           <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_expenses || 0).toLocaleString()}</h3>
         </div>
 
-        {/* NET PROFIT (DYNAMIC CALCULATION) */}
+        {/* NET PROFIT */}
         <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
           <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
           <div className="relative z-10">
@@ -223,7 +264,6 @@ const Dashboard = () => {
 
       {/* 📋 OPERATIONAL MANIFESTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        
         {/* Arrivals Card */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
           <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-blue-50 transition-colors">
@@ -282,7 +322,6 @@ const Dashboard = () => {
             </table>
           </div>
         </div>
-
       </div>
 
       {/* 🚀 ANALYTICS TREND BAR (UPDATED: High Visibility) */}
@@ -293,29 +332,23 @@ const Dashboard = () => {
                   <TrendingUp className="text-blue-400" size={20}/>
               </div>
               
-              {/* Increased Height & Spacing */}
               <div className="flex items-end justify-between gap-4 h-40 relative z-10">
                   {trendData.map((t, i) => {
                       const dailyRevenue = Number(t.daily_revenue || 0); 
-                      // Calculate percent, but ensure max doesn't crash on 0
                       const heightPercent = maxRevenue > 0 ? (dailyRevenue / maxRevenue) * 100 : 0;
                       
                       return (
                         <div key={i} className="flex-1 flex flex-col items-center group/trend h-full justify-end">
-                            {/* Bar Container */}
                             <div className="w-full relative flex items-end justify-center" style={{height: '100%'}}>
-                                {/* The Visible Bar */}
                                 <div 
                                   style={{ height: `${heightPercent}%` }} 
-                                  className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 relative min-h-[4px]" // Forced solid color & min-height
+                                  className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 relative min-h-[4px]"
                                 >
-                                    {/* Value Label (Always visible now) */}
                                     <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold opacity-70 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap">
                                         {dailyRevenue > 0 ? `₹${(dailyRevenue/1000).toFixed(1)}k` : ''}
                                     </div>
                                 </div>
                             </div>
-                            {/* Date Label */}
                             <p className="text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest">{t.date.split('-').slice(1).join('/')}</p>
                         </div>
                       );

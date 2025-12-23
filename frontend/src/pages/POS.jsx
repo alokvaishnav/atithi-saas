@@ -8,7 +8,8 @@ import {
   CreditCard, 
   Home, 
   Printer, 
-  ShoppingBag // 👈 THIS MUST BE HERE
+  ShoppingBag,
+  Loader2 // 👈 NEW: Added for loading state
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -16,9 +17,10 @@ const POS = () => {
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [cart, setCart] = useState([]);
-  const [searchQuery, setSearchQuery] = useState(''); // Updated for search logic
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false); // 👈 NEW: Transaction Lock
 
   const token = localStorage.getItem('access_token');
 
@@ -69,10 +71,12 @@ const POS = () => {
     if (!selectedBooking) return alert("Please select a Room/Guest first!");
     if (cart.length === 0) return alert("Cart is empty!");
 
+    setIsProcessing(true); // 🔒 Lock Interface
+
     try {
       // Loop through cart and post each item as a charge
       for (const item of cart) {
-        await fetch(API_URL + '/api/charges/', {
+        const res = await fetch(API_URL + '/api/charges/', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json', 
@@ -85,13 +89,25 @@ const POS = () => {
             total_cost: item.price * item.qty
           })
         });
+
+        // 🛑 INVENTORY CHECK: Handle Backend Errors (Low Stock)
+        if (!res.ok) {
+            const errData = await res.json();
+            // Backend returns array like ["Not enough stock!"]
+            const errMsg = Array.isArray(errData) ? errData[0] : (errData.detail || "Transaction Failed");
+            throw new Error(`Failed to add ${item.name}: ${errMsg}`);
+        }
       }
-      alert(`Success! ₹${total} posted to Room ${selectedBooking.room_details.room_number}`);
+
+      alert(`✅ Success! ₹${total} posted to Room ${selectedBooking.room_details.room_number}`);
       setCart([]);
       setSelectedBooking(null);
+
     } catch (err) { 
       console.error("Posting Error:", err);
-      alert("Failed to post charges. Please try again.");
+      alert(`⚠️ ${err.message}`); // Show specific inventory error
+    } finally {
+      setIsProcessing(false); // 🔓 Unlock Interface
     }
   };
 
@@ -100,7 +116,7 @@ const POS = () => {
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading POS Terminal...</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500 animate-pulse">Loading POS Terminal...</div>;
 
   return (
     <div className="flex h-[calc(100vh-72px)] bg-slate-100 overflow-hidden">
@@ -117,7 +133,7 @@ const POS = () => {
             <input 
               type="text" 
               placeholder="Search menu..." 
-              className="w-full pl-10 p-2 rounded-lg border-none shadow-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 p-2 rounded-lg border-none shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -153,7 +169,7 @@ const POS = () => {
         <div className="p-4 border-b border-slate-50 bg-blue-50/30">
            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Post to Room Folio</label>
            <select 
-              className="w-full p-2 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
               value={selectedBooking?.id || ''}
               onChange={(e) => setSelectedBooking(bookings.find(b => b.id === parseInt(e.target.value)))}
            >
@@ -201,15 +217,18 @@ const POS = () => {
            <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => setCart([])} 
-                className="p-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-200 transition text-sm"
+                disabled={isProcessing}
+                className="p-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-200 transition text-sm disabled:opacity-50"
               >
                 Clear Tray
               </button>
               <button 
                 onClick={handleChargeToRoom}
-                className="p-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-100 flex items-center justify-center gap-2 text-sm transition-transform active:scale-95"
+                disabled={isProcessing}
+                className="p-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-100 flex items-center justify-center gap-2 text-sm transition-transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <Home size={18}/> Post to Room
+                {isProcessing ? <Loader2 size={18} className="animate-spin"/> : <Home size={18}/>}
+                {isProcessing ? "Processing..." : "Post to Room"}
               </button>
            </div>
         </div>

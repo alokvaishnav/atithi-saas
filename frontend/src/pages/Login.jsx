@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Loader2, Lock, User, ShieldCheck } from 'lucide-react';
+import { Loader2, Lock, User, ShieldCheck, AlertCircle } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; // 👈 Import the Brain
 
@@ -8,6 +8,7 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null); // 👈 For UI Error Messages
   const navigate = useNavigate();
   
   // 🧠 Use Context Login function
@@ -16,6 +17,7 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       const response = await fetch(`${API_URL}/api/token/`, {
@@ -32,15 +34,16 @@ const Login = () => {
         // 1. LocalStorage saving
         // 2. State updates (Role, User, HotelName)
         // 3. Setting isAuthenticated = true
-        login(data);
-
-        navigate('/');
+        await login(data);
+        
+        // Navigate based on logic (optional, usually handled by AuthContext or Router)
+        navigate('/'); 
       } else {
-        alert(data.detail || 'Invalid Credentials. Please check your username and password.');
+        setError(data.detail || 'Invalid Credentials. Please check access details.');
       }
     } catch (error) {
       console.error('Login Error:', error);
-      alert('Network Error. Please check if the server is running.');
+      setError('Network Error. Could not connect to the Hotel Server.');
     } finally {
       setLoading(false);
     }
@@ -49,13 +52,15 @@ const Login = () => {
   return (
     <div className="flex h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
       
-      {/* Background Decor */}
-      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[100px] opacity-10"></div>
+      {/* Background Decor (Abstract Shapes) */}
+      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-10 animate-pulse"></div>
+      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-purple-600 rounded-full blur-[120px] opacity-10 animate-pulse delay-700"></div>
       
       <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-4 border-slate-100 relative z-10">
         
+        {/* Logo Icon */}
         <div className="flex justify-center mb-6">
-          <div className="bg-blue-50 p-4 rounded-3xl text-blue-600 shadow-inner">
+          <div className="bg-blue-50 p-4 rounded-3xl text-blue-600 shadow-inner ring-4 ring-blue-50/50">
             <ShieldCheck size={40} />
           </div>
         </div>
@@ -67,13 +72,21 @@ const Login = () => {
           Secure Personnel Access
         </p>
 
+        {/* Error Banner */}
+        {error && (
+            <div className="mb-6 bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold animate-in slide-in-from-top-2">
+                <AlertCircle size={18} className="shrink-0"/>
+                {error}
+            </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="relative group">
             <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
             <input
               type="text"
               placeholder="Operator ID / Username"
-              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -85,7 +98,7 @@ const Login = () => {
             <input
               type="password"
               placeholder="Access Key / Password"
-              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -95,12 +108,13 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-slate-900 text-white p-4 rounded-xl font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 active:scale-95 text-xs flex justify-center items-center gap-2"
+            className="w-full bg-slate-900 text-white p-4 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl shadow-slate-200 active:scale-95 text-xs flex justify-center items-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {loading ? <Loader2 className="animate-spin" /> : 'Authenticate System'}
+            {loading ? <Loader2 className="animate-spin" size={18}/> : 'Authenticate System'}
           </button>
         </form>
 
+        {/* Footer Link */}
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">New Property?</p>
             <Link to="/register" className="text-blue-600 font-black uppercase text-xs tracking-widest hover:underline hover:text-blue-800 transition-colors">

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, Download, CreditCard, CheckCircle, 
   Clock, Calendar, User, ShieldCheck, Mail, Phone, 
-  Loader2, ArrowLeft, FileText, IndianRupee, Send 
-} from 'lucide-react'; // 👈 Added 'Send' Icon
+  Loader2, ArrowLeft, FileText, IndianRupee, Send, LogOut 
+} from 'lucide-react'; 
+import { useReactToPrint } from 'react-to-print';
 import { API_URL } from '../config';
 
 const Folio = () => {
@@ -17,111 +18,142 @@ const Folio = () => {
   
   // ⏳ Loading States
   const [pdfLoading, setPdfLoading] = useState(false); 
-  const [emailLoading, setEmailLoading] = useState(false); // 👈 New State for Email
+  const [emailLoading, setEmailLoading] = useState(false); 
+  const [paymentAmount, setPaymentAmount] = useState('');
 
   const token = localStorage.getItem('access_token');
+  const componentRef = useRef();
 
   // 1️⃣ Fetch Booking & Charges Data
-  useEffect(() => {
-    const fetchFolioData = async () => {
-      try {
-        setLoading(true);
-        
-        // A. Fetch Booking Details
-        const bookingRes = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const bookingData = await bookingRes.json();
-        
-        // B. Fetch Extra Charges (Services/Food)
-        const chargesRes = await fetch(`${API_URL}/api/charges/?booking=${bookingId}`, {
+  const fetchFolioData = async () => {
+    try {
+      setLoading(true);
+      
+      const bookingRes = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const bookingData = await bookingRes.json();
+      
+      const chargesRes = await fetch(`${API_URL}/api/charges/?booking=${bookingId}`, {
            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const chargesData = await chargesRes.json();
+      });
+      const chargesData = await chargesRes.json();
 
-        if (bookingRes.ok) setBooking(bookingData);
-        if (chargesRes.ok) setCharges(Array.isArray(chargesData) ? chargesData : []);
-        
-      } catch (err) {
-        console.error("Error fetching folio:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+      if (bookingRes.ok) setBooking(bookingData);
+      if (chargesRes.ok) setCharges(Array.isArray(chargesData) ? chargesData : []);
+      
+    } catch (err) {
+      console.error("Error fetching folio:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchFolioData();
-  }, [bookingId, token]);
+  useEffect(() => { fetchFolioData(); }, [bookingId, token]);
+
+  // 🧮 CALCULATE TOTALS
+  const calculateTotals = () => {
+      if (!booking) return { roomTotal: 0, extrasTotal: 0, grandTotal: 0, advance: 0, balance: 0 };
+      
+      const roomTotal = parseFloat(booking.total_amount || 0);
+      const extrasTotal = charges.reduce((acc, curr) => acc + parseFloat(curr.total_cost || 0), 0);
+      const grandTotal = roomTotal + extrasTotal;
+      const advance = parseFloat(booking.amount_paid || 0); // This is total paid so far
+      const balance = grandTotal - advance;
+
+      return { roomTotal, extrasTotal, grandTotal, advance, balance };
+  };
+
+  const { roomTotal, extrasTotal, grandTotal, advance, balance } = calculateTotals();
 
   // 2️⃣ Handle PDF Download Logic
   const handleDownloadPDF = async () => {
     try {
       setPdfLoading(true);
-      
       const res = await fetch(`${API_URL}/api/invoice/${bookingId}/pdf/`, {
         method: 'GET',
-        headers: { 
-            'Authorization': `Bearer ${token}` 
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!res.ok) throw new Error("Failed to generate PDF");
 
-      // Convert response to a Blob (Binary Large Object)
       const blob = await res.blob();
-      
-      // Create a temporary link to download it
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Invoice_#${bookingId}_${booking?.guest_name || 'Guest'}.pdf`);
+      link.setAttribute('download', `Invoice_#${bookingId}.pdf`);
       document.body.appendChild(link);
       link.click();
-      
-      // Cleanup
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
+      link.remove();
     } catch (err) {
       console.error(err);
-      alert("⚠️ Error generating invoice. Please check if backend templates are set up.");
+      alert("⚠️ Error generating invoice.");
     } finally {
       setPdfLoading(false);
     }
   };
 
-  // 3️⃣ Handle Email Invoice Logic 📧
+  // 3️⃣ Handle Email Invoice Logic
   const handleEmailInvoice = async () => {
-      // Check if email exists (handles flat or nested structure)
       const targetEmail = booking.guest_email || booking.guest_details?.email;
-
-      if(!targetEmail) {
-          alert("⚠️ This guest does not have an email address saved.");
-          return;
-      }
+      if(!targetEmail) return alert("⚠️ No email address found for guest.");
       
-      const confirmSend = window.confirm(`Send invoice to ${targetEmail}?`);
-      if(!confirmSend) return;
+      if(!window.confirm(`Send invoice to ${targetEmail}?`)) return;
 
       try {
           setEmailLoading(true);
-          // Call the new Email Endpoint
           const res = await fetch(`${API_URL}/api/invoice/${bookingId}/email/`, {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}` }
           });
-          
-          if(res.ok) {
-              alert("✅ Email Sent Successfully!");
-          } else {
-              alert("❌ Failed to send email. Check SMTP settings.");
-          }
+          if(res.ok) alert("✅ Email Sent Successfully!");
+          else alert("❌ Failed to send email.");
       } catch (e) {
           console.error(e);
-          alert("Network Error: Could not connect to server.");
+          alert("Network Error.");
       } finally {
           setEmailLoading(false);
       }
   };
+
+  // 4️⃣ Handle Payment
+  const handlePayment = async () => {
+      if (!paymentAmount || parseFloat(paymentAmount) <= 0) return alert("Enter valid amount");
+      try {
+          const newPaid = parseFloat(booking.amount_paid || 0) + parseFloat(paymentAmount);
+          const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ amount_paid: newPaid })
+          });
+          if (res.ok) {
+              alert("Payment Recorded! 💰");
+              setPaymentAmount('');
+              fetchFolioData();
+          }
+      } catch (err) { console.error(err); }
+  };
+
+  // 5️⃣ Handle Checkout
+  const handleCheckout = async () => {
+      if (balance > 0 && !window.confirm(`Balance of ₹${balance} pending. Checkout anyway?`)) return;
+      try {
+          const res = await fetch(`${API_URL}/api/bookings/${bookingId}/checkout/`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+              alert("Guest Checked Out! 👋");
+              navigate('/dashboard');
+          }
+      } catch (err) { console.error(err); }
+  };
+
+  // 🖨️ Print Helper
+  const handlePrint = useReactToPrint({
+    content: () => componentRef.current,
+    documentTitle: `Invoice_${bookingId}`,
+  });
 
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-slate-50">
@@ -134,49 +166,33 @@ const Folio = () => {
 
   if (!booking) return <div className="p-10 text-center text-red-500 font-bold">Folio Not Found</div>;
 
-  // 🧮 Calculate Totals (Frontend fallback calculation)
-  const roomTotal = parseFloat(booking.total_amount || 0);
-  const extrasTotal = charges.reduce((acc, curr) => acc + parseFloat(curr.total_cost || 0), 0);
-  const grandTotal = roomTotal + extrasTotal;
-  const advance = parseFloat(booking.advance_paid || 0);
-  const balance = grandTotal - advance;
-
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* 🔙 Navigation Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-8 no-print">
         <button onClick={() => navigate('/bookings')} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-bold uppercase text-xs tracking-widest">
             <ArrowLeft size={16}/> Back to Reservations
         </button>
         <div className="flex gap-3">
-             
-             {/* 📧 EMAIL BUTTON (New) */}
-             <button 
-                onClick={handleEmailInvoice} 
-                disabled={emailLoading}
-                className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-black shadow-sm hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-70 uppercase text-xs tracking-widest"
-             >
+             <button onClick={handleEmailInvoice} disabled={emailLoading} className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-black shadow-sm hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-70 uppercase text-xs tracking-widest">
                 {emailLoading ? <Loader2 className="animate-spin" size={18}/> : <Send size={18}/>}
                 {emailLoading ? 'Sending...' : 'Email Invoice'}
              </button>
-
-             {/* 🖨️ PDF BUTTON */}
-             <button 
-                onClick={handleDownloadPDF} 
-                disabled={pdfLoading}
-                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-black shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70 uppercase text-xs tracking-widest"
-             >
+             <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-black shadow-sm hover:bg-slate-50 transition-all uppercase text-xs tracking-widest">
+                <Printer size={18}/> Print
+             </button>
+             <button onClick={handleDownloadPDF} disabled={pdfLoading} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-black shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-70 uppercase text-xs tracking-widest">
                 {pdfLoading ? <Loader2 className="animate-spin" size={18}/> : <Download size={18}/>}
-                {pdfLoading ? 'Generating...' : 'Download Invoice'}
+                {pdfLoading ? 'Generating...' : 'Download PDF'}
              </button>
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* 📄 LEFT: INVOICE PAPER VIEW */}
-        <div className="lg:col-span-2 bg-white rounded-[30px] shadow-sm border border-slate-200 overflow-hidden relative">
+        <div className="lg:col-span-2 bg-white rounded-[30px] shadow-sm border border-slate-200 overflow-hidden relative" ref={componentRef}>
             
             {/* Invoice Header */}
             <div className="bg-slate-900 text-white p-10 flex justify-between items-start relative overflow-hidden">
@@ -202,7 +218,6 @@ const Folio = () => {
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Billed To Guest</h4>
                     <div className="flex items-center gap-3 mb-2">
                         <User size={16} className="text-blue-600"/>
-                        {/* Handles both 'guest_name' (flat) or 'guest_details.full_name' (nested) */}
                         <span className="font-bold text-slate-800 text-lg">
                             {booking.guest_name || booking.guest_details?.full_name || 'Guest'}
                         </span>
@@ -212,7 +227,7 @@ const Folio = () => {
                             <Phone size={12}/> {booking.guest_phone || booking.guest_details?.phone || 'N/A'}
                         </p>
                         <p className="text-sm font-medium text-slate-500 flex items-center gap-2">
-                            <Mail size={12}/> {booking.guest_email || 'N/A'}
+                            <Mail size={12}/> {booking.guest_email || booking.guest_details?.email || 'N/A'}
                         </p>
                     </div>
                 </div>
@@ -225,7 +240,7 @@ const Folio = () => {
                         </div>
                         <div className="flex justify-end items-center gap-3">
                             <span className="text-sm font-medium text-slate-500">
-                                {booking.check_in_date} — {booking.check_out_date}
+                                {new Date(booking.check_in_date).toLocaleDateString()} — {new Date(booking.check_out_date).toLocaleDateString()}
                             </span>
                             <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400"><Calendar size={14}/></div>
                         </div>
@@ -247,7 +262,7 @@ const Folio = () => {
                         <tr className="border-b border-slate-50">
                             <td className="py-4">
                                 <div className="font-bold text-slate-800">Accommodation Charges</div>
-                                <div className="text-xs text-slate-400">Room Rent for Stay Duration</div>
+                                <div className="text-xs text-slate-400">Room Rent + GST</div>
                             </td>
                             <td className="py-4 text-right font-bold">₹{roomTotal.toLocaleString()}</td>
                         </tr>
@@ -274,12 +289,12 @@ const Folio = () => {
                         <span>₹{grandTotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm font-medium text-emerald-600">
-                        <span>Advance Paid</span>
+                        <span>Advance / Paid</span>
                         <span>- ₹{advance.toLocaleString()}</span>
                     </div>
                     <div className="border-t border-slate-200 my-2"></div>
                     <div className="flex justify-between text-xl font-black text-slate-900">
-                        <span>Total Due</span>
+                        <span>Balance Due</span>
                         <span>₹{balance.toLocaleString()}</span>
                     </div>
                 </div>
@@ -288,36 +303,65 @@ const Folio = () => {
 
         {/* 💳 RIGHT: ACTION PANEL */}
         <div className="space-y-6">
+            
+            {/* Quick Actions Card */}
             <div className="bg-slate-900 text-white p-8 rounded-[30px] shadow-xl relative overflow-hidden">
                 <div className="relative z-10">
                     <h3 className="text-xl font-black italic tracking-tighter uppercase mb-1">Quick Actions</h3>
-                    <p className="text-slate-400 text-xs mb-6 font-medium">Manage this guest folio instantly.</p>
+                    <p className="text-slate-400 text-xs mb-6 font-medium">Manage payment & status.</p>
                     
-                    <button className="w-full bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all mb-3 text-sm uppercase tracking-widest shadow-lg">
+                    {/* Payment Input */}
+                    <div className="mb-4">
+                        <div className="flex items-center bg-white/10 rounded-xl px-4 border border-white/10">
+                            <span className="text-slate-400 mr-2">₹</span>
+                            <input 
+                                type="number" 
+                                placeholder="Enter Amount" 
+                                className="bg-transparent border-none text-white font-bold w-full py-3 focus:outline-none placeholder-slate-500"
+                                value={paymentAmount}
+                                onChange={(e) => setPaymentAmount(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={handlePayment} 
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all mb-3 text-sm uppercase tracking-widest shadow-lg"
+                    >
                         <CreditCard size={18}/> Record Payment
                     </button>
                     
                     {booking.status !== 'CHECKED_OUT' && (
-                        <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all text-sm uppercase tracking-widest shadow-lg">
-                            <CheckCircle size={18}/> Complete Checkout
+                        <button 
+                            onClick={handleCheckout} 
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white p-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all text-sm uppercase tracking-widest shadow-lg"
+                        >
+                            <LogOut size={18}/> Checkout Guest
                         </button>
                     )}
                 </div>
             </div>
 
+            {/* Payment History Card */}
             <div className="bg-white p-8 rounded-[30px] shadow-sm border border-slate-200">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Payment History</h3>
-                {advance > 0 ? (
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Payment Status</h3>
+                
+                {balance <= 0 ? (
                     <div className="flex items-center gap-4 bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
                         <div className="bg-emerald-100 text-emerald-600 p-2 rounded-lg"><CheckCircle size={16}/></div>
                         <div>
-                            <div className="font-bold text-slate-800 text-sm">Advance Payment</div>
-                            <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Received</div>
+                            <div className="font-bold text-slate-800 text-sm">Fully Paid</div>
+                            <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">No Dues</div>
                         </div>
-                        <div className="ml-auto font-black text-slate-800">₹{advance}</div>
                     </div>
                 ) : (
-                    <div className="text-center text-slate-400 text-sm font-medium py-4">No payments recorded yet.</div>
+                    <div className="flex items-center gap-4 bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                        <div className="bg-orange-100 text-orange-600 p-2 rounded-lg"><Clock size={16}/></div>
+                        <div>
+                            <div className="font-bold text-slate-800 text-sm">Payment Pending</div>
+                            <div className="text-[10px] font-black text-orange-600 uppercase tracking-widest">₹{balance} Due</div>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

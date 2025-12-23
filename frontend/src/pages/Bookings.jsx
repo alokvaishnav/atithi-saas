@@ -60,23 +60,26 @@ const Bookings = () => {
     } catch (err) { console.error("Critical Fetch Error:", err); }
   };
 
-  useEffect(() => { fetchAllData(); }, []);
+  useEffect(() => { 
+      fetchAllData(); 
+      // Auto-refresh every 30 seconds to keep dashboard live
+      const interval = setInterval(fetchAllData, 30000);
+      return () => clearInterval(interval);
+  }, []);
 
   // --- AUTOMATION HANDLERS ---
   
-  // 🚀 NEW: CHECK-IN LOGIC (Syncs Booking & Room Status)
+  // 🚀 CHECK-IN LOGIC
   const handleCheckIn = async (bookingId, roomId) => {
     if (!window.confirm("Confirm Guest Arrival & Handover Key?")) return;
 
     try {
-        // 1. Update Booking Status
         await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ status: 'CHECKED_IN' })
         });
 
-        // 2. Update Room Status to OCCUPIED
         if (roomId) {
             await fetch(`${API_URL}/api/rooms/${roomId}/`, {
                 method: 'PATCH',
@@ -91,7 +94,7 @@ const Bookings = () => {
     } catch (err) { console.error("Check-In Error:", err); alert("Check-in failed."); }
   };
 
-  // 🚀 NEW: CANCEL LOGIC
+  // 🚀 CANCEL LOGIC
   const handleCancel = async (bookingId, roomId) => {
     if (!window.confirm("Are you sure you want to CANCEL this reservation?")) return;
 
@@ -102,7 +105,6 @@ const Bookings = () => {
             body: JSON.stringify({ status: 'CANCELLED' })
         });
         
-        // Free up room if needed
         if (roomId) {
             await fetch(`${API_URL}/api/rooms/${roomId}/`, {
                 method: 'PATCH',
@@ -158,6 +160,7 @@ const Bookings = () => {
   // --- DOCUMENT PRINTING LOGIC ---
   const handlePrintGRC = (id) => {
     const b = bookings.find(x => x.id === id);
+    if(!b) return;
     const w = window.open('', '', 'width=800,height=900');
     const html = `
       <html><head><style>
@@ -172,12 +175,12 @@ const Bookings = () => {
         <div class="h"><h1>ATITHI GUEST REGISTRATION</h1><p>Legal Form C Compliance Document</p></div>
         <div class="grid">
           <div class="sec">
-            <div class="label">Guest Full Name</div><div class="val">${b.guest_details.full_name}</div><br>
-            <div class="label">Passport / ID Number</div><div class="val">${b.guest_details.id_proof_number || 'REQUIRED'}</div><br>
-            <div class="label">Nationality</div><div class="val">${b.guest_details.nationality || 'Indian'}</div>
+            <div class="label">Guest Full Name</div><div class="val">${b.guest_details?.full_name}</div><br>
+            <div class="label">Passport / ID Number</div><div class="val">${b.guest_details?.id_proof_number || 'REQUIRED'}</div><br>
+            <div class="label">Nationality</div><div class="val">${b.guest_details?.nationality || 'Indian'}</div>
           </div>
           <div class="sec">
-            <div class="label">Room Number</div><div class="val">${b.room_details.room_number}</div><br>
+            <div class="label">Room Number</div><div class="val">${b.room_details?.room_number}</div><br>
             <div class="label">Arrival Date</div><div class="val">${new Date(b.check_in_date).toLocaleString()}</div><br>
             <div class="label">Estimated Departure</div><div class="val">${new Date(b.check_out_date).toLocaleString()}</div>
           </div>
@@ -193,10 +196,10 @@ const Bookings = () => {
   };
 
   const handlePrintInvoice = (b) => {
-    const roomSub = parseFloat(b.subtotal_amount);
-    const roomTax = parseFloat(b.tax_amount);
-    const posSub = b.charges?.reduce((s, c) => s + parseFloat(c.subtotal), 0) || 0;
-    const posTax = b.charges?.reduce((s, c) => s + parseFloat(c.tax_amount), 0) || 0;
+    const roomSub = parseFloat(b.subtotal_amount || 0);
+    const roomTax = parseFloat(b.tax_amount || 0);
+    const posSub = b.charges?.reduce((s, c) => s + parseFloat(c.subtotal || 0), 0) || 0;
+    const posTax = b.charges?.reduce((s, c) => s + parseFloat(c.tax_amount || 0), 0) || 0;
     const total = roomSub + roomTax + posSub + posTax;
     const w = window.open('', '', 'width=900,height=800');
     const html = `
@@ -209,7 +212,7 @@ const Bookings = () => {
         .total-sec { float: right; width: 350px; margin-top: 40px; background: #f1f5f9; padding: 20px; border-radius: 12px; }
       </style></head><body>
         <div class="header"><div><h1>ATITHI HOTEL</h1><p>GSTIN: 27AABCA1234A1Z5</p></div><div><h2>TAX INVOICE</h2><p>INV-${b.id}</p></div></div>
-        <p>Guest: ${b.guest_details.full_name}<br>Room: RM${b.room_details.room_number}</p>
+        <p>Guest: ${b.guest_details?.full_name}<br>Room: RM${b.room_details?.room_number}</p>
         <table><thead><tr><th>Item</th><th>Qty</th><th>Net</th><th>Tax</th><th>Total</th></tr></thead><tbody>
           <tr><td>Room Stay</td><td>Stay</td><td>₹${roomSub}</td><td>₹${roomTax}</td><td>₹${roomSub+roomTax}</td></tr>
           ${b.charges?.map(c => `<tr><td>${c.service_name}</td><td>${c.quantity}</td><td>₹${c.subtotal}</td><td>₹${c.tax_amount}</td><td>₹${c.total_cost}</td></tr>`).join('')}
@@ -298,7 +301,7 @@ const Bookings = () => {
             className={`px-6 py-2 rounded-full font-black text-[10px] tracking-[0.2em] transition-all border-2 
               ${statusFilter === status ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-400 hover:border-slate-300'}`}
           >
-            {status}
+            {status.replace('_', ' ')}
           </button>
         ))}
       </div>
@@ -312,7 +315,7 @@ const Bookings = () => {
                  <div className="w-16 h-16 bg-blue-600 text-white rounded-[24px] flex items-center justify-center font-black text-2xl shadow-xl shadow-blue-200">{currentStep}</div>
                  <div>
                    <h3 className="font-black text-slate-900 uppercase text-xl tracking-tighter">Reservation Wizard</h3>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Phase {currentStep} of 3 • Property Unit Allocation</p>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Phase {currentStep} of 3 • Allocation</p>
                  </div>
                </div>
                <button onClick={() => setShowWizard(false)} className="w-12 h-12 bg-white shadow-sm border border-slate-100 rounded-2xl flex items-center justify-center hover:text-red-500 hover:bg-red-50 transition-all"><X size={28}/></button>

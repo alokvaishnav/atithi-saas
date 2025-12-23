@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -55,9 +55,6 @@ User = get_user_model()
 def get_hotel_owner(user):
     """
     Returns the Owner User instance based on the logged-in user's role.
-    - If user is OWNER -> returns self.
-    - If user is STAFF -> returns their boss (user.hotel_owner).
-    - If Superuser -> returns None (Handled separately).
     """
     if user.is_superuser:
         return None
@@ -121,12 +118,17 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        
+        # 🚀 PERFORMANCE OPTIMIZATION: Eager Load Relationships
+        # This prevents "N+1 Query" problems where Django queries DB 100 times for 100 bookings
+        queryset = Booking.objects.select_related('guest', 'room', 'owner').prefetch_related('charges')
+
         if user.is_superuser:
-            return Booking.objects.all()
+            return queryset.all()
         
         owner = get_hotel_owner(user)
         if owner:
-            return Booking.objects.filter(owner=owner)
+            return queryset.filter(owner=owner)
         return Booking.objects.none()
 
     def perform_create(self, serializer):

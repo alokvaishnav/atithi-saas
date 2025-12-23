@@ -225,7 +225,6 @@ class BookingCharge(models.Model):
             self.subtotal = self.service.price * self.quantity
             
             # ✅ FIX: Fetch Dynamic Tax Settings from Owner
-            # We access the owner via the linked Booking
             settings = PropertySetting.objects.filter(owner=self.booking.owner).first()
             
             if self.service.category == 'FOOD':
@@ -239,7 +238,11 @@ class BookingCharge(models.Model):
             # 📦 INVENTORY DEDUCTION LOGIC
             if is_new and self.service.linked_inventory_item:
                 item = self.service.linked_inventory_item
-                # Reduce stock
+                
+                # 🛑 FIX: Prevent Negative Inventory
+                if item.current_stock < self.quantity:
+                    raise ValidationError(f"Not enough stock! Only {item.current_stock} left of {item.name}.")
+                
                 item.current_stock -= self.quantity
                 item.save()
 

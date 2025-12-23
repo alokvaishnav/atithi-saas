@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
   TrendingUp, FileBarChart, Printer, ShieldCheck, 
-  Landmark, Wallet, PieChart, Activity
+  Landmark, Wallet, PieChart, Activity, Calendar
 } from 'lucide-react';
 import { API_URL } from '../config'; 
 
@@ -9,6 +9,11 @@ const Reports = () => {
   const [bookings, setBookings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // 🗓️ DATE FILTER STATE (Default: Current Month)
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 7) + '-01');
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
   const token = localStorage.getItem('access_token');
   const today = new Date().toISOString().split('T')[0];
 
@@ -27,7 +32,6 @@ const Reports = () => {
         const bData = await resB.json();
         const rData = await resR.json();
         
-        // Safety check to ensure data is an array
         setBookings(Array.isArray(bData) ? bData : []);
         setRooms(Array.isArray(rData) ? rData : []);
       } catch (err) {
@@ -39,19 +43,25 @@ const Reports = () => {
     fetchData();
   }, [token]);
 
-  // 📊 PROFESSIONAL AUDIT CALCULATIONS
+  // 🔍 FILTER DATA BY DATE RANGE
+  const filteredBookings = bookings.filter(b => {
+      const checkIn = b.check_in_date?.split('T')[0];
+      return checkIn >= startDate && checkIn <= endDate;
+  });
+
+  // 📊 PROFESSIONAL AUDIT CALCULATIONS (Based on Filtered Data)
   
   // 1. Room Revenue Logic (Base and Tax)
-  const roomNet = bookings.reduce((sum, b) => sum + parseFloat(b.subtotal_amount || 0), 0);
-  const roomTax = bookings.reduce((sum, b) => sum + parseFloat(b.tax_amount || 0), 0);
+  const roomNet = filteredBookings.reduce((sum, b) => sum + parseFloat(b.subtotal_amount || 0), 0);
+  const roomTax = filteredBookings.reduce((sum, b) => sum + parseFloat(b.tax_amount || 0), 0);
   
   // 2. POS/Service Revenue Logic (Base and Tax)
-  const posNet = bookings.reduce((sum, b) => {
+  const posNet = filteredBookings.reduce((sum, b) => {
     const chargesNet = b.charges?.reduce((s, c) => s + parseFloat(c.subtotal || 0), 0) || 0;
     return sum + chargesNet;
   }, 0);
   
-  const posTax = bookings.reduce((sum, b) => {
+  const posTax = filteredBookings.reduce((sum, b) => {
     const chargesTax = b.charges?.reduce((s, c) => s + parseFloat(c.tax_amount || 0), 0) || 0;
     return sum + chargesTax;
   }, 0);
@@ -60,7 +70,7 @@ const Reports = () => {
   const totalTaxCollected = roomTax + posTax;
   const grandTotal = totalNetRevenue + totalTaxCollected;
 
-  // 3. Operational KPIs
+  // 3. Operational KPIs (Live Status - Not Filtered by Date)
   const inHouseCount = bookings.filter(b => b.status === 'CHECKED_IN').length;
   const occupancyPercent = rooms.length > 0 ? ((inHouseCount / rooms.length) * 100).toFixed(1) : 0;
   
@@ -79,14 +89,37 @@ const Reports = () => {
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen">
+      
       {/* HEADER SECTION */}
-      <div className="flex justify-between items-center mb-10 no-print">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 no-print">
         <div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase">Tax & Financial Audit</h2>
           <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">
             Night Audit Summary • {new Date().toLocaleDateString('en-IN', { dateStyle: 'full' })}
           </p>
         </div>
+
+        {/* 🗓️ DATE FILTERS */}
+        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2 px-3">
+                <Calendar size={16} className="text-slate-400"/>
+                <span className="text-[10px] font-black uppercase text-slate-400">Range:</span>
+            </div>
+            <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-slate-50 border-none rounded-lg text-xs font-bold text-slate-700 p-2 outline-none"
+            />
+            <span className="text-slate-300 font-black">-</span>
+            <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-slate-50 border-none rounded-lg text-xs font-bold text-slate-700 p-2 outline-none"
+            />
+        </div>
+
         <div className="flex gap-4">
           <button onClick={handlePrintReport} className="bg-white border border-slate-200 text-slate-700 px-6 py-3 rounded-2xl flex items-center gap-2 hover:bg-slate-50 shadow-sm font-black text-xs uppercase transition-all">
             <Printer size={18} className="text-blue-600" /> Export PDF

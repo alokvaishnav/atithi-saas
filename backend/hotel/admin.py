@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Room, Guest, Booking, Service, BookingCharge, 
-    Expense, PropertySetting
+    Expense, PropertySetting, InventoryItem, HousekeepingTask # 👈 Added New Models
 )
 
 # ==========================================
@@ -74,7 +74,7 @@ class ExpenseAdmin(admin.ModelAdmin):
 
 @admin.register(Service)
 class ServiceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'category', 'price', 'is_active')
+    list_display = ('name', 'owner', 'category', 'price', 'is_active', 'linked_inventory_item')
     list_filter = ('category', 'is_active', 'owner')
     search_fields = ('name', 'owner__username')
 
@@ -82,5 +82,18 @@ class ServiceAdmin(admin.ModelAdmin):
 class BookingChargeAdmin(admin.ModelAdmin):
     list_display = ('booking', 'service', 'quantity', 'total_cost', 'added_at')
     list_filter = ('added_at',)
-    # Note: BookingCharge is linked to Booking, so we don't strictly need 'owner' here,
-    # but we could add a method to show it if needed.
+
+# ==========================================
+# 4. INVENTORY & HOUSEKEEPING (NEW 🚀)
+# ==========================================
+@admin.register(InventoryItem)
+class InventoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'owner', 'current_stock', 'unit', 'min_stock_alert')
+    search_fields = ('name', 'owner__username')
+    list_filter = ('owner',)
+
+@admin.register(HousekeepingTask)
+class HousekeepingAdmin(admin.ModelAdmin):
+    list_display = ('room', 'owner', 'status', 'assigned_to', 'updated_at')
+    list_filter = ('status', 'owner')
+    search_fields = ('room__room_number', 'owner__username', 'assigned_to__username')

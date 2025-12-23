@@ -1,31 +1,38 @@
-import { Routes, Route, Navigate } from 'react-router-dom'; // 👈 REMOVED BrowserRouter
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { ShieldAlert, LogOut, Loader2 } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
+
+// --- COMPONENTS ---
 import Sidebar from './components/Sidebar';
 import LicenseLock from './components/LicenseLock'; 
-import { ShieldAlert, LogOut } from 'lucide-react';
-import { useAuth } from './context/AuthContext'; 
 
-// ✅ 1. IMPORT ALL REAL PAGES
+// --- PUBLIC PAGES ---
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register'; 
-import Dashboard from './pages/Dashboard';
-import Guests from './pages/Guests';
-import EditGuest from './pages/EditGuest';
-import Rooms from './pages/Rooms';
-import Bookings from './pages/Bookings';
-import Services from './pages/Services';
-import Expenses from './pages/Expenses'; 
+import DigitalFolio from './pages/DigitalFolio'; 
 
-// ✅ 2. ENTERPRISE MODULES
-import CalendarView from './pages/CalendarView';
-import Reports from './pages/Reports';
+// --- CORE OPERATIONS ---
+import Dashboard from './pages/Dashboard';
 import FrontDesk from './pages/FrontDesk';
+import Bookings from './pages/Bookings';
+import CalendarView from './pages/CalendarView';
 import Folio from './pages/Folio';
 import POS from './pages/POS';
-import Housekeeping from './pages/Housekeeping';
-import Staff from './pages/Staff';       
 import PrintGRC from './pages/PrintGRC';
-import DigitalFolio from './pages/DigitalFolio'; 
+
+// --- MANAGEMENT MODULES ---
+import Rooms from './pages/Rooms';
+import Guests from './pages/Guests';
+import EditGuest from './pages/EditGuest';
+import Services from './pages/Services';
+import Inventory from './pages/Inventory';
+import Housekeeping from './pages/Housekeeping';
+
+// --- ADMIN & FINANCE ---
+import Expenses from './pages/Expenses';
+import Reports from './pages/Reports';
+import Staff from './pages/Staff';       
 import Accounting from './pages/Accounting'; 
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
@@ -33,7 +40,17 @@ import Pricing from './pages/Pricing';
 
 // 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isAuthenticated, role } = useAuth(); 
+  const { isAuthenticated, role, loading } = useAuth(); 
+
+  // 0. Loading State
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50 gap-3">
+        <Loader2 className="animate-spin text-blue-600" />
+        <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">Verifying Access...</span>
+      </div>
+    );
+  }
 
   // A. Check if logged in
   if (!isAuthenticated) {
@@ -52,12 +69,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           <p className="text-slate-500 font-medium mb-8 leading-relaxed">
             The <strong>{role}</strong> role is not authorized to access this department.
           </p>
-          <button 
-            onClick={() => window.location.href = '/dashboard'} 
-            className="w-full bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-black transition-all shadow-xl shadow-slate-200 uppercase text-xs tracking-widest"
-          >
+          <a href="/dashboard" className="inline-block w-full bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-black transition-all shadow-xl shadow-slate-200 uppercase text-xs tracking-widest">
             Return to HQ
-          </button>
+          </a>
         </div>
       </div>
     );
@@ -66,9 +80,9 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// 🏗️ THE APP LAYOUT
+// 🏗️ THE APP LAYOUT (Sidebar + Header + Content)
 const AppLayout = () => {
-    const { role, logout } = useAuth(); 
+    const { role, logout, hotelName } = useAuth(); // Assuming hotelName is in context
 
     return (
       <ProtectedRoute>
@@ -84,7 +98,9 @@ const AppLayout = () => {
               {/* GLOBAL PROFESSIONAL HEADER */}
               <header className="bg-white border-b border-slate-200 p-5 px-10 flex justify-between items-center z-10 shadow-sm">
                 <div>
-                    <h2 className="text-2xl font-black text-slate-800 tracking-tighter italic leading-none">ATITHI ENTERPRISE</h2>
+                    <h2 className="text-2xl font-black text-slate-800 tracking-tighter italic leading-none">
+                        {hotelName || "ATITHI ENTERPRISE"}
+                    </h2>
                     <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1">Property Operations Cloud</p>
                 </div>
 
@@ -104,7 +120,7 @@ const AppLayout = () => {
                     </button>
                     
                     <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black shadow-xl shadow-slate-200 transform hover:scale-105 transition-transform cursor-pointer">
-                      {role ? role.charAt(0) : 'U'}
+                      {role ? role.charAt(0).toUpperCase() : 'U'}
                     </div>
                   </div>
                 </div>
@@ -125,8 +141,7 @@ const AppLayout = () => {
                   <Route path="/pos" element={<POS />} />
                   <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
                   <Route path="/support" element={<Support />} />
-                  <Route path="/expenses" element={<Expenses />} />
-
+                  
                   {/* 🛡️ HR & STAFF (Restricted) */}
                   <Route path="/staff" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
@@ -136,7 +151,7 @@ const AppLayout = () => {
 
                   {/* 💳 PRICING PAGE */}
                   <Route path="/pricing" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                       <Pricing />
                     </ProtectedRoute>
                   } />
@@ -148,10 +163,15 @@ const AppLayout = () => {
                     </ProtectedRoute>
                   } />
 
-                  {/* 💰 ACCOUNTING (Restricted) */}
+                  {/* 💰 ACCOUNTING & FINANCE (Restricted) */}
                   <Route path="/accounting" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
                       <Accounting />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/expenses" element={
+                    <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
+                      <Expenses />
                     </ProtectedRoute>
                   } />
 
@@ -162,6 +182,13 @@ const AppLayout = () => {
                     </ProtectedRoute>
                   } />
                   
+                  {/* 📦 INVENTORY (New Feature) */}
+                  <Route path="/inventory" element={
+                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
+                      <Inventory />
+                    </ProtectedRoute>
+                  } />
+
                   {/* 🧹 HOUSEKEEPING (Restricted) */}
                   <Route path="/housekeeping" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
@@ -191,7 +218,6 @@ function App() {
   const { isAuthenticated } = useAuth(); 
 
   return (
-    // ❌ REMOVED BrowserRouter (It is now in main.jsx)
     <Routes>
         {/* 🔓 PUBLIC ROUTES */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />

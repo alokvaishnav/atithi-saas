@@ -14,20 +14,22 @@ const Expenses = () => {
 
   const token = localStorage.getItem('access_token');
 
-  // New Expense Model
+  // New Expense Model (Matches Backend)
   const [formData, setFormData] = useState({
-    category: 'UTILITIES',
+    title: '',      // 👈 Required by Backend
+    category: 'UTILITY', // 👈 Fixed Default
     amount: '',
     description: '',
     date: new Date().toISOString().split('T')[0]
   });
 
+  // 🔄 SYNCED WITH BACKEND CONSTANTS
   const CATEGORIES = [
     { value: 'SALARY', label: 'Staff Payroll', color: 'bg-blue-100 text-blue-700' },
-    { value: 'UTILITIES', label: 'Electricity & Water', color: 'bg-orange-100 text-orange-700' },
+    { value: 'UTILITY', label: 'Electricity & Water', color: 'bg-orange-100 text-orange-700' },
     { value: 'MAINTENANCE', label: 'Repairs & Maint.', color: 'bg-red-100 text-red-700' },
-    { value: 'SUPPLIES', label: 'Kitchen/Cleaning', color: 'bg-green-100 text-green-700' },
-    { value: 'MARKETING', label: 'Ads & Promo', color: 'bg-purple-100 text-purple-700' },
+    { value: 'INVENTORY', label: 'Supplies & Grocery', color: 'bg-green-100 text-green-700' }, // 👈 Matches Backend
+    { value: 'TAX', label: 'Govt Taxes', color: 'bg-purple-100 text-purple-700' },
     { value: 'OTHER', label: 'Miscellaneous', color: 'bg-slate-100 text-slate-700' }
   ];
 
@@ -36,7 +38,10 @@ const Expenses = () => {
       const res = await fetch(API_URL + '/api/expenses/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) setExpenses(await res.json());
+      if (res.ok) {
+          const data = await res.json();
+          setExpenses(Array.isArray(data) ? data : []);
+      }
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
@@ -58,8 +63,10 @@ const Expenses = () => {
       if (res.ok) {
         alert("Expense Recorded Successfully! 💸");
         setShowModal(false);
-        setFormData({ category: 'UTILITIES', amount: '', description: '', date: new Date().toISOString().split('T')[0] });
+        setFormData({ title: '', category: 'UTILITY', amount: '', description: '', date: new Date().toISOString().split('T')[0] });
         fetchExpenses();
+      } else {
+        alert("Error saving expense. Please check inputs.");
       }
     } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
   };
@@ -77,7 +84,7 @@ const Expenses = () => {
 
   // Filter Logic
   const filteredList = expenses.filter(e => 
-    e.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    e.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
     e.category.includes(searchTerm.toUpperCase())
   );
 
@@ -127,14 +134,16 @@ const Expenses = () => {
               <tr>
                 <th className="p-6 pl-8">Date</th>
                 <th className="p-6">Category</th>
-                <th className="p-6">Details</th>
+                <th className="p-6">Title / Vendor</th>
                 <th className="p-6">Authorized By</th>
                 <th className="p-6 text-right">Amount</th>
                 <th className="p-6 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredList.length > 0 ? filteredList.map(item => {
+              {loading ? (
+                 <tr><td colSpan="6" className="p-20 text-center text-slate-400 animate-pulse uppercase tracking-widest">Loading Records...</td></tr>
+              ) : filteredList.length > 0 ? filteredList.map(item => {
                 const catStyle = CATEGORIES.find(c => c.value === item.category) || CATEGORIES[5];
                 return (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors group">
@@ -149,7 +158,7 @@ const Expenses = () => {
                                 {catStyle.label}
                             </span>
                         </td>
-                        <td className="p-6 font-bold text-slate-800">{item.description || '—'}</td>
+                        <td className="p-6 font-bold text-slate-800">{item.title}</td>
                         <td className="p-6 text-xs font-bold text-slate-400 uppercase tracking-wider">{item.paid_by_username || 'Admin'}</td>
                         <td className="p-6 text-right font-black text-slate-900 text-lg">₹{parseFloat(item.amount).toLocaleString()}</td>
                         <td className="p-6 text-center">
@@ -187,7 +196,7 @@ const Expenses = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Amount</label>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Amount (₹)</label>
                             <input type="number" required placeholder="0.00" 
                                 className="w-full bg-slate-50 p-4 rounded-xl font-black text-xl outline-none border-2 border-transparent focus:border-red-500 transition-all mt-1"
                                 value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})}
@@ -203,8 +212,16 @@ const Expenses = () => {
                     </div>
 
                     <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Description / Vendor</label>
-                        <input type="text" placeholder="e.g. June Staff Salary, Vegetable Vendor..." 
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Title / Vendor</label>
+                        <input type="text" required placeholder="e.g. June Staff Salary, Vegetable Vendor..." 
+                            className="w-full bg-slate-50 p-4 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all mt-1"
+                            value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Extra Details (Optional)</label>
+                        <input type="text" placeholder="Additional notes..." 
                             className="w-full bg-slate-50 p-4 rounded-xl font-bold outline-none border-2 border-transparent focus:border-red-500 transition-all mt-1"
                             value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
                         />

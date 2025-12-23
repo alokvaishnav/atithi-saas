@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
   UserPlus, Shield, Mail, Phone, Trash2, Edit2, 
-  UserCheck, X, Loader2, ShieldAlert, ShieldCheck 
+  UserCheck, X, Loader2, ShieldCheck, Key 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -9,6 +9,7 @@ const Staff = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUser, setEditingUser] = useState(null); // 👈 Track who we are editing
 
   const [formData, setFormData] = useState({ 
@@ -41,14 +42,14 @@ const Staff = () => {
 
   // 1️⃣ OPEN CREATE MODAL
   const handleCreate = () => {
-    setEditingUser(null); // Clear edit mode
+    setEditingUser(null); 
     setFormData({ username: '', email: '', password: '', role: 'RECEPTIONIST', phone: '' });
     setShowModal(true);
   };
 
   // 2️⃣ OPEN EDIT MODAL
   const handleEdit = (user) => {
-    setEditingUser(user); // Set the user we are editing
+    setEditingUser(user); 
     setFormData({
         username: user.username,
         email: user.email,
@@ -62,12 +63,14 @@ const Staff = () => {
   // 3️⃣ HANDLE SUBMIT (Create OR Update)
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
+    
     try {
       const isEdit = !!editingUser;
       const url = isEdit ? `${API_URL}/api/staff/${editingUser.id}/` : `${API_URL}/api/staff/`;
       const method = isEdit ? 'PATCH' : 'POST';
 
-      // If editing and password is empty, remove it so we don't overwrite it with blank
+      // If editing and password is empty, remove it so we don't overwrite it
       const payload = { ...formData };
       if (isEdit && !payload.password) delete payload.password;
 
@@ -83,35 +86,32 @@ const Staff = () => {
       if (res.ok) {
         setShowModal(false);
         fetchUsers();
-        alert(isEdit ? "Staff profile updated successfully! ✅" : "Staff account created successfully! 🔑");
+        alert(isEdit ? "Staff profile updated! ✅" : "Staff account created! 🔑");
       } else {
         const errorData = await res.json();
-        alert(errorData.error || "Operation failed.");
+        alert(errorData.detail || "Operation failed.");
       }
     } catch (err) {
       console.error(err);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to revoke system access for this user? This cannot be undone.")) {
+    if (window.confirm("Are you sure you want to revoke system access for this user?")) {
       try {
         const res = await fetch(`${API_URL}/api/staff/${id}/`, {
           method: 'DELETE',
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        if (res.ok) {
-          fetchUsers();
-        } else {
-          alert("Permission denied.");
-        }
-      } catch (err) {
-        console.error(err);
-      }
+        if (res.ok) fetchUsers();
+        else alert("Permission denied.");
+      } catch (err) { console.error(err); }
     }
   };
 
-  if (loading && users.length === 0) return (
+  if (loading) return (
     <div className="flex h-screen items-center justify-center bg-slate-50">
        <div className="flex flex-col items-center gap-4">
         <Loader2 className="animate-spin text-blue-600" size={40} />
@@ -122,6 +122,7 @@ const Staff = () => {
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen">
+      
       {/* HEADER SECTION */}
       <div className="flex justify-between items-center mb-10">
         <div>
@@ -170,7 +171,7 @@ const Staff = () => {
                 <div className="w-8 h-8 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400">
                   <Phone size={14}/>
                 </div>
-                {user.phone || '+91 ----------'}
+                {user.phone || 'No Phone Linked'}
               </div>
             </div>
 
@@ -222,7 +223,6 @@ const Staff = () => {
                     value={formData.username}
                     onChange={e => setFormData({...formData, username: e.target.value})} 
                     required 
-                    // Username is readonly during edit to prevent ID conflicts
                     disabled={!!editingUser} 
                   />
                 </div>
@@ -242,13 +242,16 @@ const Staff = () => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
                     {editingUser ? 'New Password (Optional)' : 'Access Password'}
                   </label>
-                  <input 
-                    type="password"  
-                    className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold outline-none transition-all" 
-                    value={formData.password}
-                    onChange={e => setFormData({...formData, password: e.target.value})} 
-                    required={!editingUser} // Only required for new users
-                  />
+                  <div className="relative">
+                      <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                      <input 
+                        type="password"  
+                        className="w-full pl-12 p-5 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold outline-none transition-all" 
+                        value={formData.password}
+                        onChange={e => setFormData({...formData, password: e.target.value})} 
+                        required={!editingUser}
+                      />
+                  </div>
                 </div>
                 
                 <div className="space-y-1">
@@ -276,9 +279,10 @@ const Staff = () => {
                 </div>
 
                 <div className="flex gap-4 pt-6">
-                  <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-xs tracking-widest">Cancel</button>
-                  <button type="submit" className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase text-xs tracking-widest">
-                    {editingUser ? 'Save Changes' : 'Generate Account'}
+                  <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-xs tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
+                  <button type="submit" disabled={isSubmitting} className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2">
+                    {isSubmitting ? <Loader2 className="animate-spin" size={16}/> : (editingUser ? <Edit2 size={16}/> : <UserPlus size={16}/>)}
+                    {isSubmitting ? 'Saving...' : (editingUser ? 'Save Changes' : 'Generate Account')}
                   </button>
                 </div>
               </form>
