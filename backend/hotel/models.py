@@ -25,7 +25,7 @@ class Room(models.Model):
     # 🔗 SAAS ISOLATION: Link Room to Specific Hotel Owner
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='rooms', null=True, blank=True)
     
-    room_number = models.CharField(max_length=10) # Removed unique=True globally, logic will handle per-owner uniqueness
+    room_number = models.CharField(max_length=10) 
     room_type = models.CharField(max_length=10, choices=ROOM_TYPES)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
@@ -60,7 +60,21 @@ class Guest(models.Model):
         return self.full_name
 
 # ==========================================
-# 3. BOOKINGS & BILLING (Core Logic Engine)
+# 3. INVENTORY MANAGEMENT (New Feature 📦)
+# ==========================================
+class InventoryItem(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='inventory', null=True, blank=True)
+    name = models.CharField(max_length=100)
+    current_stock = models.IntegerField(default=0)
+    min_stock_alert = models.IntegerField(default=10)
+    unit = models.CharField(max_length=20, default="pcs") # pcs, kg, ltr
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f"{self.name} ({self.current_stock} {self.unit})"
+
+# ==========================================
+# 4. BOOKINGS & BILLING (Core Logic Engine)
 # ==========================================
 class Booking(models.Model):
     STATUS_CHOICES = (
@@ -123,8 +137,12 @@ class Booking(models.Model):
             delta = self.check_out_date - self.check_in_date
             nights = max(delta.days, 1)
             
+            # ✅ FIX: Fetch Dynamic Tax Settings from Owner
+            settings = PropertySetting.objects.filter(owner=self.owner).first()
+            room_tax_rate = settings.room_tax_rate if settings else Decimal('12.00')
+
             self.subtotal_amount = self.room.price_per_night * nights
-            self.tax_amount = (self.subtotal_amount * Decimal('0.12')).quantize(Decimal('0.01'))
+            self.tax_amount = (self.subtotal_amount * (room_tax_rate / Decimal('100.00'))).quantize(Decimal('0.01'))
             self.total_amount = self.subtotal_amount + self.tax_amount
             
             if self.advance_paid > 0 and self.amount_paid < self.advance_paid:
@@ -137,18 +155,19 @@ class Booking(models.Model):
             self.send_confirmation_email()
 
     def send_confirmation_email(self):
-        subject = f"Booking Confirmed at {self.owner.hotel_profile.hotel_name if hasattr(self.owner, 'hotel_profile') else 'Atithi Hotel'} - ID: {self.id}"
-        message = (
-            f"Dear {self.guest.full_name},\n\n"
-            f"Your reservation is confirmed! Stay Details:\n\n"
-            f"Room: {self.room.room_number}\n"
-            f"Check-In: {self.check_in_date.strftime('%d %b %Y')}\n\n"
-            f"Total: ₹{self.total_amount}\n"
-            f"Advance: ₹{self.advance_paid}\n"
-            f"Balance: ₹{self.balance_due}\n\n"
-            f"Thank you for choosing us!"
-        )
         try:
+            hotel_name = self.owner.hotel_profile.hotel_name if hasattr(self.owner, 'hotel_profile') else 'Atithi Hotel'
+            subject = f"Booking Confirmed at {hotel_name} - ID: {self.id}"
+            message = (
+                f"Dear {self.guest.full_name},\n\n"
+                f"Your reservation is confirmed! Stay Details:\n\n"
+                f"Room: {self.room.room_number}\n"
+                f"Check-In: {self.check_in_date.strftime('%d %b %Y')}\n\n"
+                f"Total: ₹{self.total_amount}\n"
+                f"Advance: ₹{self.advance_paid}\n"
+                f"Balance: ₹{self.balance_due}\n\n"
+                f"Thank you for choosing us!"
+            )
             send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.guest.email])
         except Exception as e:
             print(f"Email failed: {e}")
@@ -162,7 +181,7 @@ class Booking(models.Model):
         return f"B-{self.id} | {self.guest.full_name}"
 
 # ==========================================
-# 4. POS & SERVICES (Tax Category Aware)
+# 5. POS & SERVICES (With Inventory Link)
 # ==========================================
 class Service(models.Model):
     CATEGORY_CHOICES = (
@@ -180,6 +199,9 @@ class Service(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2) 
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='FOOD')
     is_active = models.BooleanField(default=True)
+    
+    # 📦 LINK TO INVENTORY: Buying this service reduces stock of this item
+    linked_inventory_item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="linked_services")
 
     def __str__(self):
         return f"{self.name} (₹{self.price})"
@@ -197,15 +219,55 @@ class BookingCharge(models.Model):
     added_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        
         if self.service:
             self.subtotal = self.service.price * self.quantity
-            tax_rate = Decimal('0.05') if self.service.category == 'FOOD' else Decimal('0.18')
-            self.tax_amount = (self.subtotal * tax_rate).quantize(Decimal('0.01'))
+            
+            # ✅ FIX: Fetch Dynamic Tax Settings from Owner
+            # We access the owner via the linked Booking
+            settings = PropertySetting.objects.filter(owner=self.booking.owner).first()
+            
+            if self.service.category == 'FOOD':
+                rate = settings.food_tax_rate if settings else Decimal('5.00')
+            else:
+                rate = settings.service_tax_rate if settings else Decimal('18.00')
+
+            self.tax_amount = (self.subtotal * (rate / Decimal('100.00'))).quantize(Decimal('0.01'))
             self.total_cost = self.subtotal + self.tax_amount
+            
+            # 📦 INVENTORY DEDUCTION LOGIC
+            if is_new and self.service.linked_inventory_item:
+                item = self.service.linked_inventory_item
+                # Reduce stock
+                item.current_stock -= self.quantity
+                item.save()
+
         super().save(*args, **kwargs)
 
 # ==========================================
-# 5. EXPENSE TRACKING (Financial Outflow)
+# 6. HOUSEKEEPING (New Feature 🧹)
+# ==========================================
+class HousekeepingTask(models.Model):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed')
+    )
+    
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='housekeeping_tasks')
+    room = models.ForeignKey(Room, on_delete=models.CASCADE)
+    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='assigned_tasks')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.room.room_number} - {self.status}"
+
+# ==========================================
+# 7. EXPENSE TRACKING (Financial Outflow)
 # ==========================================
 class Expense(models.Model):
     CATEGORY_CHOICES = [
@@ -232,7 +294,7 @@ class Expense(models.Model):
         return f"{self.title} - ₹{self.amount}"
 
 # ==========================================
-# 6. PROPERTY SETTINGS (White-Label Config)
+# 8. PROPERTY SETTINGS (White-Label Config)
 # ==========================================
 class PropertySetting(models.Model):
     # 🔗 SAAS ISOLATION: The Master Link
@@ -246,7 +308,11 @@ class PropertySetting(models.Model):
     
     # Financial Configuration
     currency_symbol = models.CharField(max_length=5, default="₹")
-    room_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.00, help_text="Default Room GST %")
+    
+    # ✅ DYNAMIC TAX RATES (Editable by Owner)
+    room_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.00, help_text="GST % for Rooms")
+    food_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=5.00, help_text="GST % for Food")
+    service_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18.00, help_text="GST % for Other Services")
 
     class Meta:
         verbose_name = "Property Setting"

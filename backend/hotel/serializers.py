@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Room, Guest, Booking, Service, BookingCharge, Expense, PropertySetting
+from .models import (
+    Room, Guest, Booking, Service, BookingCharge, Expense, PropertySetting,
+    InventoryItem, HousekeepingTask # 👈 Added New Models
+)
 
 # ============================
 # 1. CORE OPERATIONAL SERIALIZERS
@@ -27,12 +30,21 @@ class GuestSerializer(serializers.ModelSerializer):
         ]
 
 # ============================
-# 2. POS / SERVICE SERIALIZERS
+# 2. INVENTORY & SERVICES (NEW)
 # ============================
+
+class InventoryItemSerializer(serializers.ModelSerializer):
+    """
+    Handles stock tracking for items like 'Water Bottles', 'Toiletries', etc.
+    """
+    class Meta:
+        model = InventoryItem
+        fields = '__all__'
 
 class ServiceSerializer(serializers.ModelSerializer):
     """
-    Standard Hotel Menu Items (Food, Laundry, etc.)
+    Standard Hotel Menu Items. Now includes 'linked_inventory_item' 
+    to automatically deduct stock when sold.
     """
     class Meta:
         model = Service
@@ -55,7 +67,26 @@ class BookingChargeSerializer(serializers.ModelSerializer):
         ]
 
 # ============================
-# 3. BOOKING SERIALIZER (Final Enterprise Version)
+# 3. HOUSEKEEPING (NEW)
+# ============================
+
+class HousekeepingTaskSerializer(serializers.ModelSerializer):
+    """
+    Manages cleaning tasks. Includes read-only fields to make
+    displaying data on the dashboard easier.
+    """
+    room_number = serializers.CharField(source='room.room_number', read_only=True)
+    assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True)
+
+    class Meta:
+        model = HousekeepingTask
+        fields = [
+            'id', 'room', 'room_number', 'assigned_to', 'assigned_to_name',
+            'status', 'notes', 'created_at', 'updated_at'
+        ]
+
+# ============================
+# 4. BOOKING SERIALIZER (Final Enterprise Version)
 # ============================
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -111,7 +142,7 @@ class BookingSerializer(serializers.ModelSerializer):
         return data
 
 # ============================
-# 4. ACCOUNTING & EXPENSE SERIALIZERS
+# 5. ACCOUNTING & EXPENSE SERIALIZERS
 # ============================
 
 class ExpenseSerializer(serializers.ModelSerializer):
@@ -131,12 +162,12 @@ class ExpenseSerializer(serializers.ModelSerializer):
         read_only_fields = ['paid_by', 'created_at']
 
 # ============================
-# 5. WHITE-LABEL SETTINGS SERIALIZER
+# 6. WHITE-LABEL SETTINGS SERIALIZER
 # ============================
 
 class PropertySettingSerializer(serializers.ModelSerializer):
     """
-    Handles global property configuration like Hotel Name and GSTIN.
+    Handles global property configuration like Hotel Name, GSTIN, and Tax Rates.
     """
     class Meta:
         model = PropertySetting

@@ -37,21 +37,21 @@ class User(AbstractUser):
         boss_name = f" [Boss: {self.hotel_owner.username}]" if self.hotel_owner else ""
         return f"{self.username} ({self.get_role_display()}){boss_name}"
 
-    # 👇 CRITICAL ADDITION: This fixes the 500 Error on Login
-    # The frontend expects 'hotel_name' in the login response.
+    # 👇 CRITICAL FIX: Changed 'Setting' to 'PropertySetting'
+    # This prevents the "ImportError: cannot import name 'Setting'" crash.
     def get_hotel_name(self):
         """
         Helper to safely fetch the Hotel Name without crashing.
         """
         try:
             # Import inside method to avoid circular import errors
-            from hotel.models import Setting 
+            from hotel.models import PropertySetting 
             
             # If I am the owner, find my settings. If I am staff, use my boss's settings.
             target_user = self.hotel_owner if self.hotel_owner else self
             
             # Find settings belonging to this owner
-            setting = Setting.objects.filter(owner=target_user).first()
+            setting = PropertySetting.objects.filter(owner=target_user).first()
             
             if setting and setting.hotel_name:
                 return setting.hotel_name

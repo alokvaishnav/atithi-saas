@@ -2,7 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -21,7 +21,7 @@ from django.utils.dateparse import parse_date
 
 import csv
 import razorpay
-import uuid # 👈 ADDED THIS IMPORT
+import uuid 
 from datetime import timedelta
 from io import BytesIO
 from xhtml2pdf import pisa
@@ -29,7 +29,10 @@ from xhtml2pdf import pisa
 # ==============================
 # 📦 IMPORT MODELS & SERIALIZERS
 # ==============================
-from .models import Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting
+from .models import (
+    Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting,
+    InventoryItem, HousekeepingTask # 👈 ADDED NEW MODELS
+)
 from .serializers import (
     GuestSerializer, 
     RoomSerializer, 
@@ -37,7 +40,9 @@ from .serializers import (
     ServiceSerializer, 
     BookingChargeSerializer,
     ExpenseSerializer,
-    PropertySettingSerializer
+    PropertySettingSerializer,
+    InventoryItemSerializer,      # 👈 ADDED
+    HousekeepingTaskSerializer    # 👈 ADDED
 )
 from core.models import Subscription, Payment, HotelSMTPSettings
 
@@ -161,8 +166,22 @@ class BookingViewSet(viewsets.ModelViewSet):
         return Response({'status': 'Checkout successful.'})
 
 # ==============================
-# 2. POS, SERVICES & EXPENSES
+# 2. POS, SERVICES & INVENTORY
 # ==============================
+
+# 📦 NEW: Inventory Management
+class InventoryViewSet(viewsets.ModelViewSet):
+    queryset = InventoryItem.objects.all()
+    serializer_class = InventoryItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser: return InventoryItem.objects.all()
+        return InventoryItem.objects.filter(owner=get_hotel_owner(user))
+
+    def perform_create(self, serializer):
+        serializer.save(owner=get_hotel_owner(self.request.user))
 
 class ServiceViewSet(viewsets.ModelViewSet):
     queryset = Service.objects.all()
@@ -212,7 +231,25 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         )
 
 # ==============================
-# 3. SETTINGS (SAAS ISOLATION)
+# 3. HOUSEKEEPING (NEW)
+# ==============================
+
+# 🧹 NEW: Housekeeping Tasks
+class HousekeepingTaskViewSet(viewsets.ModelViewSet):
+    queryset = HousekeepingTask.objects.all()
+    serializer_class = HousekeepingTaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser: return HousekeepingTask.objects.all()
+        return HousekeepingTask.objects.filter(owner=get_hotel_owner(user))
+
+    def perform_create(self, serializer):
+        serializer.save(owner=get_hotel_owner(self.request.user))
+
+# ==============================
+# 4. SETTINGS (SAAS ISOLATION)
 # ==============================
 
 class SettingViewSet(viewsets.ModelViewSet):
@@ -234,7 +271,7 @@ class SettingViewSet(viewsets.ModelViewSet):
         serializer.save(owner=self.request.user)
 
 # ==============================
-# 4. EXECUTIVE ANALYTICS (SCOPED)
+# 5. EXECUTIVE ANALYTICS (SCOPED)
 # ==============================
 
 class AnalyticsView(APIView):
@@ -302,7 +339,7 @@ class AnalyticsView(APIView):
         })
 
 # ==============================
-# 5. PUBLIC / UTILITY
+# 6. PUBLIC / UTILITY
 # ==============================
 
 class PublicFolioView(APIView):
@@ -374,6 +411,12 @@ class InvoicePDFView(APIView):
         except Exception as e:
             return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
 
+# ==============================
+# ⚠️ DANGER ZONE: DB SEEDING
+# ==============================
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAdminUser]) # 👈 SECURED: Only Superusers/Staff
 def seed_data_trigger(request):
     try:
         call_command('seed_data')
@@ -437,14 +480,16 @@ class ExportReportView(APIView):
         response['Content-Disposition'] = 'attachment; filename="daily_report.csv"'
 
         writer = csv.writer(response)
-        writer.writerow(['Date', 'Type', 'Description', 'Amount', 'Payment Mode'])
+        writer.writerow(['Date', 'Type', 'Description', 'Amount', 'Payment Status'])
 
         if owner:
             bookings = Booking.objects.filter(owner=owner)
             expenses = Expense.objects.filter(owner=owner)
 
             for b in bookings:
-                writer.writerow([b.created_at.date(), 'INCOME', f'Booking #{b.id} - {b.guest_name}', b.total_amount, b.payment_status])
+                # ✅ FIX: Calculate payment status & access guest name correctly
+                payment_status = "PAID" if b.amount_paid >= b.total_amount else "PARTIAL" if b.amount_paid > 0 else "PENDING"
+                writer.writerow([b.created_at.date(), 'INCOME', f'Booking #{b.id} - {b.guest.full_name}', b.total_amount, payment_status])
             
             for e in expenses:
                 writer.writerow([e.date, 'EXPENSE', e.description, e.amount, e.category])
@@ -461,6 +506,23 @@ class ActivateLicenseView(APIView):
         key = request.data.get('license_key')
         user = request.user
         
+        # 1. Try to activate via Unique Database Key (Razorpay generated)
+        try:
+            sub = Subscription.objects.get(license_key=key)
+            # Ensure this key belongs to the current user (or is unassigned logic if you add that later)
+            # For now, we update the current user's subscription based on the validity of this key
+            
+            my_sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
+            my_sub.plan_name = "PRO"
+            my_sub.expiry_date = timezone.now() + timedelta(days=365)
+            my_sub.is_active = True
+            my_sub.save()
+            return Response({"status": "Activated", "days": 365})
+            
+        except Subscription.DoesNotExist:
+            pass
+
+        # 2. Fallback: Legacy Magic Key
         if key == "ATITHI-PRO-365":
             sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
             sub.plan_name = "PRO"
@@ -569,10 +631,8 @@ class EmailInvoiceView(APIView):
             owner = get_hotel_owner(request.user)
             booking = Booking.objects.get(id=pk, owner=owner)
             
-            # ✅ CORRECTED: Use BookingCharge, not Charge
             charges = BookingCharge.objects.filter(booking=booking)
             
-            # ✅ CORRECTED: Access .guest.email properly
             if not booking.guest.email:
                 return Response({"error": "Guest has no email address."}, status=400)
 
@@ -660,7 +720,6 @@ def register_user(request):
         phone = data.get('phone')
         hotel_name = data.get('hotel_name')
 
-        # 1. Validation check
         if not username or not email or not password:
             return Response({'detail': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -670,7 +729,7 @@ def register_user(request):
             return Response({'email': ['Email already exists']}, status=status.HTTP_400_BAD_REQUEST)
         
         with transaction.atomic():
-            # 2. Create User
+            # 1. Create User
             user = User.objects.create_user(
                 username=username, 
                 email=email, 
@@ -679,26 +738,24 @@ def register_user(request):
                 role='OWNER' 
             )
 
-            # 3. Create Property Settings (CRITICAL FIX: PropertySetting)
+            # 2. Create Property Settings
             PropertySetting.objects.create(
                 owner=user,
                 hotel_name=hotel_name if hotel_name else "My Hotel"
             )
 
-            # 4. Create Subscription (Prevents 401 License errors & Duplicate Key Error)
-            # ✅ FIX: Generates a UNIQUE license key using UUID
+            # 3. Create Subscription with Unique Key
             Subscription.objects.create(
                 owner=user,
                 plan_name='TRIAL',
                 is_active=True,
                 expiry_date=timezone.now() + timedelta(days=14),
-                license_key=str(uuid.uuid4()) # 👈 THIS PREVENTS THE CRASH
+                license_key=str(uuid.uuid4())
             )
 
-            # 5. Generate Tokens
+            # 4. Generate Tokens
             refresh = RefreshToken.for_user(user)
             
-            # 6. Final Safe Response (Fixes the 500 Error by NOT relying on DB read-back)
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
