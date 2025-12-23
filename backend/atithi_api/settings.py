@@ -179,8 +179,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # --------------------------------------------------------
 # We check environment variables first for security.
 # If not found (local testing), we fallback to the hardcoded keys.
-RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_live_RvBOgLN1rxP9zd")
-RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "LhT40VfsBxIX5VUJjrTE2W9h")
+RAZORPAY_KEY_ID = "rzp_live_RvBOgLN1rxP9zd"
+RAZORPAY_KEY_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
