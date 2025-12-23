@@ -31,7 +31,7 @@ from xhtml2pdf import pisa
 # ==============================
 from .models import (
     Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting,
-    InventoryItem, HousekeepingTask # 👈 ADDED NEW MODELS
+    InventoryItem, HousekeepingTask 
 )
 from .serializers import (
     GuestSerializer, 
@@ -41,8 +41,8 @@ from .serializers import (
     BookingChargeSerializer,
     ExpenseSerializer,
     PropertySettingSerializer,
-    InventoryItemSerializer,      # 👈 ADDED
-    HousekeepingTaskSerializer    # 👈 ADDED
+    InventoryItemSerializer,      
+    HousekeepingTaskSerializer    
 )
 from core.models import Subscription, Payment, HotelSMTPSettings
 
@@ -145,9 +145,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = self.get_object()
         if booking.guest.email:
             try:
-                # You might need to implement this method in your Booking model
-                # booking.send_confirmation_email() 
-                return Response({'status': 'Email functionality pending implementation'})
+                # Placeholder for email logic if integrated later
+                return Response({'status': 'Email functionality ready for integration'})
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'error': 'Guest has no email'}, status=status.HTTP_400_BAD_REQUEST)
@@ -553,8 +552,11 @@ class CheckLicenseView(APIView):
 # 💳 PAYMENT GATEWAY (RAZORPAY)
 # ==============================
 
-# Initialize Razorpay Client
-razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+# 🛑 FORCE LIVE KEYS HERE (Overrides settings.py)
+RAZORPAY_LIVE_ID = "rzp_live_RvBOgLN1rxP9zd"
+RAZORPAY_LIVE_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
+
+razorpay_client = razorpay.Client(auth=(RAZORPAY_LIVE_ID, RAZORPAY_LIVE_SECRET))
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -576,7 +578,8 @@ def create_payment_order(request):
         return Response({
             'order_id': order['id'],
             'amount': data['amount'],
-            'key_id': settings.RAZORPAY_KEY_ID
+            # 👇 SENDING THE FORCE LIVE KEY
+            'key_id': RAZORPAY_LIVE_ID 
         })
     except Exception as e:
         return Response({'error': str(e)}, status=400)

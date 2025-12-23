@@ -138,6 +138,7 @@ CORS_ALLOWED_ORIGINS = [
 
 # 🚀 Allow all origins in production if strict list fails (Optional but helpful for beta)
 CORS_ALLOW_ALL_ORIGINS = True 
+CORS_ALLOW_CREDENTIALS = True
 
 # 🛡️ CSRF Trusted Origins (Required for Django 4.0+)
 CSRF_TRUSTED_ORIGINS = [
@@ -145,6 +146,9 @@ CSRF_TRUSTED_ORIGINS = [
     "https://atithi-saas.onrender.com",
     "https://atithi-saas-frontend.vercel.app",
 ]
+
+# 🛡️ FIX FOR RENDER HTTPS (Prevents Redirect Loops & Admin Login Issues)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # --------------------------------------------------------
 # 📧 EMAIL AUTOMATION
@@ -177,8 +181,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # --------------------------------------------------------
 # 💳 RAZORPAY CONFIGURATION (Live Mode Active)
 # --------------------------------------------------------
-# We check environment variables first for security.
-# If not found (local testing), we fallback to the hardcoded keys.
+# We hardcode keys here to force them on the server, ignoring faulty environment variables.
 RAZORPAY_KEY_ID = "rzp_live_RvBOgLN1rxP9zd"
 RAZORPAY_KEY_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
 
