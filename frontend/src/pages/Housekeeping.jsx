@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { 
   Sparkles, Trash2, ShieldAlert, CheckCircle, 
   RefreshCcw, Hammer, Eraser, Filter, 
-  Plus, User, Clock, Check, X, Broom 
+  Plus, User, Clock, Check, X, Brush // 👈 FIXED: Swapped 'Broom' for 'Brush'
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -267,7 +267,8 @@ const Housekeeping = () => {
                                 <h4 className="text-2xl font-black text-slate-800">Room {task.room_number}</h4>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Assigned to: <span className="text-blue-600">{task.assigned_to_name || "Unassigned"}</span></p>
                             </div>
-                            <div className="bg-slate-50 p-2 rounded-xl text-slate-400"><Broom size={20}/></div>
+                            {/* 🧹 Updated Icon Here */}
+                            <div className="bg-slate-50 p-2 rounded-xl text-slate-400"><Brush size={20}/></div>
                         </div>
                         
                         {task.notes && (
