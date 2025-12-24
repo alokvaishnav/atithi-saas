@@ -339,10 +339,10 @@ class AnalyticsView(APIView):
         return Response({
             "financials": {
                 "total_rev": total_revenue,
-                "total_tax": total_tax,
-                "total_advance": total_advance,
                 "total_expenses": total_expenses,
-                "net_profit": net_profit
+                "net_profit": net_profit,
+                "total_advance": total_advance,
+                "total_tax": total_tax
             },
             "occupancy": round(occupancy_rate, 1),
             "trend": formatted_trend,
@@ -624,12 +624,13 @@ def verify_payment(request):
         return Response({'error': str(e)}, status=400)
 
 # ==============================
-# 💳 SUBSCRIPTION PAYMENT VIEWS (For Hotel Owners paying You)
+# 💳 SUBSCRIPTION PAYMENT VIEWS (Updated Logic)
 # ==============================
 
 class CreatePaymentOrderView(APIView):
     """
-    Creates an Order ID for SUBSCRIPTIONS (SaaS Payment).
+    Creates an Order ID for SUBSCRIPTIONS.
+    👉 FIXED: Now returns 'key_id' to prevent frontend 401 error.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -653,7 +654,7 @@ class CreatePaymentOrderView(APIView):
                 status='PENDING'
             )
 
-            # 👇 CRITICAL FIX: Explicitly send key_id to Frontend to avoid 401 Error
+            # 👇 CRITICAL FIX: Return Key ID
             response_data = order
             response_data['key_id'] = RAZORPAY_LIVE_ID 
 
@@ -670,7 +671,6 @@ class VerifyPaymentView(APIView):
     def post(self, request):
         try:
             data = request.data
-            
             check = {
                 'razorpay_order_id': data['razorpay_order_id'],
                 'razorpay_payment_id': data['razorpay_payment_id'],
@@ -688,7 +688,7 @@ class VerifyPaymentView(APIView):
                 
                 now = timezone.now()
                 if sub.expiry_date and sub.expiry_date > now:
-                    sub.expiry_date += timedelta(days=365)
+                    sub.expiry_date += timedelta(days=365) # Add 1 year
                 else:
                     sub.expiry_date = now + timedelta(days=365)
                 
