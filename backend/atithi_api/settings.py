@@ -22,6 +22,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*ky
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # 🚀 SECURITY FIX: Allow specific hosts
+# On Render, this defaults to allowing all if not specified
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # --------------------------------------------------------
@@ -93,6 +94,7 @@ DATABASES = {
 
 # 🚀 PRODUCTION DATABASE CONNECTION
 # This handles both Local Development (connecting to Cloud DB) and Production Deployment
+# Note: Ensure this URL matches your internal Render DB URL for best performance
 MANUAL_DB_URL = "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr"
 
 if os.environ.get('DATABASE_URL'):
@@ -137,7 +139,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://atithi-saas-8yopcvwvq-aloks-projects-6839c285.vercel.app"
 ]
 
-# 🚀 Allow all origins in production if strict list fails (Optional but helpful for beta)
+# 🚀 Allow all origins in production if strict list fails (Helps prevent CORS errors during testing)
 CORS_ALLOW_ALL_ORIGINS = True 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -183,7 +185,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # --------------------------------------------------------
 # 💳 RAZORPAY CONFIGURATION (Live Mode Active)
 # --------------------------------------------------------
-# We hardcode keys here to force them on the server, ignoring faulty environment variables.
+# These are kept here for reference, but your Views currently use hardcoded keys to ensure safety.
 RAZORPAY_KEY_ID = "rzp_live_RvBOgLN1rxP9zd"
 RAZORPAY_KEY_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
 
