@@ -1,67 +1,58 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useContext, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // 👈 IMPORT HOOK
 
 // Create the Context
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  // 1️⃣ State Definitions
   const [user, setUser] = useState(null);
   const [role, setRole] = useState(null);
   const [hotelName, setHotelName] = useState('Atithi HMS');
-  const [loading, setLoading] = useState(true); // 👈 Critical: Prevents premature redirects on refresh
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate(); // 👈 INITIALIZE HOOK
 
-  // 2️⃣ Load Data on App Start (Restore Session)
+  // 1️⃣ Load Data on App Start
   useEffect(() => {
-    const restoreSession = () => {
-      const token = localStorage.getItem('access_token');
-      const storedUser = localStorage.getItem('username');
-      const storedRole = localStorage.getItem('user_role');
-      const storedHotel = localStorage.getItem('hotel_name');
-      
-      if (token && storedUser) {
-        // Restore user state so the app knows we are logged in
-        setUser({ username: storedUser, user_role: storedRole });
-        setRole(storedRole);
-        setHotelName(storedHotel || 'Atithi HMS');
-      }
-      
-      setLoading(false); // ✅ Session check complete, allow app to render
-    };
-
-    restoreSession();
+    const token = localStorage.getItem('access_token');
+    const storedUser = localStorage.getItem('username');
+    const storedRole = localStorage.getItem('user_role');
+    const storedHotel = localStorage.getItem('hotel_name');
+    
+    if (token) {
+        setIsAuthenticated(true);
+        if (storedUser) setUser(storedUser);
+        if (storedRole) setRole(storedRole);
+        if (storedHotel) setHotelName(storedHotel);
+    }
   }, []);
 
-  // 3️⃣ Login Function (Updates State & Storage)
+  // 2️⃣ Login Function (Updates State & Storage)
   const login = (data) => {
-    // Save to Storage
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
-    
-    // Handle potential differences in backend response keys
-    const userRole = data.user_role || data.role || 'RECEPTIONIST';
-    localStorage.setItem('user_role', userRole);
+    localStorage.setItem('user_role', data.user_role || 'RECEPTIONIST');
     localStorage.setItem('username', data.username);
     
     const hName = data.hotel_name || 'Atithi HMS';
     localStorage.setItem('hotel_name', hName);
 
-    // Update State (Triggers UI updates)
-    setUser({ username: data.username, user_role: userRole });
-    setRole(userRole);
+    setUser(data.username);
+    setRole(data.user_role || 'RECEPTIONIST');
     setHotelName(hName);
+    setIsAuthenticated(true);
   };
 
-  // 4️⃣ Logout Function
+  // 3️⃣ Logout Function (FIXED: Uses Client-Side Navigation)
   const logout = () => {
     localStorage.clear();
     setUser(null);
     setRole(null);
     setHotelName('Atithi HMS');
-    // Note: We don't use navigate() here to avoid Router Context errors.
-    // The <Layout> component in App.jsx detects 'user' is null and redirects automatically.
+    setIsAuthenticated(false);
+    navigate('/login'); // 👈 USE NAVIGATE (No more 404 Error)
   };
 
-  // 5️⃣ Live Update Helper (For Settings Page)
+  // 4️⃣ Live Update Helper (For Settings Page)
   const updateGlobalProfile = (name) => {
       localStorage.setItem('hotel_name', name);
       setHotelName(name);
@@ -69,11 +60,10 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ 
-        user, role, hotelName, loading,
+        user, role, hotelName, isAuthenticated, 
         login, logout, updateGlobalProfile 
     }}>
-      {/* 🛡️ Only render children when initial auth check is done */}
-      {!loading && children} 
+      {children}
     </AuthContext.Provider>
   );
 };
