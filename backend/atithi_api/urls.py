@@ -13,8 +13,8 @@ from hotel.views import (
     BookingChargeViewSet,
     ExpenseViewSet,
     SettingViewSet,
-    InventoryViewSet,        # 👈 NEW: Added Inventory
-    HousekeepingTaskViewSet, # 👈 NEW: Added Housekeeping
+    InventoryViewSet,        
+    HousekeepingTaskViewSet, 
     AnalyticsView,
     PublicFolioView,
     seed_data_trigger,
@@ -23,13 +23,13 @@ from hotel.views import (
     ExportReportView, 
     ActivateLicenseView, 
     CheckLicenseView,
-    # 👇 UPDATED: Imported as Functions, not Classes
-    create_payment_order, 
-    verify_payment,
+    # 👇 UPDATED: Imported Classes instead of deleted functions
+    CreatePaymentOrderView, 
+    VerifyPaymentView,
     EmailInvoiceView,
     HotelSMTPSettingsView,
     register_user,
-    CustomTokenObtainPairView # 👈 Use the centralized logic from views.py
+    CustomTokenObtainPairView
 )
 
 # 🏢 CORE APP IMPORTS
@@ -59,8 +59,8 @@ router.register(r'staff', StaffViewSet)
 router.register(r'support-info', SaaSConfigView)
 
 # --- 🚀 NEW FEATURES (Now Registered) ---
-router.register(r'inventory', InventoryViewSet)           # 👈 Inventory API
-router.register(r'housekeeping', HousekeepingTaskViewSet) # 👈 Housekeeping API
+router.register(r'inventory', InventoryViewSet)           
+router.register(r'housekeeping', HousekeepingTaskViewSet) 
 
 # ==========================================
 # 2. URL PATTERNS
@@ -96,9 +96,9 @@ urlpatterns = [
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
     
-    # 👇 UPDATED: Removed .as_view() because these are functions
-    path('api/payment/create/', create_payment_order),
-    path('api/payment/verify/', verify_payment),
+    # 👇 UPDATED: Changed to Class-Based Views for Subscription Payments
+    path('api/payment/create/', CreatePaymentOrderView.as_view()),
+    path('api/payment/verify/', VerifyPaymentView.as_view()),
 
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
