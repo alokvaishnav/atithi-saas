@@ -24,7 +24,7 @@ import PrintGRC from './pages/PrintGRC';
 // --- MANAGEMENT MODULES ---
 import Rooms from './pages/Rooms';
 import Guests from './pages/Guests';
-import EditGuest from './pages/EditGuest';
+import EditGuest from './pages/EditGuest'; 
 import Services from './pages/Services';
 import Inventory from './pages/Inventory';
 import Housekeeping from './pages/Housekeeping';
@@ -75,17 +75,19 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         </div>
       </div>
     );
-  } // 👈 Added this missing closing brace
+  }
 
   return children;
 };
 
 // 🏗️ THE APP LAYOUT (Sidebar + Header + Content)
 const AppLayout = () => {
-    const { role, logout, hotelName } = useAuth(); 
+    // 🔍 FIX: Added 'loading' to the destructuring here
+    const { role, logout, hotelName, loading } = useAuth(); 
 
     return (
-      <ProtectedRoute>
+      // 🔍 FIX: Passing loading state to ProtectedRoute
+      <ProtectedRoute loading={loading}>
         <LicenseLock>
           <div className="flex h-screen bg-slate-50 overflow-hidden">
             <Sidebar />
