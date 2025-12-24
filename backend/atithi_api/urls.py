@@ -97,7 +97,7 @@ urlpatterns = [
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
     
-    # 👇 PAYMENT ROUTES (Fixed to use Classes)
+    # 👇 PAYMENT ROUTES (Fixed to use Class-Based Views)
     path('api/payment/create/', CreatePaymentOrderView.as_view()),
     path('api/payment/verify/', VerifyPaymentView.as_view()),
 

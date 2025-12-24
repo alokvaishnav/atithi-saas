@@ -185,7 +185,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # --------------------------------------------------------
 # 💳 RAZORPAY CONFIGURATION (Live Mode Active)
 # --------------------------------------------------------
-# These are kept here for reference, but your Views currently use hardcoded keys to ensure safety.
+# We ensure the live keys are available here as well, mirroring views.py
 RAZORPAY_KEY_ID = "rzp_live_RvBOgLN1rxP9zd"
 RAZORPAY_KEY_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
 

@@ -72,7 +72,7 @@ const Pricing = () => {
                 alert("🎉 Payment Successful! License Extended.");
                 window.location.href = '/'; // Redirect to Dashboard
             } else {
-                alert("Payment Verification Failed.");
+                alert(verifyData.error || "Payment Verification Failed.");
             }
         },
         prefill: {
