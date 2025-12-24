@@ -110,8 +110,8 @@ const Settings = () => {
       const emailReq = fetch(`${API_URL}/api/settings/email/`, {
           method: 'POST',
           headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
           },
           body: JSON.stringify(emailData)
       });
