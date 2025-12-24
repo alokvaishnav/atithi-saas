@@ -1,6 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ShieldAlert, LogOut, Loader2 } from 'lucide-react';
-import { useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // --- COMPONENTS ---
 import Sidebar from './components/Sidebar';
@@ -40,24 +40,17 @@ import Pricing from './pages/Pricing';
 
 // 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isAuthenticated, loading } = useAuth(); 
+  const { isAuthenticated, role, loading } = useAuth(); 
 
-  // 0. Loading State
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-900"><Loader2 className="text-white animate-spin"/></div>;
-  return (
-    <Routes>
-        {/* 🔓 PUBLIC ROUTES */}
-        <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
-        
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} /> 
-        <Route path="/folio-live/:id" element={<DigitalFolio />} />
-
-        {/* 🔒 PROTECTED APP ARCHITECTURE */}
-        <Route path="/*" element={<AppLayout />} />
-    </Routes>
-  );
-}
+  // 0. Loading State (Prevents flicker)
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50 gap-3">
+        <Loader2 className="animate-spin text-blue-600" />
+        <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">Verifying Access...</span>
+      </div>
+    );
+  }
 
   // A. Check if logged in
   if (!isAuthenticated) {
@@ -82,27 +75,21 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
         </div>
       </div>
     );
-  }
+  } // 👈 Added this missing closing brace
 
   return children;
 };
 
 // 🏗️ THE APP LAYOUT (Sidebar + Header + Content)
 const AppLayout = () => {
-    const { role, logout, hotelName } = useAuth(); // Assuming hotelName is in context
+    const { role, logout, hotelName } = useAuth(); 
 
     return (
       <ProtectedRoute>
-        {/* 🔐 LICENSE LOCK: WRAPS THE ENTIRE APP */}
         <LicenseLock>
           <div className="flex h-screen bg-slate-50 overflow-hidden">
-            
-            {/* SIDEBAR NAVIGATION */}
             <Sidebar />
-            
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              
-              {/* GLOBAL PROFESSIONAL HEADER */}
               <header className="bg-white border-b border-slate-200 p-5 px-10 flex justify-between items-center z-10 shadow-sm">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800 tracking-tighter italic leading-none">
@@ -119,7 +106,7 @@ const AppLayout = () => {
                   
                   <div className="flex items-center gap-3 border-l pl-8 border-slate-100">
                     <button 
-                      onClick={logout} 
+                      onClick={() => { if(window.confirm("Logout?")) logout() }} 
                       className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
                       title="System Logout"
                     >
@@ -133,10 +120,9 @@ const AppLayout = () => {
                 </div>
               </header>
 
-              {/* DEPARTMENT VIEWPORT */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <Routes>
-                  {/* ✅ STANDARD ACCESS (All Staff) */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/front-desk" element={<FrontDesk />} />
                   <Route path="/rooms" element={<Rooms />} />
@@ -149,28 +135,24 @@ const AppLayout = () => {
                   <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
                   <Route path="/support" element={<Support />} />
                   
-                  {/* 🛡️ HR & STAFF (Restricted) */}
                   <Route path="/staff" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                       <Staff />
                     </ProtectedRoute>
                   } />
 
-                  {/* 💳 PRICING PAGE */}
                   <Route path="/pricing" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                       <Pricing />
                     </ProtectedRoute>
                   } />
 
-                  {/* ⚙️ SETTINGS (Owner Only) */}
                   <Route path="/settings" element={
                     <ProtectedRoute allowedRoles={['OWNER']}>
                       <Settings />
                     </ProtectedRoute>
                   } />
 
-                  {/* 💰 ACCOUNTING & FINANCE (Restricted) */}
                   <Route path="/accounting" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
                       <Accounting />
@@ -182,35 +164,30 @@ const AppLayout = () => {
                     </ProtectedRoute>
                   } />
 
-                  {/* 📊 REPORTS (Restricted) */}
                   <Route path="/reports" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'ACCOUNTANT']}>
                       <Reports />
                     </ProtectedRoute>
                   } />
                   
-                  {/* 📦 INVENTORY (New Feature) */}
                   <Route path="/inventory" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
                       <Inventory />
                     </ProtectedRoute>
                   } />
 
-                  {/* 🧹 HOUSEKEEPING (Restricted) */}
                   <Route path="/housekeeping" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
                       <Housekeeping />
                     </ProtectedRoute>
                   } />
 
-                  {/* 🍽️ SERVICES (Restricted) */}
                   <Route path="/services" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
                       <Services />
                     </ProtectedRoute>
                   } />
 
-                  {/* Catch-all inside App -> Go to Dashboard */}
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />
                 </Routes>
               </div>
@@ -221,22 +198,29 @@ const AppLayout = () => {
     );
 };
 
-function App() {
-  const { isAuthenticated } = useAuth(); 
+const AppContent = () => {
+  const { isAuthenticated, loading } = useAuth(); 
+
+  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-900"><Loader2 className="text-white animate-spin"/></div>;
 
   return (
     <Routes>
-        {/* 🔓 PUBLIC ROUTES */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
-        
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} /> 
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
-
-        {/* 🔒 PROTECTED APP ARCHITECTURE */}
         <Route path="/*" element={<AppLayout />} />
-
     </Routes>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 }
 
