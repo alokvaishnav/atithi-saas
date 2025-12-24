@@ -60,10 +60,17 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ 
-        user, role, hotelName, isAuthenticated, 
-        login, logout, updateGlobalProfile 
+        user, 
+        role, 
+        hotelName, 
+        loading,
+        isAuthenticated: !!user, // 👈 ADD THIS LINE
+        login, 
+        logout, 
+        updateGlobalProfile 
+        
     }}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 };
