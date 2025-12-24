@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Room, Guest, Booking, Service, BookingCharge, Expense, PropertySetting,
-    InventoryItem, HousekeepingTask # 👈 Added New Models
+    InventoryItem, HousekeepingTask 
 )
 
 # ============================
@@ -12,31 +12,33 @@ class RoomSerializer(serializers.ModelSerializer):
     """
     Handles Room inventory data including status and pricing.
     """
+    # ✅ FIX: Make owner read-only so frontend isn't asked for it
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Room
         fields = '__all__'
 
 class GuestSerializer(serializers.ModelSerializer):
     """
-    Complete Guest Profile including GRC identity fields 
-    required for legal compliance.
+    Complete Guest Profile including GRC identity fields.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Guest
-        fields = [
-            'id', 'full_name', 'email', 'phone', 
-            'id_type', 'id_proof_number', 'address', 
-            'nationality', 'created_at'
-        ]
+        fields = '__all__'
 
 # ============================
-# 2. INVENTORY & SERVICES (NEW)
+# 2. INVENTORY & SERVICES
 # ============================
 
 class InventoryItemSerializer(serializers.ModelSerializer):
     """
     Handles stock tracking for items like 'Water Bottles', 'Toiletries', etc.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = InventoryItem
         fields = '__all__'
@@ -46,6 +48,11 @@ class ServiceSerializer(serializers.ModelSerializer):
     Standard Hotel Menu Items. Now includes 'linked_inventory_item' 
     to automatically deduct stock when sold.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    
+    # Optional: Display the name of the linked inventory item instead of just ID
+    linked_inventory_name = serializers.ReadOnlyField(source='linked_inventory_item.name')
+
     class Meta:
         model = Service
         fields = '__all__'
@@ -67,7 +74,7 @@ class BookingChargeSerializer(serializers.ModelSerializer):
         ]
 
 # ============================
-# 3. HOUSEKEEPING (NEW)
+# 3. HOUSEKEEPING
 # ============================
 
 class HousekeepingTaskSerializer(serializers.ModelSerializer):
@@ -75,18 +82,19 @@ class HousekeepingTaskSerializer(serializers.ModelSerializer):
     Manages cleaning tasks. Includes read-only fields to make
     displaying data on the dashboard easier.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
     room_number = serializers.CharField(source='room.room_number', read_only=True)
     assigned_to_name = serializers.CharField(source='assigned_to.username', read_only=True)
 
     class Meta:
         model = HousekeepingTask
         fields = [
-            'id', 'room', 'room_number', 'assigned_to', 'assigned_to_name',
+            'id', 'owner', 'room', 'room_number', 'assigned_to', 'assigned_to_name',
             'status', 'notes', 'created_at', 'updated_at'
         ]
 
 # ============================
-# 4. BOOKING SERIALIZER (Final Enterprise Version)
+# 4. BOOKING SERIALIZER
 # ============================
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -94,6 +102,8 @@ class BookingSerializer(serializers.ModelSerializer):
     The main engine for the HMS. Includes nested Room/Guest data, 
     all POS charges, and logic for GRC printing and Advance payments.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    
     # Nested Read-Only details for the UI
     room_details = RoomSerializer(source='room', read_only=True)
     guest_details = GuestSerializer(source='guest', read_only=True)
@@ -107,7 +117,7 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = [
-            'id', 
+            'id', 'owner',
             'guest', 
             'guest_details', 
             'room', 
@@ -150,12 +160,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
     Handles tracking of money flowing out of the business.
     Includes the username of the staff who logged the expense.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
     paid_by_username = serializers.ReadOnlyField(source='paid_by.username')
 
     class Meta:
         model = Expense
         fields = [
-            'id', 'title', 'category', 'amount', 
+            'id', 'owner', 'title', 'category', 'amount', 
             'date', 'description', 'paid_by', 
             'paid_by_username', 'created_at'
         ]
@@ -169,6 +180,8 @@ class PropertySettingSerializer(serializers.ModelSerializer):
     """
     Handles global property configuration like Hotel Name, GSTIN, and Tax Rates.
     """
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = PropertySetting
         fields = '__all__'

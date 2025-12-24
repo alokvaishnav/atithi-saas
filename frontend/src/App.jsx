@@ -1,9 +1,10 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ShieldAlert, LogOut, Loader2 } from 'lucide-react';
-import { useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // --- COMPONENTS ---
 import Sidebar from './components/Sidebar';
+// Note: If you haven't created LicenseLock yet, you can create a simple wrapper or remove it.
 import LicenseLock from './components/LicenseLock'; 
 
 // --- PUBLIC PAGES ---
@@ -24,7 +25,7 @@ import PrintGRC from './pages/PrintGRC';
 // --- MANAGEMENT MODULES ---
 import Rooms from './pages/Rooms';
 import Guests from './pages/Guests';
-import EditGuest from './pages/EditGuest';
+import EditGuest from './pages/EditGuest'; // Optional: If you use a separate page instead of modal
 import Services from './pages/Services';
 import Inventory from './pages/Inventory';
 import Housekeeping from './pages/Housekeeping';
@@ -42,7 +43,7 @@ import Pricing from './pages/Pricing';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, role, loading } = useAuth(); 
 
-  // 0. Loading State
+  // 0. Loading State (Prevents flicker)
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 gap-3">
@@ -82,7 +83,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 // 🏗️ THE APP LAYOUT (Sidebar + Header + Content)
 const AppLayout = () => {
-    const { role, logout, hotelName } = useAuth(); // Assuming hotelName is in context
+    const { role, logout, hotelName } = useAuth(); 
 
     return (
       <ProtectedRoute>
@@ -112,7 +113,7 @@ const AppLayout = () => {
                   
                   <div className="flex items-center gap-3 border-l pl-8 border-slate-100">
                     <button 
-                      onClick={logout} 
+                      onClick={() => { if(window.confirm("Logout?")) logout() }} 
                       className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
                       title="System Logout"
                     >
@@ -127,9 +128,10 @@ const AppLayout = () => {
               </header>
 
               {/* DEPARTMENT VIEWPORT */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
                 <Routes>
                   {/* ✅ STANDARD ACCESS (All Staff) */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/front-desk" element={<FrontDesk />} />
                   <Route path="/rooms" element={<Rooms />} />
@@ -182,7 +184,7 @@ const AppLayout = () => {
                     </ProtectedRoute>
                   } />
                   
-                  {/* 📦 INVENTORY (New Feature) */}
+                  {/* 📦 INVENTORY (Restricted) */}
                   <Route path="/inventory" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
                       <Inventory />
@@ -214,8 +216,11 @@ const AppLayout = () => {
     );
 };
 
-function App() {
-  const { isAuthenticated } = useAuth(); 
+// 🧠 Main Content Wrapper (Accesses Context)
+const AppContent = () => {
+  const { isAuthenticated, loading } = useAuth(); 
+
+  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-900"><Loader2 className="text-white animate-spin"/></div>;
 
   return (
     <Routes>
@@ -227,9 +232,21 @@ function App() {
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
         {/* 🔒 PROTECTED APP ARCHITECTURE */}
+        {/* Any route not matched above falls into AppLayout, which checks Auth */}
         <Route path="/*" element={<AppLayout />} />
 
     </Routes>
+  );
+}
+
+// 🚀 ROOT COMPONENT
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 }
 

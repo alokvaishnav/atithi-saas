@@ -4,6 +4,9 @@ import uuid
 from datetime import timedelta
 from django.utils import timezone
 
+# ==========================================
+# 1. CUSTOM USER MODEL (SaaS Enabled)
+# ==========================================
 class User(AbstractUser):
     # Professional Roles for Enterprise HMS
     ROLE_CHOICES = (
@@ -37,11 +40,10 @@ class User(AbstractUser):
         boss_name = f" [Boss: {self.hotel_owner.username}]" if self.hotel_owner else ""
         return f"{self.username} ({self.get_role_display()}){boss_name}"
 
-    # 👇 CRITICAL FIX: Changed 'Setting' to 'PropertySetting'
-    # This prevents the "ImportError: cannot import name 'Setting'" crash.
     def get_hotel_name(self):
         """
         Helper to safely fetch the Hotel Name without crashing.
+        Uses delayed import to avoid circular dependencies.
         """
         try:
             # Import inside method to avoid circular import errors
@@ -51,15 +53,17 @@ class User(AbstractUser):
             target_user = self.hotel_owner if self.hotel_owner else self
             
             # Find settings belonging to this owner
-            setting = PropertySetting.objects.filter(owner=target_user).first()
-            
-            if setting and setting.hotel_name:
-                return setting.hotel_name
+            # Note: We use 'hotel_profile' related_name defined in hotel/models.py
+            if hasattr(target_user, 'hotel_profile'):
+                return target_user.hotel_profile.hotel_name
             return "Atithi HMS" # Default fallback
             
         except Exception:
             return "Atithi HMS"
 
+# ==========================================
+# 2. SAAS GLOBAL CONFIG
+# ==========================================
 class SaaSConfig(models.Model):
     """
     Global Configuration for the Software Company (YOU).
@@ -82,7 +86,9 @@ class SaaSConfig(models.Model):
         verbose_name = "Software Company Settings"
         verbose_name_plural = "Software Company Settings"
 
-
+# ==========================================
+# 3. SUBSCRIPTION & LICENSING
+# ==========================================
 class Subscription(models.Model):
     """
     Control SaaS Access. If expired, the Owner cannot login.
@@ -102,6 +108,7 @@ class Subscription(models.Model):
 
     @property
     def days_left(self):
+        if not self.expiry_date: return 0
         now = timezone.now()
         if self.expiry_date < now:
             return 0
@@ -110,14 +117,16 @@ class Subscription(models.Model):
     def __str__(self):
         return f"{self.owner.username} - {self.plan_name} ({self.days_left} Days Left)"
 
-
+# ==========================================
+# 4. PAYMENT HISTORY
+# ==========================================
 class Payment(models.Model):
     """
     Records every successful transaction via Razorpay.
     """
     subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='payments')
     razorpay_order_id = models.CharField(max_length=100)
-    razorpay_payment_id = models.CharField(max_length=100, blank=True)
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2) # In Rupees
     status = models.CharField(max_length=20, default='PENDING') # PENDING, SUCCESS, FAILED
     created_at = models.DateTimeField(auto_now_add=True)
@@ -125,19 +134,19 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.subscription.owner.username} - ₹{self.amount} - {self.status}"
 
-
+# ==========================================
+# 5. EMAIL AUTOMATION SETTINGS
+# ==========================================
 class HotelSMTPSettings(models.Model):
     """
     Stores email credentials for each specific hotel owner.
     This allows 'Hotel A' to send emails from their own Gmail account.
     """
-    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='smtp_settings')
+    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='smtp_config')
+    email_host = models.CharField(max_length=100, default='smtp.gmail.com')
+    email_port = models.IntegerField(default=587)
     email_host_user = models.EmailField(help_text="The Hotel's Gmail Address")
     email_host_password = models.CharField(max_length=100, help_text="The Gmail App Password")
     
-    # We default to Gmail for simplicity, but you can add Host/Port fields later if needed
-    email_host = models.CharField(max_length=100, default='smtp.gmail.com')
-    email_port = models.IntegerField(default=587)
-
     def __str__(self):
         return f"SMTP Config for {self.owner.username}"

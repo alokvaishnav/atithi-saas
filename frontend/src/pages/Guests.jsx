@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { 
   User, Search, Plus, Edit2, Trash2, 
   Phone, Mail, MapPin, Globe, CreditCard, 
-  Loader2, X, Save, Star, ShieldAlert 
+  Loader2, X, Save, Star, ShieldAlert, History
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -24,6 +24,7 @@ const Guests = () => {
     address: '',
     nationality: 'Indian',
     id_proof_number: '',
+    id_proof_type: 'AADHAAR', // Default ID Type
     notes: '' // Used for VIP/Blacklist tags
   });
 
@@ -51,7 +52,7 @@ const Guests = () => {
     setEditingGuest(null);
     setFormData({
       full_name: '', email: '', phone: '', address: '', 
-      nationality: 'Indian', id_proof_number: '', notes: ''
+      nationality: 'Indian', id_proof_number: '', id_proof_type: 'AADHAAR', notes: ''
     });
     setShowModal(true);
   };
@@ -66,6 +67,7 @@ const Guests = () => {
       address: guest.address || '',
       nationality: guest.nationality || 'Indian',
       id_proof_number: guest.id_proof_number || '',
+      id_proof_type: guest.id_proof_type || 'AADHAAR',
       notes: guest.notes || ''
     });
     setShowModal(true);
@@ -96,7 +98,7 @@ const Guests = () => {
         setShowModal(false);
         fetchGuests();
       } else {
-        alert("Error saving profile. Please check fields.");
+        alert("Error saving profile. Please check fields (Phone number must be unique).");
       }
     } catch (err) { console.error(err); } 
     finally { setIsSubmitting(false); }
@@ -122,8 +124,8 @@ const Guests = () => {
   // --- FILTERING (Search Logic) ---
   const filteredGuests = guests.filter(g => 
     g.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    g.phone?.includes(searchTerm) || 
-    g.id_proof_number?.toLowerCase().includes(searchTerm.toLowerCase())
+    (g.phone && g.phone.includes(searchTerm)) || 
+    (g.id_proof_number && g.id_proof_number.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   if (loading) return (
@@ -136,7 +138,7 @@ const Guests = () => {
   );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
+    <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
@@ -279,21 +281,34 @@ const Guests = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ID Type</label>
+                            <select 
+                                className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all mt-1"
+                                value={formData.id_proof_type} onChange={e => setFormData({...formData, id_proof_type: e.target.value})}
+                            >
+                                <option value="AADHAAR">Aadhaar</option>
+                                <option value="PASSPORT">Passport</option>
+                                <option value="DRIVING_LICENSE">License</option>
+                                <option value="VOTER_ID">Voter ID</option>
+                            </select>
+                        </div>
+                        <div className="col-span-2">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ID Number</label>
-                            <input type="text" placeholder="Aadhar / Passport" 
+                            <input type="text" placeholder="Number..." 
                                 className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all mt-1"
                                 value={formData.id_proof_number} onChange={e => setFormData({...formData, id_proof_number: e.target.value})}
                             />
                         </div>
-                        <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nationality</label>
-                            <input type="text" placeholder="Indian" 
-                                className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all mt-1"
-                                value={formData.nationality} onChange={e => setFormData({...formData, nationality: e.target.value})}
-                            />
-                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Nationality</label>
+                        <input type="text" placeholder="Indian" 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all mt-1"
+                            value={formData.nationality} onChange={e => setFormData({...formData, nationality: e.target.value})}
+                        />
                     </div>
 
                     <div>

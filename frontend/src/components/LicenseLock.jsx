@@ -11,6 +11,12 @@ const LicenseLock = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation(); 
 
+  // ✅ FIXED: Soft Logout (No 404 Error)
+  const handleLogout = () => {
+      localStorage.clear();
+      navigate('/login'); // 👈 Use navigate hook instead of window reload
+  };
+
   // 1. Check License Status
   const checkLicense = async () => {
     try {
@@ -40,12 +46,6 @@ const LicenseLock = ({ children }) => {
           navigate('/login');
       }
   }, [token, navigate]);
-
-  // ✅ FIXED: Soft Logout (No 404 Error)
-  const handleLogout = () => {
-      localStorage.clear();
-      navigate('/login'); // 👈 Use navigate hook instead of window reload
-  };
 
   const handleActivate = async () => {
       if (!key) {

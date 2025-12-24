@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, Download, CreditCard, CheckCircle, 
   Clock, Calendar, User, ShieldCheck, Mail, Phone, 
-  Loader2, ArrowLeft, FileText, Globe, Send, LogOut 
+  Loader2, ArrowLeft, FileText, Globe, Send, LogOut, BedDouble 
 } from 'lucide-react'; 
 import { useReactToPrint } from 'react-to-print';
 import { API_URL } from '../config';
@@ -32,15 +32,20 @@ const Folio = () => {
       const bookingRes = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const bookingData = await bookingRes.json();
       
       const chargesRes = await fetch(`${API_URL}/api/charges/?booking=${bookingId}`, {
            headers: { 'Authorization': `Bearer ${token}` }
       });
-      const chargesData = await chargesRes.json();
 
-      if (bookingRes.ok) setBooking(bookingData);
-      if (chargesRes.ok) setCharges(Array.isArray(chargesData) ? chargesData : []);
+      if (bookingRes.ok) {
+          const bookingData = await bookingRes.json();
+          setBooking(bookingData);
+      }
+      
+      if (chargesRes.ok) {
+          const chargesData = await chargesRes.json();
+          setCharges(Array.isArray(chargesData) ? chargesData : []);
+      }
       
     } catch (err) {
       console.error("Error fetching folio:", err);
@@ -68,12 +73,15 @@ const Folio = () => {
   const handleManualPayment = async () => {
       if (!paymentAmount || parseFloat(paymentAmount) <= 0) return alert("Enter valid amount");
       try {
+          // Calculate new total paid amount
           const newPaid = parseFloat(booking.amount_paid || 0) + parseFloat(paymentAmount);
+          
           const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ amount_paid: newPaid })
           });
+          
           if (res.ok) {
               alert("Payment Recorded! 💰");
               setPaymentAmount('');
@@ -210,7 +218,7 @@ const Folio = () => {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (res.ok) { alert("Guest Checked Out! 👋"); navigate('/dashboard'); }
+          if (res.ok) { alert("Guest Checked Out! 👋"); navigate('/front-desk'); }
       } catch (err) { console.error(err); }
   };
 

@@ -22,7 +22,7 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/auth/register/`, {
+      const res = await fetch(`${API_URL}/api/register/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -32,22 +32,24 @@ const Register = () => {
       if (res.ok) {
         // ✅ CRITICAL FIX: Preserve Old Logic
         // In the old code, you forced the role to be 'OWNER'. 
-        // We must ensure the Context receives this role, or it might default to 'RECEPTIONIST'.
+        // We must ensure the Context receives this role.
         const authData = {
             ...data,
-            user_role: 'OWNER', // 👈 Forced Owner Role (Like Old Logic)
+            user_role: 'OWNER', // 👈 Forced Owner Role
             hotel_name: formData.hotel_name // Ensure Hotel Name is passed
         };
 
         // 🧠 Update Global State Instantly
         login(authData); 
         
-        // 🚀 Redirect to the new Dashboard route
-        navigate('/dashboard');
+        // 🚀 Redirect to the Home/Dashboard
+        navigate('/'); 
       } else {
         // ❌ Handle Validation Errors gracefully
         let errorMsg = "Registration failed.";
-        if (data.username) errorMsg = `Username: ${data.username[0]}`;
+        
+        if (data.detail) errorMsg = data.detail; // Catch generic backend errors
+        else if (data.username) errorMsg = `Username: ${data.username[0]}`;
         else if (data.email) errorMsg = `Email: ${data.email[0]}`;
         else if (data.password) errorMsg = `Password: ${data.password[0]}`;
         
@@ -111,7 +113,8 @@ const Input = ({ icon, type="text", name, placeholder, val, set, full }) => (
     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">{icon}</div>
     <input 
       required 
-      type={type} 
+      type={type}
+      name={name} // 👈 Added this missing attribute for browser autofill/accessibility
       placeholder={placeholder} 
       value={val}
       onChange={e => set({...full, [name]: e.target.value})}

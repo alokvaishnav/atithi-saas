@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Room, Guest, Booking, Service, BookingCharge, 
-    Expense, PropertySetting, InventoryItem, HousekeepingTask # 👈 Added New Models
+    Expense, PropertySetting, InventoryItem, HousekeepingTask 
 )
 
 # ==========================================
@@ -59,7 +59,7 @@ class BookingAdmin(admin.ModelAdmin):
         if not obj.created_by:
             obj.created_by = request.user
         # If created by Admin via panel, try to auto-assign owner if missing
-        if not obj.owner and request.user.role == 'OWNER':
+        if not obj.owner and hasattr(request.user, 'role') and request.user.role == 'OWNER':
              obj.owner = request.user
         super().save_model(request, obj, form, change)
 

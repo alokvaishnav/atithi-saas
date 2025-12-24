@@ -4,7 +4,11 @@ from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-# 🏨 HOTEL APP IMPORTS
+# 🏢 CORE APP IMPORTS (User & Auth)
+# We import RegisterView from CORE as per your latest update
+from core.views import StaffViewSet, SaaSConfigView, RegisterView 
+
+# 🏨 HOTEL APP IMPORTS (Business Logic)
 from hotel.views import (
     RoomViewSet, 
     GuestViewSet, 
@@ -23,18 +27,14 @@ from hotel.views import (
     ExportReportView, 
     ActivateLicenseView, 
     CheckLicenseView,
-    # 💳 Payment Classes (Matches views.py)
+    # 💳 Payment Classes
     CreatePaymentOrderView, 
     VerifyPaymentView,
-    # 📧 Automation & Auth
+    # 📧 Automation
     EmailInvoiceView,
     HotelSMTPSettingsView,
-    register_user,
     CustomTokenObtainPairView
 )
-
-# 🏢 CORE APP IMPORTS
-from core.views import StaffViewSet, SaaSConfigView
 
 # ==========================================
 # 1. VIEWS & ROUTING
@@ -48,6 +48,7 @@ def home_view(request):
     })
 
 router = DefaultRouter()
+
 # --- Core Features ---
 router.register(r'rooms', RoomViewSet)
 router.register(r'guests', GuestViewSet)
@@ -56,6 +57,8 @@ router.register(r'services', ServiceViewSet)
 router.register(r'charges', BookingChargeViewSet)
 router.register(r'expenses', ExpenseViewSet)
 router.register(r'settings', SettingViewSet)
+
+# --- SaaS & Staff Features ---
 router.register(r'staff', StaffViewSet)
 router.register(r'support-info', SaaSConfigView)
 
@@ -77,7 +80,8 @@ urlpatterns = [
     path('api/', include(router.urls)),
     
     # 🔐 AUTHENTICATION & REGISTRATION
-    path('api/auth/register/', register_user),
+    # ✅ CORRECTED: Points to 'core.views.RegisterView'
+    path('api/auth/register/', RegisterView.as_view()), 
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
