@@ -23,9 +23,10 @@ from hotel.views import (
     ExportReportView, 
     ActivateLicenseView, 
     CheckLicenseView,
-    # 👇 UPDATED: Imported Classes instead of deleted functions
+    # 💳 Payment Classes (Matches views.py)
     CreatePaymentOrderView, 
     VerifyPaymentView,
+    # 📧 Automation & Auth
     EmailInvoiceView,
     HotelSMTPSettingsView,
     register_user,
@@ -47,7 +48,7 @@ def home_view(request):
     })
 
 router = DefaultRouter()
-# --- Existing Features ---
+# --- Core Features ---
 router.register(r'rooms', RoomViewSet)
 router.register(r'guests', GuestViewSet)
 router.register(r'bookings', BookingViewSet)
@@ -58,7 +59,7 @@ router.register(r'settings', SettingViewSet)
 router.register(r'staff', StaffViewSet)
 router.register(r'support-info', SaaSConfigView)
 
-# --- 🚀 NEW FEATURES (Now Registered) ---
+# --- 🚀 Enterprise Inventory & Housekeeping ---
 router.register(r'inventory', InventoryViewSet)           
 router.register(r'housekeeping', HousekeepingTaskViewSet) 
 
@@ -80,7 +81,7 @@ urlpatterns = [
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # 📈 EXECUTIVE ANALYTICS
+    # 📈 EXECUTIVE ANALYTICS & REPORTS
     path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
     path('api/reports/analytics/', AdvancedAnalyticsView.as_view()),
     path('api/reports/export/', ExportReportView.as_view()),
@@ -92,17 +93,17 @@ urlpatterns = [
     path('api/invoice/<int:booking_id>/pdf/', InvoicePDFView.as_view(), name='invoice_pdf'),
     path('api/invoice/<int:pk>/email/', EmailInvoiceView.as_view()),
 
-    # 💳 LICENSE & PAYMENTS (UPDATED)
+    # 💳 LICENSE & SAAS RENT PAYMENTS
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
     
-    # 👇 UPDATED: Changed to Class-Based Views for Subscription Payments
+    # 👇 PAYMENT ROUTES (Fixed to use Classes)
     path('api/payment/create/', CreatePaymentOrderView.as_view()),
     path('api/payment/verify/', VerifyPaymentView.as_view()),
 
-    # ⚙️ HOTEL CONFIGURATION
+    # ⚙️ HOTEL OWNER SMTP CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
 
-    # 🪄 MAGIC SEED LINK
+    # 🪄 SYSTEM TOOLS
     path('seed-db-now/', seed_data_trigger, name='seed_data_trigger'),
 ]

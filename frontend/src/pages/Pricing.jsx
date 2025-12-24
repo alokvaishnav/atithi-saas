@@ -41,11 +41,12 @@ const Pricing = () => {
       });
       const orderData = await orderRes.json();
 
-      if (!orderRes.ok) throw new Error("Order creation failed");
+      if (!orderRes.ok) throw new Error(orderData.error || "Order creation failed");
 
       // C. Open Razorpay Options
       const options = {
-        key: "rzp_test_YOUR_KEY_HERE", // ⚠️ REPLACE WITH YOUR KEY FROM SETTINGS.PY
+        // ✅ FIXED: Using dynamic key_id from backend to fix 401 Unauthorized error
+        key: orderData.key_id, 
         amount: orderData.amount, 
         currency: "INR",
         name: "Atithi SaaS",
@@ -75,9 +76,9 @@ const Pricing = () => {
             }
         },
         prefill: {
-            name: "Hotel Owner",
-            email: "owner@hotel.com",
-            contact: "9999999999"
+            name: localStorage.getItem('username') || "Hotel Owner",
+            email: "",
+            contact: ""
         },
         theme: { color: "#2563eb" }
       };
@@ -87,7 +88,7 @@ const Pricing = () => {
 
     } catch (err) {
       console.error(err);
-      alert("Something went wrong. Check console.");
+      alert(err.message || "Something went wrong. Check console.");
     } finally {
       setLoading(false);
     }
