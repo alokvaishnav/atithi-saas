@@ -4,7 +4,7 @@ import {
   CheckCircle, XCircle, AlertTriangle, Briefcase,
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, AlertCircle, TrendingDown,
   ArrowUpRight, MapPin, Calendar, ShieldCheck,
-  Package, Broom // 👈 Added New Icons
+  Package, Brush // 👈 Added New Icons
 } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; // 👈 Added for navigation
 import { API_URL } from '../config'; 
@@ -149,7 +149,7 @@ const Dashboard = () => {
                     className="bg-purple-50 border-2 border-purple-100 p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
                 >
                     <div className="flex items-center gap-4">
-                        <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Broom size={24}/></div>
+                        <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Brush size={24}/></div>
                         <div>
                             <h3 className="font-black text-slate-800 text-lg">Pending Cleaning</h3>
                             <p className="text-xs font-bold text-slate-500">{pendingTasks.length} tasks assigned</p>
