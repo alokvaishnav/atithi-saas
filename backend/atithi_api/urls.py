@@ -4,11 +4,7 @@ from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-# 🏢 CORE APP IMPORTS (User & Auth)
-# We import RegisterView from CORE as per your latest update
-from core.views import StaffViewSet, SaaSConfigView, RegisterView 
-
-# 🏨 HOTEL APP IMPORTS (Business Logic)
+# 🏨 HOTEL APP IMPORTS
 from hotel.views import (
     RoomViewSet, 
     GuestViewSet, 
@@ -17,8 +13,8 @@ from hotel.views import (
     BookingChargeViewSet,
     ExpenseViewSet,
     SettingViewSet,
-    InventoryViewSet,        
-    HousekeepingTaskViewSet, 
+    InventoryViewSet,        # 👈 NEW: Added Inventory
+    HousekeepingTaskViewSet, # 👈 NEW: Added Housekeeping
     AnalyticsView,
     PublicFolioView,
     seed_data_trigger,
@@ -27,14 +23,17 @@ from hotel.views import (
     ExportReportView, 
     ActivateLicenseView, 
     CheckLicenseView,
-    # 💳 Payment Classes
-    CreatePaymentOrderView, 
-    VerifyPaymentView,
-    # 📧 Automation
+    # 👇 UPDATED: Imported as Functions, not Classes
+    create_payment_order, 
+    verify_payment,
     EmailInvoiceView,
     HotelSMTPSettingsView,
-    CustomTokenObtainPairView
+    register_user,
+    CustomTokenObtainPairView # 👈 Use the centralized logic from views.py
 )
+
+# 🏢 CORE APP IMPORTS
+from core.views import StaffViewSet, SaaSConfigView
 
 # ==========================================
 # 1. VIEWS & ROUTING
@@ -48,8 +47,7 @@ def home_view(request):
     })
 
 router = DefaultRouter()
-
-# --- Core Features ---
+# --- Existing Features ---
 router.register(r'rooms', RoomViewSet)
 router.register(r'guests', GuestViewSet)
 router.register(r'bookings', BookingViewSet)
@@ -57,14 +55,12 @@ router.register(r'services', ServiceViewSet)
 router.register(r'charges', BookingChargeViewSet)
 router.register(r'expenses', ExpenseViewSet)
 router.register(r'settings', SettingViewSet)
-
-# --- SaaS & Staff Features ---
 router.register(r'staff', StaffViewSet)
 router.register(r'support-info', SaaSConfigView)
 
-# --- 🚀 Enterprise Inventory & Housekeeping ---
-router.register(r'inventory', InventoryViewSet)           
-router.register(r'housekeeping', HousekeepingTaskViewSet) 
+# --- 🚀 NEW FEATURES (Now Registered) ---
+router.register(r'inventory', InventoryViewSet)           # 👈 Inventory API
+router.register(r'housekeeping', HousekeepingTaskViewSet) # 👈 Housekeeping API
 
 # ==========================================
 # 2. URL PATTERNS
@@ -80,12 +76,11 @@ urlpatterns = [
     path('api/', include(router.urls)),
     
     # 🔐 AUTHENTICATION & REGISTRATION
-    # ✅ CORRECTED: Points to 'core.views.RegisterView'
-    path('api/auth/register/', RegisterView.as_view()), 
+    path('api/auth/register/', register_user),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # 📈 EXECUTIVE ANALYTICS & REPORTS
+    # 📈 EXECUTIVE ANALYTICS
     path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
     path('api/reports/analytics/', AdvancedAnalyticsView.as_view()),
     path('api/reports/export/', ExportReportView.as_view()),
@@ -97,17 +92,17 @@ urlpatterns = [
     path('api/invoice/<int:booking_id>/pdf/', InvoicePDFView.as_view(), name='invoice_pdf'),
     path('api/invoice/<int:pk>/email/', EmailInvoiceView.as_view()),
 
-    # 💳 LICENSE & SAAS RENT PAYMENTS
+    # 💳 LICENSE & PAYMENTS (UPDATED)
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
     
-    # 👇 PAYMENT ROUTES (Fixed to use Class-Based Views)
-    path('api/payment/create/', CreatePaymentOrderView.as_view()),
-    path('api/payment/verify/', VerifyPaymentView.as_view()),
+    # 👇 UPDATED: Removed .as_view() because these are functions
+    path('api/payment/create/', create_payment_order),
+    path('api/payment/verify/', verify_payment),
 
-    # ⚙️ HOTEL OWNER SMTP CONFIGURATION
+    # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
 
-    # 🪄 SYSTEM TOOLS
+    # 🪄 MAGIC SEED LINK
     path('seed-db-now/', seed_data_trigger, name='seed_data_trigger'),
 ]

@@ -79,56 +79,37 @@ const Settings = () => {
     setIsSaving(true);
     try {
       // 1. Save Property Settings
-      // If settingId exists, we assume we need to patch specifically. 
-      // But since your view handles lists mostly, let's keep it robust.
-      // Standard REST usually requires ID in URL for PUT/PATCH.
-      
-      let propRes;
-      if (settingId) {
-          // Update Existing
-          propRes = await fetch(`${API_URL}/api/settings/${settingId}/`, {
-            method: 'PATCH', // Safer than PUT for partial updates
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify(formData)
-          });
-      } else {
-          // Create New
-          propRes = await fetch(`${API_URL}/api/settings/`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` 
-            },
-            body: JSON.stringify(formData)
-          });
-      }
+      const method = settingId ? 'PUT' : 'POST';
+      const url = settingId 
+        ? `${API_URL}/api/settings/${settingId}/` 
+        : `${API_URL}/api/settings/`;
+
+      const propReq = fetch(url, {
+        method: method,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(formData)
+      });
 
       // 2. Save Email Settings
       const emailReq = fetch(`${API_URL}/api/settings/email/`, {
           method: 'POST',
           headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}` 
           },
           body: JSON.stringify(emailData)
       });
 
-      // Wait for email request to finish
-      const emailRes = await emailReq;
+      // Wait for both requests to finish
+      const [propRes, emailRes] = await Promise.all([propReq, emailReq]);
 
       if (propRes.ok && emailRes.ok) {
         
         // 🧠 THE MAGIC: Update Global Context Instantly
         updateGlobalProfile(formData.hotel_name);
-
-        // If we just created new settings, get the ID for future updates
-        if (!settingId) {
-            const newPropData = await propRes.json();
-            setSettingId(newPropData.id);
-        }
 
         alert("✅ All System Configurations Updated Successfully!");
         

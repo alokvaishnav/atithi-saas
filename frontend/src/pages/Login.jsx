@@ -29,25 +29,16 @@ const Login = () => {
       const data = await response.json();
 
       if (response.ok) {
-        // 🧠 PREPARE DATA FOR CONTEXT
-        // We ensure all fields exist before sending to AuthContext
-        const authData = {
-            access: data.access,
-            refresh: data.refresh,
-            username: data.username,
-            // Handle different key names from backend vs serializer
-            user_role: data.user_role || data.role || 'RECEPTIONIST',
-            hotel_name: data.hotel_name || "Atithi HMS"
-        };
-
         // 🧠 CALL CONTEXT LOGIN
-        // This function inside AuthContext handles LocalStorage & State updates
-        login(authData);
+        // This function inside AuthContext handles:
+        // 1. LocalStorage saving
+        // 2. State updates (Role, User, HotelName)
+        // 3. Setting isAuthenticated = true
+        await login(data);
         
-        // 🚀 Redirect to Dashboard
+        // Navigate based on logic (optional, usually handled by AuthContext or Router)
         navigate('/'); 
       } else {
-        // Handle specific error messages from backend
         setError(data.detail || 'Invalid Credentials. Please check access details.');
       }
     } catch (error) {

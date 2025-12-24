@@ -25,8 +25,6 @@ const Sidebar = () => {
     const fetchBranding = async () => {
       try {
         const token = localStorage.getItem('access_token');
-        if (!token) return; // Guard clause if not logged in
-
         const res = await fetch(`${API_URL}/api/settings/`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -58,7 +56,7 @@ const Sidebar = () => {
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT'],
       items: [
         // 👇 UPDATED PATH: Points to /dashboard instead of /
-        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/' }, // Changed to '/' to match router default
+        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
       ]
     },
     {
@@ -135,9 +133,7 @@ const Sidebar = () => {
       {/* Navigation Groups */}
       <nav className="flex-1 p-4 space-y-8 overflow-y-auto scrollbar-hide py-8">
         {groups.map((group, index) => (
-          // Check if user role is allowed in this group (simple includes check)
-          // Default to showing if role is missing/loading to avoid flicker, or handle loading state elsewhere
-          (group.roles.includes(role) || !role) && (
+          group.roles.includes(role) && (
             <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
               <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
                 {group.title}
@@ -176,7 +172,7 @@ const Sidebar = () => {
             </div>
             <div>
                <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
-               <p className="text-[11px] font-black text-white tracking-tight">{role || "Loading..."}</p>
+               <p className="text-[11px] font-black text-white tracking-tight">{role}</p>
             </div>
         </div>
         <button 

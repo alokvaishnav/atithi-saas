@@ -31,7 +31,7 @@ from xhtml2pdf import pisa
 # ==============================
 from .models import (
     Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting,
-    InventoryItem, HousekeepingTask 
+    InventoryItem, HousekeepingTask # 👈 ADDED NEW MODELS
 )
 from .serializers import (
     GuestSerializer, 
@@ -41,8 +41,8 @@ from .serializers import (
     BookingChargeSerializer,
     ExpenseSerializer,
     PropertySettingSerializer,
-    InventoryItemSerializer,      
-    HousekeepingTaskSerializer    
+    InventoryItemSerializer,      # 👈 ADDED
+    HousekeepingTaskSerializer    # 👈 ADDED
 )
 from core.models import Subscription, Payment, HotelSMTPSettings
 
@@ -50,17 +50,12 @@ from core.models import Subscription, Payment, HotelSMTPSettings
 User = get_user_model()
 
 # ==============================
-# 💳 RAZORPAY CONFIG (FORCE LIVE)
-# ==============================
-RAZORPAY_LIVE_ID = "rzp_live_RvBOgLN1rxP9zd"
-RAZORPAY_LIVE_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
-
-razorpay_client = razorpay.Client(auth=(RAZORPAY_LIVE_ID, RAZORPAY_LIVE_SECRET))
-
-# ==============================
 # 🔐 UTILITY: Get the Hotel Owner
 # ==============================
 def get_hotel_owner(user):
+    """
+    Returns the Owner User instance based on the logged-in user's role.
+    """
     if user.is_superuser:
         return None
     if user.role == 'OWNER':
@@ -78,9 +73,13 @@ class GuestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return Guest.objects.all()
+        if user.is_superuser:
+            return Guest.objects.all()
+        
         owner = get_hotel_owner(user)
-        return Guest.objects.filter(owner=owner) if owner else Guest.objects.none()
+        if owner:
+            return Guest.objects.filter(owner=owner)
+        return Guest.objects.none()
 
     def perform_create(self, serializer):
         owner = get_hotel_owner(self.request.user)
@@ -93,9 +92,13 @@ class RoomViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return Room.objects.all()
+        if user.is_superuser:
+            return Room.objects.all()
+        
         owner = get_hotel_owner(user)
-        return Room.objects.filter(owner=owner) if owner else Room.objects.none()
+        if owner:
+            return Room.objects.filter(owner=owner)
+        return Room.objects.none()
 
     def perform_create(self, serializer):
         owner = get_hotel_owner(self.request.user)
@@ -115,14 +118,23 @@ class BookingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        
+        # 🚀 PERFORMANCE OPTIMIZATION: Eager Load Relationships
         queryset = Booking.objects.select_related('guest', 'room', 'owner').prefetch_related('charges')
-        if user.is_superuser: return queryset.all()
+
+        if user.is_superuser:
+            return queryset.all()
+        
         owner = get_hotel_owner(user)
-        return queryset.filter(owner=owner) if owner else Booking.objects.none()
+        if owner:
+            return queryset.filter(owner=owner)
+        return Booking.objects.none()
 
     def perform_create(self, serializer):
         owner = get_hotel_owner(self.request.user)
+        # Save with Owner AND Creator (Audit)
         booking = serializer.save(owner=owner, created_by=self.request.user)
+        
         if booking.room:
             room = booking.room
             room.status = 'OCCUPIED'
@@ -133,7 +145,9 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = self.get_object()
         if booking.guest.email:
             try:
-                return Response({'status': 'Email functionality ready'})
+                # You might need to implement this method in your Booking model
+                # booking.send_confirmation_email() 
+                return Response({'status': 'Email functionality pending implementation'})
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'error': 'Guest has no email'}, status=status.HTTP_400_BAD_REQUEST)
@@ -146,15 +160,18 @@ class BookingViewSet(viewsets.ModelViewSet):
         
         booking.status = 'CHECKED_OUT'
         booking.save()
+        
         if booking.room:
             booking.room.status = 'DIRTY'
             booking.room.save()
+            
         return Response({'status': 'Checkout successful.'})
 
 # ==============================
 # 2. POS, SERVICES & INVENTORY
 # ==============================
 
+# 📦 NEW: Inventory Management
 class InventoryViewSet(viewsets.ModelViewSet):
     queryset = InventoryItem.objects.all()
     serializer_class = InventoryItemSerializer
@@ -175,7 +192,8 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return Service.objects.all()
+        if user.is_superuser:
+            return Service.objects.all()
         return Service.objects.filter(owner=get_hotel_owner(user))
 
     def perform_create(self, serializer):
@@ -188,7 +206,9 @@ class BookingChargeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return BookingCharge.objects.all()
+        if user.is_superuser:
+            return BookingCharge.objects.all()
+        
         owner = get_hotel_owner(user)
         return BookingCharge.objects.filter(booking__owner=owner)
 
@@ -202,16 +222,21 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return Expense.objects.all()
+        if user.is_superuser:
+            return Expense.objects.all()
         return Expense.objects.filter(owner=get_hotel_owner(user))
 
     def perform_create(self, serializer):
-        serializer.save(owner=get_hotel_owner(self.request.user), paid_by=self.request.user)
+        serializer.save(
+            owner=get_hotel_owner(self.request.user),
+            paid_by=self.request.user
+        )
 
 # ==============================
-# 3. HOUSEKEEPING
+# 3. HOUSEKEEPING (NEW)
 # ==============================
 
+# 🧹 NEW: Housekeeping Tasks
 class HousekeepingTaskViewSet(viewsets.ModelViewSet):
     queryset = HousekeepingTask.objects.all()
     serializer_class = HousekeepingTaskSerializer
@@ -236,16 +261,19 @@ class SettingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser: return PropertySetting.objects.all()
+        if user.is_superuser:
+            return PropertySetting.objects.all()
+        
         owner = get_hotel_owner(user)
-        if owner: return PropertySetting.objects.filter(owner=owner)
+        if owner:
+            return PropertySetting.objects.filter(owner=owner)
         return PropertySetting.objects.none()
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
 # ==============================
-# 5. EXECUTIVE ANALYTICS
+# 5. EXECUTIVE ANALYTICS (SCOPED)
 # ==============================
 
 class AnalyticsView(APIView):
@@ -266,27 +294,29 @@ class AnalyticsView(APIView):
         else:
             return Response({"error": "No Hotel Profile Linked"}, status=400)
 
-        # Revenue
+        # 1. Revenue
         rev_stats = bookings.aggregate(
             total_rev=Sum('total_amount'),
             total_tax=Sum('tax_amount'),
             total_advance=Sum('advance_paid')
         )
+
+        # 2. Expense
         exp_total = expenses.aggregate(total_exp=Sum('amount'))['total_exp'] or 0
 
-        # Calculations
+        # 3. Conversions
         total_revenue = float(rev_stats['total_rev'] or 0)
         total_tax = float(rev_stats['total_tax'] or 0)
         total_advance = float(rev_stats['total_advance'] or 0)
         total_expenses = float(exp_total)
         net_profit = total_revenue - total_expenses
 
-        # Occupancy
+        # 4. Occupancy
         total_room_count = rooms.count()
         occupied_count = rooms.filter(status='OCCUPIED').count()
         occupancy_rate = (occupied_count / total_room_count * 100) if total_room_count > 0 else 0
 
-        # Trend
+        # 5. Trend (Scoped)
         raw_trend = bookings.annotate(date=TruncDate('check_in_date')) \
             .values('date') \
             .annotate(daily_revenue=Sum('total_amount')) \
@@ -300,10 +330,10 @@ class AnalyticsView(APIView):
         return Response({
             "financials": {
                 "total_rev": total_revenue,
-                "total_expenses": total_expenses,
-                "net_profit": net_profit,
+                "total_tax": total_tax,
                 "total_advance": total_advance,
-                "total_tax": total_tax
+                "total_expenses": total_expenses,
+                "net_profit": net_profit
             },
             "occupancy": round(occupancy_rate, 1),
             "trend": formatted_trend,
@@ -334,6 +364,7 @@ class InvoicePDFView(APIView):
         try:
             booking = Booking.objects.get(id=booking_id)
             charges = BookingCharge.objects.filter(booking=booking)
+            
             hotel_settings = PropertySetting.objects.filter(owner=booking.owner).first()
             
             context = {
@@ -383,13 +414,204 @@ class InvoicePDFView(APIView):
             return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
 
 # ==============================
-# 💳 SUBSCRIPTION PAYMENT (SAAS ONLY)
+# ⚠️ DANGER ZONE: DB SEEDING
 # ==============================
 
+@api_view(['POST'])
+@permission_classes([permissions.IsAdminUser]) # 👈 SECURED: Only Superusers/Staff
+def seed_data_trigger(request):
+    try:
+        call_command('seed_data')
+        return JsonResponse({"status": "Success", "message": "DB Seeded!"})
+    except Exception as e:
+        return JsonResponse({"status": "Error", "message": str(e)})
+    
+# ==============================
+# 📊 REPORTS & EXCEL EXPORT
+# ==============================
+
+class AdvancedAnalyticsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        owner = get_hotel_owner(user)
+        
+        start_date_str = request.query_params.get('start')
+        end_date_str = request.query_params.get('end')
+        
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=30)
+
+        if start_date_str and end_date_str:
+            start_date = parse_date(start_date_str)
+            end_date = parse_date(end_date_str)
+
+        if user.is_superuser:
+            bookings = Booking.objects.filter(created_at__range=[start_date, end_date])
+            expenses = Expense.objects.filter(date__range=[start_date, end_date])
+        elif owner:
+            bookings = Booking.objects.filter(owner=owner, created_at__range=[start_date, end_date])
+            expenses = Expense.objects.filter(owner=owner, date__range=[start_date, end_date])
+        else:
+            return Response({"error": "No Access"}, status=400)
+
+        income = bookings.aggregate(sum=Sum('total_amount'))['sum'] or 0
+        expense = expenses.aggregate(sum=Sum('amount'))['sum'] or 0
+        profit = income - expense
+
+        daily_income = bookings.annotate(day=TruncDate('created_at')).values('day').annotate(amount=Sum('total_amount')).order_by('day')
+        
+        chart_data = []
+        for i in daily_income:
+            chart_data.append({"date": i['day'], "income": i['amount'], "expense": 0})
+        
+        return Response({
+            "summary": {"income": income, "expense": expense, "profit": profit},
+            "chart_data": chart_data
+        })
+
+class ExportReportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        owner = get_hotel_owner(user)
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="daily_report.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['Date', 'Type', 'Description', 'Amount', 'Payment Status'])
+
+        if owner:
+            bookings = Booking.objects.filter(owner=owner)
+            expenses = Expense.objects.filter(owner=owner)
+
+            for b in bookings:
+                # ✅ FIX: Calculate payment status & access guest name correctly
+                payment_status = "PAID" if b.amount_paid >= b.total_amount else "PARTIAL" if b.amount_paid > 0 else "PENDING"
+                writer.writerow([b.created_at.date(), 'INCOME', f'Booking #{b.id} - {b.guest.full_name}', b.total_amount, payment_status])
+            
+            for e in expenses:
+                writer.writerow([e.date, 'EXPENSE', e.description, e.amount, e.category])
+
+        return response
+
+# ==============================
+# 💳 LICENSE MANAGEMENT
+# ==============================
+class ActivateLicenseView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        key = request.data.get('license_key')
+        user = request.user
+        
+        # 1. Try to activate via Unique Database Key (Razorpay generated)
+        try:
+            sub = Subscription.objects.get(license_key=key)
+            # Ensure this key belongs to the current user (or is unassigned logic if you add that later)
+            # For now, we update the current user's subscription based on the validity of this key
+            
+            my_sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
+            my_sub.plan_name = "PRO"
+            my_sub.expiry_date = timezone.now() + timedelta(days=365)
+            my_sub.is_active = True
+            my_sub.save()
+            return Response({"status": "Activated", "days": 365})
+            
+        except Subscription.DoesNotExist:
+            pass
+
+        # 2. Fallback: Legacy Magic Key
+        if key == "ATITHI-PRO-365":
+            sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
+            sub.plan_name = "PRO"
+            sub.expiry_date = timezone.now() + timedelta(days=365)
+            sub.is_active = True
+            sub.save()
+            return Response({"status": "Activated", "days": 365})
+        
+        return Response({"error": "Invalid License Key"}, status=400)
+
+class CheckLicenseView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        owner = get_hotel_owner(request.user)
+        if not owner: return Response({"status": "Active", "days": 999})
+        
+        sub, created = Subscription.objects.get_or_create(owner=owner)
+        return Response({
+            "is_active": sub.is_active and sub.days_left > 0,
+            "days_left": sub.days_left,
+            "plan": sub.plan_name
+        })
+
+# ==============================
+# 💳 PAYMENT GATEWAY (RAZORPAY)
+# ==============================
+
+# Initialize Razorpay Client
+razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def create_payment_order(request):
+    """Step 1: Create an Order ID on Razorpay"""
+    try:
+        amount = float(request.data.get('amount'))
+        booking_id = request.data.get('booking_id')
+        
+        # Razorpay expects amount in PAISE (e.g. ₹100 = 10000 paise)
+        data = {
+            'amount': int(amount * 100), 
+            'currency': 'INR',
+            'receipt': f'receipt_{booking_id}',
+            'payment_capture': 1 
+        }
+        order = razorpay_client.order.create(data=data)
+        
+        return Response({
+            'order_id': order['id'],
+            'amount': data['amount'],
+            'key_id': settings.RAZORPAY_KEY_ID
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def verify_payment(request):
+    """Step 2: Verify the Signature sent by Frontend"""
+    try:
+        data = request.data
+        
+        # 1. Verify Signature
+        params_dict = {
+            'razorpay_order_id': data['razorpay_order_id'],
+            'razorpay_payment_id': data['razorpay_payment_id'],
+            'razorpay_signature': data['razorpay_signature']
+        }
+        razorpay_client.utility.verify_payment_signature(params_dict)
+
+        # 2. Update Database if Verified
+        booking_id = data.get('booking_id')
+        amount_paid = float(data.get('amount'))
+        
+        booking = Booking.objects.get(id=booking_id)
+        # Check if booking amount_paid is stored as Decimal or Float in your model
+        # Assuming DecimalField or FloatField:
+        booking.amount_paid = float(booking.amount_paid) + amount_paid
+        booking.save()
+
+        return Response({'status': 'Payment Verified & Updated'})
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+# Also keeping the Class-Based Views for subscription payments if needed by other parts of your app
 class CreatePaymentOrderView(APIView):
-    """
-    Creates an Order ID for SUBSCRIPTIONS (Hotel Owners Paying You).
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -404,9 +626,7 @@ class CreatePaymentOrderView(APIView):
             }
             order = razorpay_client.order.create(data=data)
             
-            # Use get_or_create to safely handle missing subscription records
-            sub, _ = Subscription.objects.get_or_create(owner=get_hotel_owner(request.user))
-            
+            sub = Subscription.objects.get(owner=get_hotel_owner(request.user))
             Payment.objects.create(
                 subscription=sub,
                 razorpay_order_id=order['id'],
@@ -414,57 +634,47 @@ class CreatePaymentOrderView(APIView):
                 status='PENDING'
             )
 
-            # 👇 CRITICAL FIX: Return the Key ID to frontend so the popup opens
-            response_data = order
-            response_data['key_id'] = RAZORPAY_LIVE_ID 
-            
-            return Response(response_data)
+            return Response(order)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
 class VerifyPaymentView(APIView):
-    """
-    Verifies Subscription Payment Signature and extends license
-    """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         try:
             data = request.data
+            
             check = {
                 'razorpay_order_id': data['razorpay_order_id'],
                 'razorpay_payment_id': data['razorpay_payment_id'],
                 'razorpay_signature': data['razorpay_signature']
             }
             
-            # Verify Signature
-            razorpay_client.utility.verify_payment_signature(check)
-            
-            # Update Payment Record
-            payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
-            payment.razorpay_payment_id = data['razorpay_payment_id']
-            payment.status = 'SUCCESS'
-            payment.save()
-            
-            # Extend Subscription License
-            sub = payment.subscription
-            sub.is_active = True
-            
-            now = timezone.now()
-            # If expired, start from now. If active, add to existing expiry.
-            if sub.expiry_date and sub.expiry_date > now:
-                sub.expiry_date += timedelta(days=365) # Add 1 year
+            if razorpay_client.utility.verify_payment_signature(check):
+                payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
+                payment.razorpay_payment_id = data['razorpay_payment_id']
+                payment.status = 'SUCCESS'
+                payment.save()
+                
+                sub = payment.subscription
+                sub.is_active = True
+                
+                now = timezone.now()
+                if sub.expiry_date and sub.expiry_date > now:
+                    sub.expiry_date += timedelta(days=30)
+                else:
+                    sub.expiry_date = now + timedelta(days=30)
+                
+                sub.save()
+                
+                return Response({"status": "Payment Verified & License Extended!"})
             else:
-                sub.expiry_date = now + timedelta(days=365)
-            
-            sub.plan_name = "PRO"
-            sub.save()
-            
-            return Response({"status": "Payment Verified & License Extended!"})
-            
+                return Response({"error": "Signature Verification Failed"}, status=400)
+                
         except Exception as e:
-            print(f"Sub Verify Error: {e}")
-            return Response({"error": "Verification Failed"}, status=400)
+            print(e)
+            return Response({"error": "Verification Failed"}, status=500)
 
 # ==============================
 # 📧 EMAIL AUTOMATION
@@ -477,6 +687,7 @@ class EmailInvoiceView(APIView):
         try:
             owner = get_hotel_owner(request.user)
             booking = Booking.objects.get(id=pk, owner=owner)
+            
             charges = BookingCharge.objects.filter(booking=booking)
             
             if not booking.guest.email:
@@ -492,8 +703,9 @@ class EmailInvoiceView(APIView):
                     use_tls=True
                 )
                 sender_email = smtp_config.email_host_user
+            
             except HotelSMTPSettings.DoesNotExist:
-                return Response({"error": "Configure SMTP Settings first."}, status=400)
+                return Response({"error": "Please configure your Email Settings in the Settings Page first."}, status=400)
 
             template_path = 'hotel/templates/invoice.html'
             context = {'booking': booking, 'charges': charges, 'total': booking.total_amount, 'owner': booking.owner}
@@ -516,14 +728,17 @@ class EmailInvoiceView(APIView):
             email.attach(f'Invoice_{booking.id}.pdf', result.getvalue(), 'application/pdf')
             email.send()
 
-            return Response({"status": "Email Sent! 📧"})
+            return Response({"status": "Email Sent from Hotel Account! 📧"})
+
         except Exception as e:
+            print(f"EMAIL ERROR: {e}")
             return Response({"error": str(e)}, status=500)
         
 class HotelSMTPSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
+        """Get current settings"""
         try:
             conf = HotelSMTPSettings.objects.get(owner=get_hotel_owner(request.user))
             return Response({
@@ -534,6 +749,7 @@ class HotelSMTPSettingsView(APIView):
             return Response({"email": "", "has_password": False})
 
     def post(self, request):
+        """Save settings"""
         owner = get_hotel_owner(request.user)
         email = request.data.get('email')
         password = request.data.get('password')
@@ -544,7 +760,7 @@ class HotelSMTPSettingsView(APIView):
             obj.email_host_password = password
         obj.save()
 
-        return Response({"status": "Saved!"})
+        return Response({"status": "Email Settings Saved!"})
 
 # ==============================
 # 🚀 REGISTRATION & AUTH
@@ -555,30 +771,59 @@ class HotelSMTPSettingsView(APIView):
 def register_user(request):
     try:
         data = request.data
-        if User.objects.filter(username=data.get('username')).exists():
-            return Response({'detail': 'Username taken'}, status=400)
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        phone = data.get('phone')
+        hotel_name = data.get('hotel_name')
+
+        if not username or not email or not password:
+            return Response({'detail': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(username=username).exists():
+            return Response({'username': ['Username already exists']}, status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email=email).exists():
+            return Response({'email': ['Email already exists']}, status=status.HTTP_400_BAD_REQUEST)
         
         with transaction.atomic():
+            # 1. Create User
             user = User.objects.create_user(
-                username=data.get('username'), 
-                email=data.get('email'), 
-                password=data.get('password'), 
-                phone=data.get('phone'),
+                username=username, 
+                email=email, 
+                password=password, 
+                phone=phone,
                 role='OWNER' 
             )
-            PropertySetting.objects.create(owner=user, hotel_name=data.get('hotel_name', "My Hotel"))
-            Subscription.objects.create(owner=user, plan_name='TRIAL', is_active=True, expiry_date=timezone.now() + timedelta(days=14), license_key=str(uuid.uuid4()))
-            
+
+            # 2. Create Property Settings
+            PropertySetting.objects.create(
+                owner=user,
+                hotel_name=hotel_name if hotel_name else "My Hotel"
+            )
+
+            # 3. Create Subscription with Unique Key
+            Subscription.objects.create(
+                owner=user,
+                plan_name='TRIAL',
+                is_active=True,
+                expiry_date=timezone.now() + timedelta(days=14),
+                license_key=str(uuid.uuid4())
+            )
+
+            # 4. Generate Tokens
             refresh = RefreshToken.for_user(user)
+            
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user_role': 'OWNER', 
                 'username': user.username,
-                'hotel_name': data.get('hotel_name', "My Hotel")
-            }, status=201)
+                'hotel_name': hotel_name if hotel_name else "My Hotel"
+            }, status=status.HTTP_201_CREATED)
+
     except Exception as e:
-        return Response({'detail': str(e)}, status=500)
+        print(f"REGISTRATION CRASH: {str(e)}") 
+        return Response({'detail': f'Registration failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -590,32 +835,3 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
-
-# 🪄 MISC / REPORTS
-class AdvancedAnalyticsView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    def get(self, request):
-        return Response({"status": "Advanced stats active"})
-
-class ExportReportView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    def get(self, request):
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="report.csv"'
-        return response
-
-class ActivateLicenseView(APIView):
-    def post(self, request): return Response({"status": "Active"})
-
-class CheckLicenseView(APIView):
-    def get(self, request):
-        sub, _ = Subscription.objects.get_or_create(owner=get_hotel_owner(request.user))
-        return Response({"is_active": sub.is_active, "days_left": sub.days_left})
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAdminUser])
-def seed_data_trigger(request):
-    try:
-        call_command('seed_data')
-        return JsonResponse({"status": "Success"})
-    except: return JsonResponse({"status": "Error"})

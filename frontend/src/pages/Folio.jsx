@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, Download, CreditCard, CheckCircle, 
   Clock, Calendar, User, ShieldCheck, Mail, Phone, 
-  Loader2, ArrowLeft, FileText, Globe, Send, LogOut, BedDouble 
+  Loader2, ArrowLeft, FileText, IndianRupee, Send, LogOut, Globe 
 } from 'lucide-react'; 
 import { useReactToPrint } from 'react-to-print';
 import { API_URL } from '../config';
@@ -20,7 +20,7 @@ const Folio = () => {
   const [pdfLoading, setPdfLoading] = useState(false); 
   const [emailLoading, setEmailLoading] = useState(false); 
   const [paymentAmount, setPaymentAmount] = useState('');
-  const [payingOnline, setPayingOnline] = useState(false); // 👈 New: Razorpay State
+  const [payingOnline, setPayingOnline] = useState(false); // 👈 For Razorpay Spinner
 
   const token = localStorage.getItem('access_token');
   const componentRef = useRef();
@@ -32,20 +32,15 @@ const Folio = () => {
       const bookingRes = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      const bookingData = await bookingRes.json();
       
       const chargesRes = await fetch(`${API_URL}/api/charges/?booking=${bookingId}`, {
            headers: { 'Authorization': `Bearer ${token}` }
       });
+      const chargesData = await chargesRes.json();
 
-      if (bookingRes.ok) {
-          const bookingData = await bookingRes.json();
-          setBooking(bookingData);
-      }
-      
-      if (chargesRes.ok) {
-          const chargesData = await chargesRes.json();
-          setCharges(Array.isArray(chargesData) ? chargesData : []);
-      }
+      if (bookingRes.ok) setBooking(bookingData);
+      if (chargesRes.ok) setCharges(Array.isArray(chargesData) ? chargesData : []);
       
     } catch (err) {
       console.error("Error fetching folio:", err);
@@ -73,15 +68,12 @@ const Folio = () => {
   const handleManualPayment = async () => {
       if (!paymentAmount || parseFloat(paymentAmount) <= 0) return alert("Enter valid amount");
       try {
-          // Calculate new total paid amount
           const newPaid = parseFloat(booking.amount_paid || 0) + parseFloat(paymentAmount);
-          
           const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ amount_paid: newPaid })
           });
-          
           if (res.ok) {
               alert("Payment Recorded! 💰");
               setPaymentAmount('');
@@ -90,7 +82,7 @@ const Folio = () => {
       } catch (err) { console.error(err); }
   };
 
-  // 🌐 HANDLE RAZORPAY ONLINE PAYMENT [NEW FEATURE]
+  // 🌐 HANDLE RAZORPAY ONLINE PAYMENT
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
         const script = document.createElement("script");
@@ -218,12 +210,12 @@ const Folio = () => {
               method: 'POST',
               headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (res.ok) { alert("Guest Checked Out! 👋"); navigate('/front-desk'); }
+          if (res.ok) { alert("Guest Checked Out! 👋"); navigate('/dashboard'); }
       } catch (err) { console.error(err); }
   };
 
   const handlePrint = useReactToPrint({
-    contentRef: componentRef, 
+    content: () => componentRef.current,
     documentTitle: `Invoice_${bookingId}`,
   });
 

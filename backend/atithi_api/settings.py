@@ -18,11 +18,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*kyl6lbp(%f@79b_+tp*bo6_ppe(0m=v')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# On Render, set the Environment Variable DEBUG = False
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # 🚀 SECURITY FIX: Allow specific hosts
-# On Render, this defaults to allowing all if not specified
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # --------------------------------------------------------
@@ -94,7 +92,6 @@ DATABASES = {
 
 # 🚀 PRODUCTION DATABASE CONNECTION
 # This handles both Local Development (connecting to Cloud DB) and Production Deployment
-# Note: Ensure this URL matches your internal Render DB URL for best performance
 MANUAL_DB_URL = "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr"
 
 if os.environ.get('DATABASE_URL'):
@@ -136,23 +133,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://atithi-saas-frontend.vercel.app", # Your Frontend URL
-    "https://atithi-saas-8yopcvwvq-aloks-projects-6839c285.vercel.app"
 ]
 
-# 🚀 Allow all origins in production if strict list fails (Helps prevent CORS errors during testing)
+# 🚀 Allow all origins in production if strict list fails (Optional but helpful for beta)
 CORS_ALLOW_ALL_ORIGINS = True 
-CORS_ALLOW_CREDENTIALS = True
 
 # 🛡️ CSRF Trusted Origins (Required for Django 4.0+)
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://atithi-saas.onrender.com",
     "https://atithi-saas-frontend.vercel.app",
-    "https://atithi-saas-8yopcvwvq-aloks-projects-6839c285.vercel.app"
 ]
-
-# 🛡️ FIX FOR RENDER HTTPS (Prevents Redirect Loops & Admin Login Issues)
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # --------------------------------------------------------
 # 📧 EMAIL AUTOMATION
@@ -183,11 +174,11 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # --------------------------------------------------------
-# 💳 RAZORPAY CONFIGURATION (Live Mode Active)
+# 💳 RAZORPAY CONFIGURATION
 # --------------------------------------------------------
-# We ensure the live keys are available here as well, mirroring views.py
-RAZORPAY_KEY_ID = "rzp_live_RvBOgLN1rxP9zd"
-RAZORPAY_KEY_SECRET = "LhT40VfsBxIX5VUJjrTE2W9h"
+# Replace the defaults below with your actual keys from Razorpay Dashboard
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_test_YOUR_KEY_HERE")
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "YOUR_SECRET_HERE")
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

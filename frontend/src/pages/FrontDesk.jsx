@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { 
   CheckCircle, LogIn, LogOut, User, 
   Briefcase, ArrowRight, Bell, Grid, List, 
-  AlertTriangle, Clock, Calendar, Search, BedDouble
+  AlertTriangle, Clock, Calendar, Search
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
@@ -45,7 +45,6 @@ const FrontDesk = () => {
   const updateBookingStatus = async (id, newStatus) => {
     if(!window.confirm(`Confirm: Mark guest as ${newStatus}?`)) return;
     try {
-      // 1. Update Booking
       await fetch(`${API_URL}/api/bookings/${id}/`, {
         method: 'PATCH',
         headers: { 
@@ -54,15 +53,6 @@ const FrontDesk = () => {
         },
         body: JSON.stringify({ status: newStatus })
       });
-
-      // 2. If Checking Out, use special endpoint to handle room status & charges if needed
-      if (newStatus === 'CHECKED_OUT') {
-          await fetch(`${API_URL}/api/bookings/${id}/checkout/`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-      }
-
       fetchData(); // Refresh all data
       alert("Status Updated Successfully! ✅");
     } catch (err) { console.error(err); }
@@ -86,8 +76,8 @@ const FrontDesk = () => {
   });
 
   // Filter Lists
-  const arrivals = bookings.filter(b => b.check_in_date.startsWith(todayStr) && b.status === 'CONFIRMED');
-  const departures = bookings.filter(b => b.check_out_date.startsWith(todayStr) && b.status === 'CHECKED_IN');
+  const arrivals = bookings.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED');
+  const departures = bookings.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN');
   const inHouse = bookings.filter(b => b.status === 'CHECKED_IN');
 
   if (loading) return (
@@ -100,7 +90,7 @@ const FrontDesk = () => {
   );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-8 bg-slate-50 min-h-screen">
       
       {/* HEADER */}
       <div className="flex justify-between items-center mb-8">
@@ -250,7 +240,7 @@ const FrontDesk = () => {
                             RM {b.room_details.room_number}
                         </span>
                     ) : <span className="text-slate-400 text-xs italic">Unassigned</span>}
-                    <div className="text-[10px] text-slate-400 font-bold uppercase mt-1">{b.room_type_name || b.room_details?.room_type}</div>
+                    <div className="text-[10px] text-slate-400 font-bold uppercase mt-1">{b.room_type_name}</div>
                   </td>
                   <td className="p-6 font-medium text-slate-500">
                     {b.guest_details?.phone || 'N/A'}

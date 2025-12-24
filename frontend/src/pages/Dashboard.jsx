@@ -4,20 +4,20 @@ import {
   CheckCircle, XCircle, AlertTriangle, Briefcase,
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, AlertCircle, TrendingDown,
   ArrowUpRight, MapPin, Calendar, ShieldCheck,
-  Package, Brush // 👈 FIXED: Swapped 'Broom' for 'Brush' to fix build error
+  Package, Broom // 👈 Added New Icons
 } from 'lucide-react'; 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // 👈 Added for navigation
 import { API_URL } from '../config'; 
 
 const Dashboard = () => {
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [inventory, setInventory] = useState([]); 
-  const [tasks, setTasks] = useState([]);        
+  const [inventory, setInventory] = useState([]); // 👈 New State
+  const [tasks, setTasks] = useState([]);         // 👈 New State
   const [loading, setLoading] = useState(true);
 
-  const navigate = useNavigate(); 
+  const navigate = useNavigate(); // 👈 For clicking alerts
   const token = localStorage.getItem('access_token');
   const userRole = localStorage.getItem('user_role');
 
@@ -32,8 +32,8 @@ const Dashboard = () => {
         fetch(API_URL + '/api/rooms/', { headers }),
         fetch(API_URL + '/api/bookings/', { headers }),
         fetch(API_URL + '/api/analytics/', { headers }),
-        fetch(API_URL + '/api/inventory/', { headers }),    
-        fetch(API_URL + '/api/housekeeping/', { headers })  
+        fetch(API_URL + '/api/inventory/', { headers }),    // 👈 Fetch Inventory
+        fetch(API_URL + '/api/housekeeping/', { headers })  // 👈 Fetch Tasks
       ]);
 
       if (resRooms.ok) setRooms(await resRooms.json());
@@ -82,7 +82,7 @@ const Dashboard = () => {
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
   const maxRevenue = Math.max(...revenueValues, 5000);
 
-  // 🚨 Alert Logic
+  // 🚨 NEW: Alert Logic
   const lowStockItems = Array.isArray(inventory) ? inventory.filter(i => i.current_stock <= i.min_stock_alert) : [];
   const pendingTasks = Array.isArray(tasks) ? tasks.filter(t => t.status !== 'COMPLETED') : [];
 
@@ -124,7 +124,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 🚨 CRITICAL ALERTS ROW (Inventory & Tasks) */}
+      {/* 🚨 NEW: CRITICAL ALERTS ROW (Inventory & Tasks) */}
       {(lowStockItems.length > 0 || pendingTasks.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             {lowStockItems.length > 0 && (
@@ -149,8 +149,7 @@ const Dashboard = () => {
                     className="bg-purple-50 border-2 border-purple-100 p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
                 >
                     <div className="flex items-center gap-4">
-                        {/* 🧹 Using Brush Icon Here */}
-                        <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Brush size={24}/></div>
+                        <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Broom size={24}/></div>
                         <div>
                             <h3 className="font-black text-slate-800 text-lg">Pending Cleaning</h3>
                             <p className="text-xs font-bold text-slate-500">{pendingTasks.length} tasks assigned</p>
@@ -325,7 +324,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 🚀 ANALYTICS TREND BAR */}
+      {/* 🚀 ANALYTICS TREND BAR (UPDATED: High Visibility) */}
       {trendData.length > 0 && (
           <div className="mt-10 bg-slate-900 p-10 rounded-[48px] text-white overflow-hidden relative">
               <div className="flex justify-between items-center mb-10 relative z-10">

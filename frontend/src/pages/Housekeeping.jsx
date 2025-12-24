@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { 
   Sparkles, Trash2, ShieldAlert, CheckCircle, 
   RefreshCcw, Hammer, Eraser, Filter, 
-  Plus, User, Clock, Check, X, Brush 
+  Plus, User, Clock, Check, X, Broom 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -42,10 +42,8 @@ const Housekeeping = () => {
 
       // 3. Fetch Staff (For dropdown)
       const staffRes = await fetch(`${API_URL}/api/staff/`, { headers });
-      if (staffRes.ok) {
-          const staffData = await staffRes.json();
-          if(Array.isArray(staffData)) setStaffList(staffData);
-      }
+      const staffData = await staffRes.json();
+      if(Array.isArray(staffData)) setStaffList(staffData);
 
     } catch (err) {
       console.error("Housekeeping fetch error:", err);
@@ -269,7 +267,7 @@ const Housekeeping = () => {
                                 <h4 className="text-2xl font-black text-slate-800">Room {task.room_number}</h4>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Assigned to: <span className="text-blue-600">{task.assigned_to_name || "Unassigned"}</span></p>
                             </div>
-                            <div className="bg-slate-50 p-2 rounded-xl text-slate-400"><Brush size={20}/></div>
+                            <div className="bg-slate-50 p-2 rounded-xl text-slate-400"><Broom size={20}/></div>
                         </div>
                         
                         {task.notes && (
@@ -320,6 +318,7 @@ const Housekeeping = () => {
                         <select required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
                             value={taskForm.room} onChange={e => setTaskForm({...taskForm, room: e.target.value})}>
                             <option value="">-- Choose Room --</option>
+                            {/* Filter mainly dirty rooms, but allow selecting any */}
                             {rooms.map(r => (
                                 <option key={r.id} value={r.id}>Room {r.room_number} ({r.status})</option>
                             ))}
