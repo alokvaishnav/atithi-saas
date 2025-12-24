@@ -70,6 +70,7 @@ export const AuthProvider = ({ children }) => {
         updateGlobalProfile 
         
     }}>
+      {/* 🛡️ Only render children when initial auth check is done */}
       {!loading && children}
     </AuthContext.Provider>
   );

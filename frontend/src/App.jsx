@@ -40,17 +40,24 @@ import Pricing from './pages/Pricing';
 
 // 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isAuthenticated, role, loading } = useAuth(); 
+  const { isAuthenticated, loading } = useAuth(); 
 
   // 0. Loading State
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-slate-50 gap-3">
-        <Loader2 className="animate-spin text-blue-600" />
-        <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">Verifying Access...</span>
-      </div>
-    );
-  }
+  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-900"><Loader2 className="text-white animate-spin"/></div>;
+  return (
+    <Routes>
+        {/* 🔓 PUBLIC ROUTES */}
+        <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
+        
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} /> 
+        <Route path="/folio-live/:id" element={<DigitalFolio />} />
+
+        {/* 🔒 PROTECTED APP ARCHITECTURE */}
+        <Route path="/*" element={<AppLayout />} />
+    </Routes>
+  );
+}
 
   // A. Check if logged in
   if (!isAuthenticated) {
