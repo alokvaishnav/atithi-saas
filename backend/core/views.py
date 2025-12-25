@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny 
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser # 👈 Added IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken 
 from django.contrib.auth import get_user_model
 from django.db.models import Q 
@@ -117,14 +117,24 @@ class StaffViewSet(viewsets.ModelViewSet):
 # ==========================================
 # SUPPORT PAGE CONFIG VIEW
 # ==========================================
-class SaaSConfigView(viewsets.ReadOnlyModelViewSet):
+class SaaSConfigView(viewsets.ModelViewSet): # 👈 Changed to ModelViewSet to allow updates
     """
     Publicly accessible (authenticated) view to get Support Info.
     Fetched from the 'Software Company Settings' in Admin Panel.
+    Write access is restricted to Super Admin only.
     """
     queryset = SaaSConfig.objects.all()
     serializer_class = SaaSConfigSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        Custom Permissions:
+        - Read (GET): Authenticated Users (Hotel Owners/Staff)
+        - Write (POST/PUT/DELETE): Super Admin Only
+        """
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAdminUser()]
+        return [permissions.IsAuthenticated()]
 
 # ==========================================
 # 🔐 PASSWORD RESET FLOW

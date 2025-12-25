@@ -150,13 +150,25 @@ const Support = () => {
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-4 relative z-10 w-full lg:w-auto">
-          <a href={`mailto:${info?.support_email}`} className="flex-1 bg-white text-slate-900 px-10 py-5 rounded-[24px] font-black flex items-center justify-center gap-3 hover:bg-slate-100 transition-all shadow-2xl cursor-pointer">
-            <MessageSquare size={20}/> Email Support
+        <div className="flex flex-col gap-4 relative z-10 w-full lg:w-auto">
+          {/* WhatsApp Button (Priority) */}
+          <a 
+            href={`https://wa.me/${info?.admin_whatsapp?.replace(/\D/g,'')}`} 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex-1 bg-emerald-500 text-white px-10 py-5 rounded-[24px] font-black flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 cursor-pointer"
+          >
+            <MessageSquare size={20}/> WhatsApp Support
           </a>
-          <a href={`tel:${info?.support_phone}`} className="flex-1 bg-blue-600 text-white px-10 py-5 rounded-[24px] font-black flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 cursor-pointer">
-            <PhoneCall size={20}/> {info?.support_phone || 'Contact Support'}
-          </a>
+
+          <div className="flex gap-4">
+            <a href={`mailto:${info?.support_email}`} className="flex-1 bg-white text-slate-900 px-8 py-5 rounded-[24px] font-black flex items-center justify-center gap-3 hover:bg-slate-100 transition-all shadow-2xl cursor-pointer">
+                <Mail size={20}/> Email
+            </a>
+            <a href={`tel:${info?.support_phone}`} className="flex-1 bg-blue-600 text-white px-8 py-5 rounded-[24px] font-black flex items-center justify-center gap-3 hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 cursor-pointer">
+                <PhoneCall size={20}/> Call
+            </a>
+          </div>
         </div>
       </div>
 

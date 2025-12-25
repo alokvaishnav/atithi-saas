@@ -12,7 +12,6 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register'; 
 import DigitalFolio from './pages/DigitalFolio';
-// 👇 NEW IMPORTS
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 
@@ -41,6 +40,7 @@ import Accounting from './pages/Accounting';
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
+import SuperAdmin from './pages/SuperAdmin'; // 👈 NEW IMPORT
 
 // 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -154,6 +154,12 @@ const AppLayout = () => {
                   <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
                   <Route path="/support" element={<Support />} />
                   
+                  {/* 👇 NEW SUPER ADMIN ROUTE */}
+                  <Route path="/super-admin" element={
+                    // Note: Your backend will also enforce admin-only access
+                    <SuperAdmin />
+                  } />
+
                   <Route path="/staff" element={
                     <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                       <Staff />
@@ -228,7 +234,7 @@ const AppContent = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} /> 
         
-        {/* 👇 NEW PASSWORD RESET ROUTES */}
+        {/* 👇 PASSWORD RESET ROUTES */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 

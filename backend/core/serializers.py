@@ -4,17 +4,28 @@ from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from .models import User, SaaSConfig, Subscription
 
+# 👇 NEW: Subscription Serializer for Admin View
+class SubscriptionSerializer(serializers.ModelSerializer):
+    days_left = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = Subscription
+        fields = ['plan_name', 'expiry_date', 'is_active', 'days_left', 'license_key']
+
 class UserSerializer(serializers.ModelSerializer):
     # Added hotel_name helper for Frontend Context (Sidebar/Header)
     hotel_name = serializers.CharField(source='get_hotel_name', read_only=True)
+    
+    # 👇 NEW: Include Subscription details if available (For Admin Panel)
+    subscription = SubscriptionSerializer(read_only=True)
 
     class Meta:
         model = User
-        # Added 'hotel_name' to fields list
-        fields = ['id', 'username', 'email', 'role', 'phone', 'password', 'hotel_owner', 'date_joined', 'hotel_name']
+        # Added 'hotel_name' and 'subscription' to fields list
+        fields = ['id', 'username', 'email', 'role', 'phone', 'password', 'hotel_owner', 'date_joined', 'hotel_name', 'subscription']
         
-        # 'hotel_owner' and 'hotel_name' are read-only
-        read_only_fields = ['id', 'date_joined', 'hotel_owner', 'hotel_name']
+        # 'hotel_owner', 'hotel_name', and 'subscription' are read-only
+        read_only_fields = ['id', 'date_joined', 'hotel_owner', 'hotel_name', 'subscription']
         
         extra_kwargs = {
             'password': {'write_only': True},

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
-  BookOpen, ChevronRight, Settings, Package, CreditCard, X // 👈 Added X Icon for Mobile
+  BookOpen, ChevronRight, Settings, Package, CreditCard, X, Server
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -181,6 +181,33 @@ const Sidebar = ({ isOpen, onClose }) => {
               </div>
             )
           ))}
+
+          {/* 👇 SUPER ADMIN BUTTON (Hidden for Staff) */}
+          {/* Note: This is client-side visibility only. Backend still protects the API. */}
+          {/* Only showing for 'OWNER' role as a proxy for Admin/Owner access */}
+          {role === 'OWNER' && (
+             <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+                <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
+                  System
+                </div>
+                <button
+                  onClick={() => navigate('/super-admin')}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
+                    location.pathname === '/super-admin' 
+                      ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
+                      : 'text-purple-300 hover:bg-purple-500/10'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
+                      <Server size={18} />
+                    </span>
+                    <span className="uppercase tracking-widest">Super Admin</span>
+                  </div>
+                </button>
+             </div>
+          )}
+
         </nav>
 
         {/* User Session Footer */}
