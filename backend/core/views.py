@@ -1,12 +1,12 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny # 👈 Added AllowAny
-from rest_framework_simplejwt.tokens import RefreshToken # 👈 Added for Auto-Login
+from rest_framework.permissions import IsAuthenticated, AllowAny 
+from rest_framework_simplejwt.tokens import RefreshToken 
 from django.contrib.auth import get_user_model
 from django.db.models import Q 
 from .models import SaaSConfig
-from .serializers import UserSerializer, SaaSConfigSerializer, UserRegistrationSerializer # 👈 Added Registration Serializer
+from .serializers import UserSerializer, SaaSConfigSerializer
 
 User = get_user_model()
 
@@ -114,33 +114,3 @@ class SaaSConfigView(viewsets.ReadOnlyModelViewSet):
     queryset = SaaSConfig.objects.all()
     serializer_class = SaaSConfigSerializer
     permission_classes = [permissions.IsAuthenticated]
-
-# ==========================================
-# 👇 NEW: PUBLIC REGISTRATION VIEW
-# ==========================================
-class RegisterView(APIView):
-    """
-    Handles Public Sign-Ups.
-    Accessible by ANYONE (No Login Required).
-    """
-    permission_classes = [AllowAny] # Open to the public
-
-    def post(self, request):
-        serializer = UserRegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            
-            # Auto-Login: Generate Token immediately so they don't have to login manually
-            refresh = RefreshToken.for_user(user)
-            
-            return Response({
-                "status": "User Registered Successfully",
-                "user_id": user.id,
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-                "role": user.role,
-                "hotel_name": getattr(user, 'hotel_name', 'My New Hotel')
-            }, status=status.HTTP_201_CREATED)
-            
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    

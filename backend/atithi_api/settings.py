@@ -82,28 +82,33 @@ WSGI_APPLICATION = 'atithi_api.wsgi.application'
 # --------------------------------------------------------
 # 🗄️ DATABASE CONFIGURATION (Render.com)
 # --------------------------------------------------------
-# Default to SQLite for safety, overridden by PostgreSQL below
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
 
 # 🚀 PRODUCTION DATABASE CONNECTION
-# ✅ FIX: Prefer env var for Manual DB URL to avoid leaking credentials
-MANUAL_DB_URL = os.environ.get('MANUAL_DB_URL', "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr")
+# ✅ SECURITY FIX: Removed hardcoded URL. Now reads strictly from Environment Variable.
+MANUAL_DB_URL = os.environ.get('MANUAL_DB_URL') 
 
 if os.environ.get('DATABASE_URL'):
-    # Production Environment (Render automatically sets DATABASE_URL)
-    DATABASES['default'] = dj_database_url.config(conn_max_age=600, ssl_require=True)
+    # 1. Production Environment (Render automatically sets DATABASE_URL)
+    DATABASES = {
+        'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
+    }
+elif MANUAL_DB_URL:
+    # 2. Local/Manual Connection (If MANUAL_DB_URL is set in .env)
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=MANUAL_DB_URL,
+            conn_max_age=600,
+            ssl_require=True
+        )
+    }
 else:
-    # Local Development (Connect to Cloud DB manually)
-    DATABASES['default'] = dj_database_url.config(
-        default=MANUAL_DB_URL,
-        conn_max_age=600,
-        ssl_require=True
-    )
+    # 3. Fallback to SQLite (Safe for local dev without internet)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # --------------------------------------------------------
 # 🔒 AUTH & JWT SETTINGS

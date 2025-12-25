@@ -145,10 +145,40 @@ class BookingSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """
         Custom validation to ensure logical booking consistency.
+        Checks for:
+        1. Check-out date > Check-in date
+        2. Room availability (Prevents Double Bookings)
         """
-        if data.get('check_in_date') and data.get('check_out_date'):
-            if data['check_out_date'] <= data['check_in_date']:
+        # Retrieve values, fallback to instance values for updates (PATCH)
+        check_in = data.get('check_in_date')
+        check_out = data.get('check_out_date')
+        room = data.get('room')
+
+        if self.instance:
+            check_in = check_in or self.instance.check_in_date
+            check_out = check_out or self.instance.check_out_date
+            room = room or self.instance.room
+
+        # 1. Date Order Check
+        if check_in and check_out:
+            if check_out <= check_in:
                 raise serializers.ValidationError("Check-out must be after check-in.")
+
+            # 2. Overlap Check (Only if Room is assigned)
+            if room:
+                overlap = Booking.objects.filter(
+                    room=room,
+                    status__in=['CONFIRMED', 'CHECKED_IN']
+                ).exclude(pk=self.instance.pk if self.instance else None).filter(
+                    check_in_date__lt=check_out,
+                    check_out_date__gt=check_in
+                )
+
+                if overlap.exists():
+                    raise serializers.ValidationError(
+                        f"Room {room.room_number} is already occupied for these dates."
+                    )
+        
         return data
 
 # ============================
