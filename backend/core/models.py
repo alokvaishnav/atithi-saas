@@ -87,8 +87,19 @@ class Subscription(models.Model):
     """
     Control SaaS Access. If expired, the Owner cannot login.
     """
+    # ✅ Added PLAN_CHOICES for Admin Dropdown
+    PLAN_CHOICES = (
+        ('TRIAL', 'Trial (14 Days)'),
+        ('STARTER', 'Starter Plan (₹999)'),
+        ('PRO', 'Professional Plan (₹1999)'),
+        ('ENTERPRISE', 'Enterprise Plan (₹2999)'),
+    )
+
     owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
-    plan_name = models.CharField(max_length=50, default="TRIAL") # TRIAL, PRO, ENTERPRISE
+    
+    # ✅ Updated plan_name to use choices
+    plan_name = models.CharField(max_length=50, choices=PLAN_CHOICES, default="TRIAL") 
+    
     license_key = models.CharField(max_length=100, unique=True, blank=True)
     start_date = models.DateTimeField(auto_now_add=True)
     expiry_date = models.DateTimeField()

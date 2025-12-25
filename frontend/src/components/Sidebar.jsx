@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
-  BookOpen, ChevronRight, Settings, Package // 👈 Added Package Icon
+  BookOpen, ChevronRight, Settings, Package, CreditCard // 👈 Added CreditCard Icon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -103,6 +103,8 @@ const Sidebar = () => {
       roles: ['OWNER'], // 👈 Restricted to OWNER only
       items: [
         { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
+        // 👇 NEW: Added Subscription Link here so owners can find the Pricing page
+        { icon: <CreditCard size={18} />, label: 'Subscription Plan', path: '/pricing' },
       ]
     },
     {
