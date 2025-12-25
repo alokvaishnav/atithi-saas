@@ -4,9 +4,6 @@ from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
-# 👇 NEW IMPORTS FOR ADMIN CREATOR
-from django.contrib.auth import get_user_model
-
 # 🏨 HOTEL APP IMPORTS
 from hotel.views import (
     RoomViewSet, 
@@ -20,7 +17,6 @@ from hotel.views import (
     HousekeepingTaskViewSet, 
     AnalyticsView,
     PublicFolioView,
-    # Removed seed_data_trigger
     InvoicePDFView, 
     AdvancedAnalyticsView, 
     ExportReportView, 
@@ -53,20 +49,6 @@ def home_view(request):
         "version": "2.5 (Full Enterprise Features)",
         "admin_panel": "/admin/"
     })
-
-# 👇 TEMPORARY SUPER ADMIN CREATOR (DELETE AFTER USE)
-def create_super_admin(request):
-    User = get_user_model()
-    try:
-        # Check if 'admin' user already exists
-        if not User.objects.filter(username="admin").exists():
-            # Create the Superuser
-            User.objects.create_superuser("admin", "admin@atithi.com", "Admin@123")
-            return JsonResponse({"status": "SUCCESS", "message": "Superuser created! Login with: admin / Admin@123"})
-        else:
-            return JsonResponse({"status": "INFO", "message": "User 'admin' already exists."})
-    except Exception as e:
-        return JsonResponse({"status": "ERROR", "message": str(e)})
 
 router = DefaultRouter()
 # --- Existing Features ---
@@ -128,7 +110,4 @@ urlpatterns = [
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
     path('api/settings/whatsapp/', HotelWhatsAppSettingsView.as_view()),
-
-    # 👇 SECRET ADMIN CREATION LINK (DELETE THIS LINE AFTER USE)
-    path('secret-admin-create/', create_super_admin),
 ]
