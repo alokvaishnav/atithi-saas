@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react';
 import { 
-  Building, Users, Loader2, LogIn, LogOut, 
-  CheckCircle, XCircle, AlertTriangle, Briefcase,
-  Sparkles, TrendingUp, Wallet, BarChart3, Clock, AlertCircle, TrendingDown,
-  ArrowUpRight, MapPin, Calendar, ShieldCheck,
-  Package, Brush // 👈 Added New Icons
+  Building, Loader2, LogIn, LogOut, 
+  CheckCircle, AlertCircle, 
+  Sparkles, TrendingUp, Wallet, BarChart3, Clock, TrendingDown,
+  ArrowUpRight, ShieldCheck, Package, Brush 
 } from 'lucide-react'; 
-import { useNavigate } from 'react-router-dom'; // 👈 Added for navigation
+import { useNavigate } from 'react-router-dom'; 
 import { API_URL } from '../config'; 
 
 const Dashboard = () => {
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [analytics, setAnalytics] = useState(null);
-  const [inventory, setInventory] = useState([]); // 👈 New State
-  const [tasks, setTasks] = useState([]);         // 👈 New State
+  const [inventory, setInventory] = useState([]); 
+  const [tasks, setTasks] = useState([]);         
   const [loading, setLoading] = useState(true);
 
-  const navigate = useNavigate(); // 👈 For clicking alerts
+  const navigate = useNavigate(); 
   const token = localStorage.getItem('access_token');
   const userRole = localStorage.getItem('user_role');
 
@@ -27,13 +26,12 @@ const Dashboard = () => {
       
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      // ⚡ FETCH EVERYTHING IN PARALLEL
       const [resRooms, resBookings, resAnalytics, resInv, resTasks] = await Promise.all([
         fetch(API_URL + '/api/rooms/', { headers }),
         fetch(API_URL + '/api/bookings/', { headers }),
         fetch(API_URL + '/api/analytics/', { headers }),
-        fetch(API_URL + '/api/inventory/', { headers }),    // 👈 Fetch Inventory
-        fetch(API_URL + '/api/housekeeping/', { headers })  // 👈 Fetch Tasks
+        fetch(API_URL + '/api/inventory/', { headers }),    
+        fetch(API_URL + '/api/housekeeping/', { headers })  
       ]);
 
       if (resRooms.ok) setRooms(await resRooms.json());
@@ -55,7 +53,6 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // 🧮 OPERATIONAL LOGIC
   const todayStr = new Date().toISOString().split('T')[0];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
@@ -77,12 +74,10 @@ const Dashboard = () => {
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
   const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
-  // 📊 Chart Logic
   const trendData = analytics?.trend || [];
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
   const maxRevenue = Math.max(...revenueValues, 5000);
 
-  // 🚨 NEW: Alert Logic
   const lowStockItems = Array.isArray(inventory) ? inventory.filter(i => i.current_stock <= i.min_stock_alert) : [];
   const pendingTasks = Array.isArray(tasks) ? tasks.filter(t => t.status !== 'COMPLETED') : [];
 
@@ -97,7 +92,8 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    // 👇 UPDATED: Responsive Padding (Small on Mobile, Large on PC)
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* 👋 DYNAMIC MANAGEMENT HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
@@ -106,31 +102,33 @@ const Dashboard = () => {
             <span className="bg-blue-600 text-white p-1 rounded-md"><ShieldCheck size={14}/></span>
             <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">Management Portal v2.1</p>
           </div>
-          <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Intelligence</h1>
+          {/* 👇 UPDATED: Text size auto-scales */}
+          <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Intelligence</h1>
           <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mt-3 flex items-center gap-2">
              <Clock size={12}/> Last Refreshed: {new Date().toLocaleTimeString()}
           </p>
         </div>
         
-        <div className="flex gap-4">
-            <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 shadow-sm text-right">
+        <div className="flex gap-4 w-full md:w-auto">
+            <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 shadow-sm text-right flex-1 md:flex-none">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Health</p>
                 <p className="text-xl font-black text-emerald-500">{healthScore}%</p>
             </div>
-            <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700">
+            <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700 flex-1 md:flex-none">
                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Personnel</p>
-                <p className="text-xl font-black text-white">{userRole}</p>
+                {/* 👇 UPDATED: Truncate long roles on small screens */}
+                <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto">{userRole}</p>
             </div>
         </div>
       </div>
 
-      {/* 🚨 NEW: CRITICAL ALERTS ROW (Inventory & Tasks) */}
+      {/* 🚨 CRITICAL ALERTS ROW */}
       {(lowStockItems.length > 0 || pendingTasks.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-10">
             {lowStockItems.length > 0 && (
                 <div 
                     onClick={() => navigate('/inventory')}
-                    className="bg-orange-50 border-2 border-orange-100 p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-orange-100 transition-colors"
+                    className="bg-orange-50 border-2 border-orange-100 p-4 md:p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-orange-100 transition-colors"
                 >
                     <div className="flex items-center gap-4">
                         <div className="bg-orange-200 p-3 rounded-2xl text-orange-700"><Package size={24}/></div>
@@ -146,7 +144,7 @@ const Dashboard = () => {
             {pendingTasks.length > 0 && (
                 <div 
                     onClick={() => navigate('/housekeeping')}
-                    className="bg-purple-50 border-2 border-purple-100 p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
+                    className="bg-purple-50 border-2 border-purple-100 p-4 md:p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
                 >
                     <div className="flex items-center gap-4">
                         <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Brush size={24}/></div>
@@ -162,49 +160,49 @@ const Dashboard = () => {
       )}
 
       {/* 📊 CORE FINANCIAL INTELLIGENCE */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
         {/* REVENUE */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
+        <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
           <div className="flex justify-between items-start mb-6">
-            <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
             <ArrowUpRight className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
           <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
-          <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_rev || 0).toLocaleString()}</h3>
+          <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_rev || 0).toLocaleString()}</h3>
         </div>
 
         {/* EXPENSES */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
+        <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
           <div className="flex justify-between items-start mb-6">
-            <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
             <AlertCircle className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
           <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Expenses</p>
-          <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_expenses || 0).toLocaleString()}</h3>
+          <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_expenses || 0).toLocaleString()}</h3>
         </div>
 
         {/* NET PROFIT */}
-        <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
+        <div className="bg-slate-900 p-6 md:p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
           <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
           <div className="relative z-10">
-            <div className="w-14 h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
             <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit Flow</p>
-            <h3 className="text-3xl font-black text-white italic tracking-tighter">₹{(analytics?.financials?.net_profit || 0).toLocaleString()}</h3>
+            <h3 className="text-2xl md:text-3xl font-black text-white italic tracking-tighter">₹{(analytics?.financials?.net_profit || 0).toLocaleString()}</h3>
           </div>
         </div>
 
         {/* ADVANCE LIABILITY */}
-        <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-orange-500 transition-all duration-500">
+        <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-orange-500 transition-all duration-500">
           <div className="flex justify-between items-start mb-6">
-            <div className="w-14 h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
           </div>
           <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Advance Float</p>
-          <h3 className="text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_advance || 0).toLocaleString()}</h3>
+          <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(analytics?.financials?.total_advance || 0).toLocaleString()}</h3>
         </div>
       </div>
 
       {/* 📈 OPERATIONAL KPI GRID */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
         {[
           { label: "DIRTY VACANT", val: dirtyVacant, icon: Sparkles, color: "text-orange-500", bg: "border-orange-200", desc: "Needs Cleaning" },
           { label: "CLEAN READY", val: cleanVacant, icon: CheckCircle, color: "text-teal-500", bg: "border-teal-200", desc: "Available to Sell" },
@@ -214,19 +212,19 @@ const Dashboard = () => {
           <div key={i} className={`bg-white p-6 rounded-[32px] shadow-sm border-l-8 ${kpi.bg} hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1`}>
             <div className="flex justify-between items-center mb-2">
               <kpi.icon className={kpi.color} size={24}/>
-              <span className="text-4xl font-black text-slate-800 tracking-tighter">{kpi.val}</span>
+              <span className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter">{kpi.val}</span>
             </div>
-            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{kpi.label}</p>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{kpi.desc}</p>
+            <p className="text-[9px] md:text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">{kpi.label}</p>
+            <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">{kpi.desc}</p>
           </div>
         ))}
       </div>
 
       {/* 🏢 INVENTORY DISTRIBUTION ENGINE */}
-      <div className="bg-white p-10 rounded-[48px] border border-slate-200 shadow-sm mb-10 group">
+      <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-200 shadow-sm mb-10 group">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h3 className="font-black text-slate-900 uppercase text-sm tracking-[0.3em]">Live Inventory Health</h3>
+            <h3 className="font-black text-slate-900 uppercase text-xs md:text-sm tracking-[0.3em]">Live Inventory Health</h3>
             <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Real-time room status distribution</p>
           </div>
           <div className="text-right">
@@ -242,7 +240,7 @@ const Dashboard = () => {
           <div style={{ width: `${(maintenance / totalRoomsCount) * 100}%` }} className="bg-red-600 h-full transition-all duration-1000 group-hover:brightness-110"></div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mt-10">
           <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div className="w-3 h-3 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]"></div> 
             <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Ready</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{cleanVacant} Units</p></div>
@@ -263,12 +261,12 @@ const Dashboard = () => {
       </div>
 
       {/* 📋 OPERATIONAL MANIFESTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-10">
         {/* Arrivals Card */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
-          <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-blue-50 transition-colors">
+          <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-blue-50 transition-colors">
             <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest">
-              <LogIn size={20} className="text-blue-600"/> Arriving Guest Manifest
+              <LogIn size={20} className="text-blue-600"/> Arrivals
             </h3>
             <span className="text-[9px] font-black px-3 py-1 bg-blue-100 text-blue-700 rounded-full tracking-widest uppercase italic">ETA Today</span>
           </div>
@@ -286,7 +284,7 @@ const Dashboard = () => {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td className="p-20 text-center text-slate-300 italic font-medium">No arrivals scheduled for current business date.</td></tr>
+                  <tr><td className="p-10 md:p-20 text-center text-slate-300 italic font-medium">No arrivals scheduled.</td></tr>
                 )}
               </tbody>
             </table>
@@ -295,9 +293,9 @@ const Dashboard = () => {
 
         {/* Departures Card */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
-          <div className="p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-red-50 transition-colors">
+          <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-red-50 transition-colors">
             <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest">
-              <LogOut size={20} className="text-red-600"/> Departure Settlement List
+              <LogOut size={20} className="text-red-600"/> Departures
             </h3>
             <span className="text-[9px] font-black px-3 py-1 bg-red-100 text-red-700 rounded-full tracking-widest uppercase italic">Out Today</span>
           </div>
@@ -312,11 +310,11 @@ const Dashboard = () => {
                     </td>
                     <td className="p-6 text-right">
                         <p className="text-red-600 font-black text-lg tracking-tighter">₹{(parseFloat(b.total_amount) - parseFloat(b.amount_paid)).toLocaleString()}</p>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Balance Due</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Due</p>
                     </td>
                   </tr>
                 )) : (
-                  <tr><td className="p-20 text-center text-slate-300 italic font-medium">No departures scheduled for current business date.</td></tr>
+                  <tr><td className="p-10 md:p-20 text-center text-slate-300 italic font-medium">No departures scheduled.</td></tr>
                 )}
               </tbody>
             </table>
@@ -324,15 +322,15 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 🚀 ANALYTICS TREND BAR (UPDATED: High Visibility) */}
+      {/* 🚀 ANALYTICS TREND BAR (Mobile Friendly) */}
       {trendData.length > 0 && (
-          <div className="mt-10 bg-slate-900 p-10 rounded-[48px] text-white overflow-hidden relative">
+          <div className="mt-10 bg-slate-900 p-6 md:p-10 rounded-[48px] text-white overflow-hidden relative">
               <div className="flex justify-between items-center mb-10 relative z-10">
-                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Revenue Velocity</h3>
+                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Revenue</h3>
                   <TrendingUp className="text-blue-400" size={20}/>
               </div>
               
-              <div className="flex items-end justify-between gap-4 h-40 relative z-10">
+              <div className="flex items-end justify-between gap-2 md:gap-4 h-40 relative z-10">
                   {trendData.map((t, i) => {
                       const dailyRevenue = Number(t.daily_revenue || 0); 
                       const heightPercent = maxRevenue > 0 ? (dailyRevenue / maxRevenue) * 100 : 0;
@@ -344,12 +342,14 @@ const Dashboard = () => {
                                   style={{ height: `${heightPercent}%` }} 
                                   className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 relative min-h-[4px]"
                                 >
-                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold opacity-70 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap">
+                                    {/* Hide tooltips on mobile to reduce clutter */}
+                                    <div className="hidden md:block absolute -top-6 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold opacity-70 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap">
                                         {dailyRevenue > 0 ? `₹${(dailyRevenue/1000).toFixed(1)}k` : ''}
                                     </div>
                                 </div>
                             </div>
-                            <p className="text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest">{t.date.split('-').slice(1).join('/')}</p>
+                            {/* Rotate date text on mobile to fit */}
+                            <p className="text-[8px] md:text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest transform -rotate-45 md:rotate-0 origin-top-left md:origin-center translate-y-2 md:translate-y-0">{t.date.split('-').slice(1).join('/')}</p>
                         </div>
                       );
                   })}

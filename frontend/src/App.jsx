@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ShieldAlert, LogOut, Loader2 } from 'lucide-react';
+import { ShieldAlert, LogOut, Loader2, Menu } from 'lucide-react'; // 👈 Added Menu Icon
+import { useState } from 'react'; // 👈 Added useState for Mobile Sidebar
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // --- COMPONENTS ---
@@ -60,13 +61,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   // B. Check if role is authorized
   if (allowedRoles && !allowedRoles.includes(role)) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center p-12 bg-white shadow-2xl rounded-[40px] border border-red-100 max-w-md animate-in zoom-in duration-300">
+      <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="text-center p-8 md:p-12 bg-white shadow-2xl rounded-[40px] border border-red-100 max-w-md animate-in zoom-in duration-300">
           <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
             <ShieldAlert size={40} />
           </div>
-          <h2 className="text-3xl font-black text-slate-800 mb-3 tracking-tighter uppercase italic">Access Restricted</h2>
-          <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+          <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-3 tracking-tighter uppercase italic">Access Restricted</h2>
+          <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm md:text-base">
             The <strong>{role}</strong> role is not authorized to access this department.
           </p>
           <a href="/dashboard" className="inline-block w-full bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-black transition-all shadow-xl shadow-slate-200 uppercase text-xs tracking-widest">
@@ -82,31 +83,44 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 // 🏗️ THE APP LAYOUT (Sidebar + Header + Content)
 const AppLayout = () => {
-    // 🔍 FIX: Added 'loading' to the destructuring here
     const { role, logout, hotelName, loading } = useAuth(); 
+    const [sidebarOpen, setSidebarOpen] = useState(false); // 👈 Mobile Menu State
 
     return (
-      // 🔍 FIX: Passing loading state to ProtectedRoute
       <ProtectedRoute loading={loading}>
         <LicenseLock>
           <div className="flex h-screen bg-slate-50 overflow-hidden">
-            <Sidebar />
+            
+            {/* 🛡️ SIDEBAR with Mobile Props */}
+            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              <header className="bg-white border-b border-slate-200 p-5 px-10 flex justify-between items-center z-10 shadow-sm">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-800 tracking-tighter italic leading-none">
-                        {hotelName || "ATITHI ENTERPRISE"}
-                    </h2>
-                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1">Property Operations Cloud</p>
+              <header className="bg-white border-b border-slate-200 p-4 md:p-5 md:px-10 flex justify-between items-center z-10 shadow-sm sticky top-0">
+                
+                <div className="flex items-center gap-4">
+                    {/* 🍔 MOBILE HAMBURGER BUTTON */}
+                    <button 
+                        onClick={() => setSidebarOpen(true)}
+                        className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                    >
+                        <Menu size={24} />
+                    </button>
+
+                    <div>
+                        <h2 className="text-lg md:text-2xl font-black text-slate-800 tracking-tighter italic leading-none truncate max-w-[200px] md:max-w-none">
+                            {hotelName || "ATITHI ENTERPRISE"}
+                        </h2>
+                        <p className="text-[8px] md:text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1 hidden md:block">Property Operations Cloud</p>
+                    </div>
                 </div>
 
-                <div className="flex items-center space-x-8">
+                <div className="flex items-center space-x-4 md:space-x-8">
                   <div className="text-right hidden md:block">
                     <p className="text-sm font-black text-slate-800 leading-none">Management Console</p>
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Identity: {role}</span>
                   </div>
                   
-                  <div className="flex items-center gap-3 border-l pl-8 border-slate-100">
+                  <div className="flex items-center gap-3 md:border-l md:pl-8 border-slate-100">
                     <button 
                       onClick={() => { if(window.confirm("Logout?")) logout() }} 
                       className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
@@ -115,14 +129,14 @@ const AppLayout = () => {
                       <LogOut size={20} />
                     </button>
                     
-                    <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black shadow-xl shadow-slate-200 transform hover:scale-105 transition-transform cursor-pointer">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black shadow-xl shadow-slate-200 transform hover:scale-105 transition-transform cursor-pointer text-sm md:text-base">
                       {role ? role.charAt(0).toUpperCase() : 'U'}
                     </div>
                   </div>
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
                 <Routes>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
