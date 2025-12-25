@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
   Save, Building, CreditCard, Mail, Phone, MapPin, 
-  Percent, Globe, Loader2, Building2, Key, ShieldCheck, Utensils 
+  Percent, Globe, Loader2, Building2, Key, ShieldCheck, Utensils, Send
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 import { useAuth } from '../context/AuthContext'; 
@@ -13,7 +13,7 @@ const Settings = () => {
   // 🧠 Use Context to update Global State instantly
   const { updateGlobalProfile } = useAuth(); 
 
-  // 1. Property Settings State (Updated with NEW TAX FIELDS)
+  // 1. Property Settings State
   const [formData, setFormData] = useState({
     hotel_name: '',
     gstin: '',
@@ -21,9 +21,9 @@ const Settings = () => {
     email: '',
     address: '',
     currency_symbol: '₹',
-    room_tax_rate: '12.00',    // Existing
-    food_tax_rate: '5.00',     // 👈 NEW
-    service_tax_rate: '18.00'  // 👈 NEW
+    room_tax_rate: '12.00',
+    food_tax_rate: '5.00',
+    service_tax_rate: '18.00'
   });
 
   // 2. Email Automation State
@@ -47,7 +47,6 @@ const Settings = () => {
         });
         const propData = await propRes.json();
         
-        // If settings exist, populate form
         if (Array.isArray(propData) && propData.length > 0) {
           setFormData(propData[0]);
           setSettingId(propData[0].id);
@@ -103,16 +102,12 @@ const Settings = () => {
           body: JSON.stringify(emailData)
       });
 
-      // Wait for both requests to finish
+      // Wait for both
       const [propRes, emailRes] = await Promise.all([propReq, emailReq]);
 
       if (propRes.ok && emailRes.ok) {
-        
-        // 🧠 THE MAGIC: Update Global Context Instantly
         updateGlobalProfile(formData.hotel_name);
-
         alert("✅ All System Configurations Updated Successfully!");
-        
       } else {
         alert("⚠️ Saved partially. Please check inputs.");
       }
@@ -176,7 +171,7 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* SECTION 2: FINANCIALS (UPDATED WITH TAXES) */}
+        {/* SECTION 2: FINANCIALS */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
             <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center"><CreditCard size={20}/></div>
@@ -195,50 +190,41 @@ const Settings = () => {
               />
             </div>
             
-            {/* 🆕 ROOM TAX */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Room GST %</label>
               <div className="relative">
                 <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
                 <input 
-                  type="number" 
-                  step="0.01"
+                  type="number" step="0.01"
                   className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
                   value={formData.room_tax_rate}
                   onChange={e => setFormData({...formData, room_tax_rate: e.target.value})}
-                  placeholder="12.00"
                 />
               </div>
             </div>
 
-            {/* 🆕 FOOD TAX */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Food GST %</label>
               <div className="relative">
                 <Utensils className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
                 <input 
-                  type="number" 
-                  step="0.01"
+                  type="number" step="0.01"
                   className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
                   value={formData.food_tax_rate}
                   onChange={e => setFormData({...formData, food_tax_rate: e.target.value})}
-                  placeholder="5.00"
                 />
               </div>
             </div>
 
-            {/* 🆕 SERVICE TAX */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Other Service GST %</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Service GST %</label>
               <div className="relative">
                 <Percent className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
                 <input 
-                  type="number" 
-                  step="0.01"
+                  type="number" step="0.01"
                   className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-black text-xl border-2 border-transparent focus:border-green-500 outline-none transition-all"
                   value={formData.service_tax_rate}
                   onChange={e => setFormData({...formData, service_tax_rate: e.target.value})}
-                  placeholder="18.00"
                 />
               </div>
             </div>
@@ -296,10 +282,10 @@ const Settings = () => {
         {/* SECTION 4: EMAIL AUTOMATION */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
           <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-            <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Mail size={20}/></div>
+            <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Send size={20}/></div>
             <div>
-                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Email Automation</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">For Sending Invoices</p>
+                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">SMTP Email Automation</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Connect Your Gmail to Send Confirmations & Invoices</p>
             </div>
           </div>
 
@@ -331,7 +317,7 @@ const Settings = () => {
                 />
               </div>
               <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1 font-bold ml-2">
-                 <ShieldCheck size={12}/> Security Note: Use a Google App Password, not your login password.
+                 <ShieldCheck size={12}/> Use a <strong>Google App Password</strong> (Not your login password).
               </p>
             </div>
           </div>
