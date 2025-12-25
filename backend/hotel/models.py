@@ -3,7 +3,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
-from django.core.mail import send_mail
+# ✅ IMPORT EMAIL UTILITIES
+from django.core.mail import EmailMessage, get_connection
 
 # ==========================================
 # 1. ROOM MANAGEMENT
@@ -22,59 +23,51 @@ class Room(models.Model):
         ('MAINTENANCE', 'Maintenance')
     )
     
-    # 🔗 SAAS ISOLATION: Link Room to Specific Hotel Owner
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='rooms', null=True, blank=True)
-    
     room_number = models.CharField(max_length=10) 
     room_type = models.CharField(max_length=10, choices=ROOM_TYPES)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
     
     class Meta:
-        # Ensures room number is unique ONLY within the same hotel (Owner)
         unique_together = ('owner', 'room_number')
 
     def __str__(self):
         return f"Room {self.room_number} [{self.get_status_display()}]"
 
 # ==========================================
-# 2. GUEST DATA (Enterprise Identity Profile)
+# 2. GUEST DATA
 # ==========================================
 class Guest(models.Model):
-    # 🔗 SAAS ISOLATION: Guests belong to a specific Hotel Database
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='guests', null=True, blank=True)
-
     full_name = models.CharField(max_length=100)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=15)
-    
-    # Identity Tracking (Required for Legal GRC)
     id_type = models.CharField(max_length=50, blank=True, null=True) 
     id_proof_number = models.CharField(max_length=50, blank=True)
     address = models.TextField(blank=True)
     nationality = models.CharField(max_length=50, default="Indian")
-    
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.full_name
 
 # ==========================================
-# 3. INVENTORY MANAGEMENT (New Feature 📦)
+# 3. INVENTORY MANAGEMENT
 # ==========================================
 class InventoryItem(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='inventory', null=True, blank=True)
     name = models.CharField(max_length=100)
     current_stock = models.IntegerField(default=0)
     min_stock_alert = models.IntegerField(default=10)
-    unit = models.CharField(max_length=20, default="pcs") # pcs, kg, ltr
+    unit = models.CharField(max_length=20, default="pcs") 
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
         return f"{self.name} ({self.current_stock} {self.unit})"
 
 # ==========================================
-# 4. BOOKINGS & BILLING (Core Logic Engine)
+# 4. BOOKINGS & BILLING
 # ==========================================
 class Booking(models.Model):
     STATUS_CHOICES = (
@@ -85,30 +78,24 @@ class Booking(models.Model):
         ('CANCELLED', 'Cancelled')
     )
 
-    # 🔗 SAAS ISOLATION
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='bookings', null=True, blank=True)
-
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True)
     check_in_date = models.DateTimeField() 
     check_out_date = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
     
-    # Travel Logistics for Police/Legal Reporting
     purpose_of_visit = models.CharField(max_length=100, blank=True, null=True)
     coming_from = models.CharField(max_length=100, blank=True, null=True)
     going_to = models.CharField(max_length=100, blank=True, null=True)
 
-    # Financial breakdown
     subtotal_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0) 
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)      
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)    
     
-    # Payment Tracking
     advance_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0) 
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)  
     
-    # Audit Trail
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='bookings_created')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -117,9 +104,8 @@ class Booking(models.Model):
             if self.check_out_date <= self.check_in_date:
                 raise ValidationError("Check-out must be after check-in.")
 
-            # Filter overlap ONLY for rooms belonging to this booking's owner
             overlap = Booking.objects.filter(
-                owner=self.owner,  # 👈 Crucial SaaS Filter
+                owner=self.owner,
                 room=self.room,
                 status__in=['CONFIRMED', 'CHECKED_IN']
             ).exclude(pk=self.pk).filter(
@@ -133,11 +119,11 @@ class Booking(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None 
         
+        # 1. Calculate Financials
         if self.room and self.check_in_date and self.check_out_date:
             delta = self.check_out_date - self.check_in_date
             nights = max(delta.days, 1)
             
-            # ✅ FIX: Fetch Dynamic Tax Settings from Owner
             settings = PropertySetting.objects.filter(owner=self.owner).first()
             room_tax_rate = settings.room_tax_rate if settings else Decimal('12.00')
 
@@ -151,18 +137,39 @@ class Booking(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-        # 🛑 DISABLED FOR STABILITY: The email server is timing out and crashing the app.
-        # Uncomment this ONLY after configuring EMAIL_USER and EMAIL_PASS in Render Environment Variables.
-        # if is_new and self.guest.email:
-        #     self.send_confirmation_email()
+        # 2. ✅ AUTOMATED EMAIL (Using Hotel's Custom SMTP)
+        if is_new and self.guest.email:
+            self.send_confirmation_email()
 
     def send_confirmation_email(self):
         """
-        Sends an email receipt. currently disabled to prevent server crashes on Render
-        until SMTP credentials are set up.
+        Sends email using the HOTEL OWNER'S SMTP credentials.
+        Prevents app crash if settings are missing.
         """
         try:
-            hotel_name = self.owner.hotel_profile.hotel_name if hasattr(self.owner, 'hotel_profile') else 'Atithi Hotel'
+            # Import strictly inside method to avoid circular dependency
+            from core.models import HotelSMTPSettings
+            
+            # 1. Get SMTP Settings
+            smtp_config = HotelSMTPSettings.objects.filter(owner=self.owner).first()
+            
+            if not smtp_config:
+                print(f"Skipping email: No SMTP Settings found for {self.owner.username}")
+                return
+
+            # 2. Create Custom Connection
+            connection = get_connection(
+                host=smtp_config.email_host,
+                port=smtp_config.email_port,
+                username=smtp_config.email_host_user,
+                password=smtp_config.email_host_password,
+                use_tls=True
+            )
+
+            # 3. Create Email Content
+            hotel_settings = PropertySetting.objects.filter(owner=self.owner).first()
+            hotel_name = hotel_settings.hotel_name if hotel_settings else 'Atithi Hotel'
+            
             subject = f"Booking Confirmed at {hotel_name} - ID: {self.id}"
             message = (
                 f"Dear {self.guest.full_name},\n\n"
@@ -172,12 +179,24 @@ class Booking(models.Model):
                 f"Total: ₹{self.total_amount}\n"
                 f"Advance: ₹{self.advance_paid}\n"
                 f"Balance: ₹{self.balance_due}\n\n"
-                f"Thank you for choosing us!"
+                f"Thank you for choosing us!\n\n"
+                f"Regards,\n{hotel_name}"
             )
-            # send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.guest.email])
-            pass 
+            
+            # 4. Send
+            email = EmailMessage(
+                subject,
+                message,
+                smtp_config.email_host_user, # FROM: Hotel Email
+                [self.guest.email],          # TO: Guest Email
+                connection=connection        # VIA: Hotel Credentials
+            )
+            email.send()
+            print(f"Email sent via {smtp_config.email_host_user}")
+
         except Exception as e:
-            print(f"Email failed: {e}")
+            # 🛡️ Silently fail so the Booking still saves!
+            print(f"Email delivery failed: {e}")
 
     @property
     def balance_due(self):
@@ -188,7 +207,7 @@ class Booking(models.Model):
         return f"B-{self.id} | {self.guest.full_name}"
 
 # ==========================================
-# 5. POS & SERVICES (With Inventory Link)
+# 5. POS & SERVICES
 # ==========================================
 class Service(models.Model):
     CATEGORY_CHOICES = (
@@ -199,22 +218,17 @@ class Service(models.Model):
         ('OTHER', 'Other')
     )
     
-    # 🔗 SAAS ISOLATION
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='services', null=True, blank=True)
-
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2) 
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='FOOD')
     is_active = models.BooleanField(default=True)
-    
-    # 📦 LINK TO INVENTORY: Buying this service reduces stock of this item
     linked_inventory_item = models.ForeignKey(InventoryItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="linked_services")
 
     def __str__(self):
         return f"{self.name} (₹{self.price})"
 
 class BookingCharge(models.Model):
-    # Linked to Booking, which is already Linked to Owner. So we are safe here.
     booking = models.ForeignKey(Booking, related_name='charges', on_delete=models.CASCADE)
     service = models.ForeignKey(Service, on_delete=models.SET_NULL, null=True)
     description = models.CharField(max_length=200, blank=True)
@@ -230,8 +244,6 @@ class BookingCharge(models.Model):
         
         if self.service:
             self.subtotal = self.service.price * self.quantity
-            
-            # ✅ FIX: Fetch Dynamic Tax Settings from Owner
             settings = PropertySetting.objects.filter(owner=self.booking.owner).first()
             
             if self.service.category == 'FOOD':
@@ -242,21 +254,17 @@ class BookingCharge(models.Model):
             self.tax_amount = (self.subtotal * (rate / Decimal('100.00'))).quantize(Decimal('0.01'))
             self.total_cost = self.subtotal + self.tax_amount
             
-            # 📦 INVENTORY DEDUCTION LOGIC
             if is_new and self.service.linked_inventory_item:
                 item = self.service.linked_inventory_item
-                
-                # 🛑 FIX: Prevent Negative Inventory
                 if item.current_stock < self.quantity:
                     raise ValidationError(f"Not enough stock! Only {item.current_stock} left of {item.name}.")
-                
                 item.current_stock -= self.quantity
                 item.save()
 
         super().save(*args, **kwargs)
 
 # ==========================================
-# 6. HOUSEKEEPING (New Feature 🧹)
+# 6. HOUSEKEEPING
 # ==========================================
 class HousekeepingTask(models.Model):
     STATUS_CHOICES = (
@@ -277,7 +285,7 @@ class HousekeepingTask(models.Model):
         return f"{self.room.room_number} - {self.status}"
 
 # ==========================================
-# 7. EXPENSE TRACKING (Financial Outflow)
+# 7. EXPENSE TRACKING
 # ==========================================
 class Expense(models.Model):
     CATEGORY_CHOICES = [
@@ -289,9 +297,7 @@ class Expense(models.Model):
         ('OTHER', 'Miscellaneous'),
     ]
 
-    # 🔗 SAAS ISOLATION
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
-
     title = models.CharField(max_length=200)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='OTHER')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -304,22 +310,16 @@ class Expense(models.Model):
         return f"{self.title} - ₹{self.amount}"
 
 # ==========================================
-# 8. PROPERTY SETTINGS (White-Label Config)
+# 8. PROPERTY SETTINGS
 # ==========================================
 class PropertySetting(models.Model):
-    # 🔗 SAAS ISOLATION: The Master Link
     owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='hotel_profile', null=True, blank=True)
-
     hotel_name = models.CharField(max_length=200, default="Atithi Hotel")
     gstin = models.CharField(max_length=15, blank=True, verbose_name="GST Identification Number")
     contact_number = models.CharField(max_length=15, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
-    
-    # Financial Configuration
     currency_symbol = models.CharField(max_length=5, default="₹")
-    
-    # ✅ DYNAMIC TAX RATES (Editable by Owner)
     room_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=12.00, help_text="GST % for Rooms")
     food_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=5.00, help_text="GST % for Food")
     service_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18.00, help_text="GST % for Other Services")
