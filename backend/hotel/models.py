@@ -151,10 +151,16 @@ class Booking(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-        if is_new and self.guest.email:
-            self.send_confirmation_email()
+        # 🛑 DISABLED FOR STABILITY: The email server is timing out and crashing the app.
+        # Uncomment this ONLY after configuring EMAIL_USER and EMAIL_PASS in Render Environment Variables.
+        # if is_new and self.guest.email:
+        #     self.send_confirmation_email()
 
     def send_confirmation_email(self):
+        """
+        Sends an email receipt. currently disabled to prevent server crashes on Render
+        until SMTP credentials are set up.
+        """
         try:
             hotel_name = self.owner.hotel_profile.hotel_name if hasattr(self.owner, 'hotel_profile') else 'Atithi Hotel'
             subject = f"Booking Confirmed at {hotel_name} - ID: {self.id}"
@@ -168,7 +174,8 @@ class Booking(models.Model):
                 f"Balance: ₹{self.balance_due}\n\n"
                 f"Thank you for choosing us!"
             )
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.guest.email])
+            # send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.guest.email])
+            pass 
         except Exception as e:
             print(f"Email failed: {e}")
 
