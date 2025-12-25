@@ -3,6 +3,8 @@ from django.urls import path, include
 from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
+from django.conf import settings
+from django.conf.urls.static import static
 
 # 🏨 HOTEL APP IMPORTS
 from hotel.views import (
@@ -111,3 +113,7 @@ urlpatterns = [
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
     path('api/settings/whatsapp/', HotelWhatsAppSettingsView.as_view()),
 ]
+
+# 👇 MEDIA FILES CONFIGURATION (Required for Logos/PDFs)
+if settings.DEBUG or True:  # Force allow media serving in Prod for now
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
