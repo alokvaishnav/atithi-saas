@@ -21,11 +21,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        # Added 'hotel_name' and 'subscription' to fields list
-        fields = ['id', 'username', 'email', 'role', 'phone', 'password', 'hotel_owner', 'date_joined', 'hotel_name', 'subscription']
+        # 👇 ADDED 'is_superuser' to fields list (Critical for Frontend Logic)
+        fields = [
+            'id', 'username', 'email', 'role', 'phone', 
+            'password', 'hotel_owner', 'date_joined', 
+            'hotel_name', 'subscription', 'is_superuser'
+        ]
         
-        # 'hotel_owner', 'hotel_name', and 'subscription' are read-only
-        read_only_fields = ['id', 'date_joined', 'hotel_owner', 'hotel_name', 'subscription']
+        # 'hotel_owner', 'hotel_name', 'subscription', 'is_superuser' are read-only
+        read_only_fields = ['id', 'date_joined', 'hotel_owner', 'hotel_name', 'subscription', 'is_superuser']
         
         extra_kwargs = {
             'password': {'write_only': True},

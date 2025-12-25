@@ -3,7 +3,8 @@ import {
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
-  BookOpen, ChevronRight, Settings, Package, CreditCard, X, Server
+  BookOpen, ChevronRight, Settings, Package, CreditCard, X, 
+  Server // 👈 Server Icon for Super Admin
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -15,7 +16,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🛡️ USE CONTEXT (The Brain)
-  const { hotelName, role, logout, updateGlobalProfile } = useAuth(); 
+  // 👇 Added 'user' to destructuring to access is_superuser
+  const { hotelName, role, user, logout, updateGlobalProfile } = useAuth(); 
 
   // 📱 AUTO-CLOSE: Close sidebar on mobile when a link is clicked
   useEffect(() => {
@@ -182,13 +184,12 @@ const Sidebar = ({ isOpen, onClose }) => {
             )
           ))}
 
-          {/* 👇 SUPER ADMIN BUTTON (Hidden for Staff) */}
-          {/* Note: This is client-side visibility only. Backend still protects the API. */}
-          {/* Only showing for 'OWNER' role as a proxy for Admin/Owner access */}
-          {role === 'OWNER' && (
+          {/* 👑 SUPER ADMIN BUTTON (STRICTLY RESTRICTED) */}
+          {/* Only shows if user is explicitly a superuser */}
+          {user && user.is_superuser && (
              <div className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
-                  System
+                  System Control
                 </div>
                 <button
                   onClick={() => navigate('/super-admin')}
@@ -204,6 +205,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                     </span>
                     <span className="uppercase tracking-widest">Super Admin</span>
                   </div>
+                  <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
                 </button>
              </div>
           )}
