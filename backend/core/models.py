@@ -66,8 +66,14 @@ class SaaSConfig(models.Model):
     Managed via Admin Panel. Displayed on the 'Support' page.
     """
     company_name = models.CharField(max_length=100, default="Atithi SaaS Corp")
-    support_email = models.EmailField(default="support@atithi.com")
-    support_phone = models.CharField(max_length=20, default="+91 99999 88888")
+    
+    # 📧 Software Admin Contact Details (For Support Page)
+    support_email = models.EmailField(default="support@atithi.com", help_text="Email for Hotel Owners to contact SaaS Support")
+    support_phone = models.CharField(max_length=20, default="+91 99999 88888", help_text="Call Support Number")
+    
+    # 📱 NEW: Admin WhatsApp for Support
+    admin_whatsapp = models.CharField(max_length=20, default="+91 99999 88888", help_text="WhatsApp Number for SaaS Support")
+    
     website = models.URLField(blank=True, null=True)
     address = models.TextField(default="Tech Park, Bangalore, India")
     
