@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.db.models import Sum, Q
 from django.db.models.functions import TruncDate
 from django.http import JsonResponse, HttpResponse
-from django.core.management import call_command
+# Removed call_command import
 from django.template.loader import get_template, render_to_string
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -31,7 +31,7 @@ from xhtml2pdf import pisa
 # ==============================
 from .models import (
     Guest, Room, Booking, Service, BookingCharge, Expense, PropertySetting,
-    InventoryItem, HousekeepingTask # 👈 ADDED NEW MODELS
+    InventoryItem, HousekeepingTask 
 )
 from .serializers import (
     GuestSerializer, 
@@ -41,8 +41,8 @@ from .serializers import (
     BookingChargeSerializer,
     ExpenseSerializer,
     PropertySettingSerializer,
-    InventoryItemSerializer,      # 👈 ADDED
-    HousekeepingTaskSerializer    # 👈 ADDED
+    InventoryItemSerializer,     
+    HousekeepingTaskSerializer    
 )
 from core.models import Subscription, Payment, HotelSMTPSettings
 
@@ -395,7 +395,7 @@ class InvoicePDFView(APIView):
                 'balance': booking.balance_due
             }
 
-            template_path = 'hotel/templates/invoice.html'
+            template_path = 'invoice.html' # Corrected path
             template = get_template(template_path)
             html = template.render(context)
 
@@ -413,19 +413,6 @@ class InvoicePDFView(APIView):
         except Exception as e:
             return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
 
-# ==============================
-# ⚠️ DANGER ZONE: DB SEEDING
-# ==============================
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAdminUser]) # 👈 SECURED: Only Superusers/Staff
-def seed_data_trigger(request):
-    try:
-        call_command('seed_data')
-        return JsonResponse({"status": "Success", "message": "DB Seeded!"})
-    except Exception as e:
-        return JsonResponse({"status": "Error", "message": str(e)})
-    
 # ==============================
 # 📊 REPORTS & EXCEL EXPORT
 # ==============================

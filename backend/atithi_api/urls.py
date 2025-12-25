@@ -13,23 +13,22 @@ from hotel.views import (
     BookingChargeViewSet,
     ExpenseViewSet,
     SettingViewSet,
-    InventoryViewSet,        # 👈 NEW: Added Inventory
-    HousekeepingTaskViewSet, # 👈 NEW: Added Housekeeping
+    InventoryViewSet,        
+    HousekeepingTaskViewSet, 
     AnalyticsView,
     PublicFolioView,
-    seed_data_trigger,
+    # Removed seed_data_trigger
     InvoicePDFView, 
     AdvancedAnalyticsView, 
     ExportReportView, 
     ActivateLicenseView, 
     CheckLicenseView,
-    # 👇 UPDATED: Imported as Functions, not Classes
     create_payment_order, 
     verify_payment,
     EmailInvoiceView,
     HotelSMTPSettingsView,
     register_user,
-    CustomTokenObtainPairView # 👈 Use the centralized logic from views.py
+    CustomTokenObtainPairView 
 )
 
 # 🏢 CORE APP IMPORTS
@@ -59,8 +58,8 @@ router.register(r'staff', StaffViewSet)
 router.register(r'support-info', SaaSConfigView)
 
 # --- 🚀 NEW FEATURES (Now Registered) ---
-router.register(r'inventory', InventoryViewSet)           # 👈 Inventory API
-router.register(r'housekeeping', HousekeepingTaskViewSet) # 👈 Housekeeping API
+router.register(r'inventory', InventoryViewSet)           
+router.register(r'housekeeping', HousekeepingTaskViewSet) 
 
 # ==========================================
 # 2. URL PATTERNS
@@ -96,13 +95,9 @@ urlpatterns = [
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
     
-    # 👇 UPDATED: Removed .as_view() because these are functions
     path('api/payment/create/', create_payment_order),
     path('api/payment/verify/', verify_payment),
 
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
-
-    # 🪄 MAGIC SEED LINK
-    path('seed-db-now/', seed_data_trigger, name='seed_data_trigger'),
 ]

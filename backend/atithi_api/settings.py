@@ -91,8 +91,8 @@ DATABASES = {
 }
 
 # 🚀 PRODUCTION DATABASE CONNECTION
-# This handles both Local Development (connecting to Cloud DB) and Production Deployment
-MANUAL_DB_URL = "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr"
+# ✅ FIX: Prefer env var for Manual DB URL to avoid leaking credentials
+MANUAL_DB_URL = os.environ.get('MANUAL_DB_URL', "postgresql://atithi_admin:LxawXbutHDKbsN3jYHNDdShDTcYBfCDv@dpg-d522vgnpm1nc73as3alg-a.singapore-postgres.render.com/atithi_db_4ekr")
 
 if os.environ.get('DATABASE_URL'):
     # Production Environment (Render automatically sets DATABASE_URL)

@@ -1,5 +1,5 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // 👈 IMPORT HOOK
+import { useNavigate } from 'react-router-dom'; 
 
 // Create the Context
 const AuthContext = createContext();
@@ -9,7 +9,11 @@ export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(null);
   const [hotelName, setHotelName] = useState('Atithi HMS');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const navigate = useNavigate(); // 👈 INITIALIZE HOOK
+  
+  // ✅ FIX: Define the loading state so the app doesn't crash
+  const [loading, setLoading] = useState(true); 
+  
+  const navigate = useNavigate(); 
 
   // 1️⃣ Load Data on App Start
   useEffect(() => {
@@ -24,6 +28,9 @@ export const AuthProvider = ({ children }) => {
         if (storedRole) setRole(storedRole);
         if (storedHotel) setHotelName(storedHotel);
     }
+    
+    // ✅ FIX: Mark loading as complete after checking storage
+    setLoading(false); 
   }, []);
 
   // 2️⃣ Login Function (Updates State & Storage)
@@ -42,14 +49,14 @@ export const AuthProvider = ({ children }) => {
     setIsAuthenticated(true);
   };
 
-  // 3️⃣ Logout Function (FIXED: Uses Client-Side Navigation)
+  // 3️⃣ Logout Function
   const logout = () => {
     localStorage.clear();
     setUser(null);
     setRole(null);
     setHotelName('Atithi HMS');
     setIsAuthenticated(false);
-    navigate('/login'); // 👈 USE NAVIGATE (No more 404 Error)
+    navigate('/login'); 
   };
 
   // 4️⃣ Live Update Helper (For Settings Page)
@@ -63,12 +70,11 @@ export const AuthProvider = ({ children }) => {
         user, 
         role, 
         hotelName, 
-        loading,
-        isAuthenticated: !!user, // 👈 ADD THIS LINE
+        loading, // ✅ Now this variable actually exists
+        isAuthenticated: !!user, 
         login, 
         logout, 
         updateGlobalProfile 
-        
     }}>
       {/* 🛡️ Only render children when initial auth check is done */}
       {!loading && children}
