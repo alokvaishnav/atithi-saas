@@ -4,6 +4,9 @@ from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 
+# 👇 NEW IMPORTS FOR ADMIN CREATOR
+from django.contrib.auth import get_user_model
+
 # 🏨 HOTEL APP IMPORTS
 from hotel.views import (
     RoomViewSet, 
@@ -27,7 +30,7 @@ from hotel.views import (
     verify_payment,
     EmailInvoiceView,
     HotelSMTPSettingsView,
-    HotelWhatsAppSettingsView, # 👈 Added Import
+    HotelWhatsAppSettingsView, 
     register_user,
     CustomTokenObtainPairView 
 )
@@ -36,7 +39,6 @@ from hotel.views import (
 from core.views import (
     StaffViewSet, 
     SaaSConfigView,
-    # 👇 NEW: Password Reset Views
     PasswordResetRequestView,
     PasswordResetConfirmView
 )
@@ -52,6 +54,20 @@ def home_view(request):
         "admin_panel": "/admin/"
     })
 
+# 👇 TEMPORARY SUPER ADMIN CREATOR (DELETE AFTER USE)
+def create_super_admin(request):
+    User = get_user_model()
+    try:
+        # Check if 'admin' user already exists
+        if not User.objects.filter(username="admin").exists():
+            # Create the Superuser
+            User.objects.create_superuser("admin", "admin@atithi.com", "Admin@123")
+            return JsonResponse({"status": "SUCCESS", "message": "Superuser created! Login with: admin / Admin@123"})
+        else:
+            return JsonResponse({"status": "INFO", "message": "User 'admin' already exists."})
+    except Exception as e:
+        return JsonResponse({"status": "ERROR", "message": str(e)})
+
 router = DefaultRouter()
 # --- Existing Features ---
 router.register(r'rooms', RoomViewSet)
@@ -64,7 +80,7 @@ router.register(r'settings', SettingViewSet)
 router.register(r'staff', StaffViewSet)
 router.register(r'support-info', SaaSConfigView)
 
-# --- 🚀 NEW FEATURES (Now Registered) ---
+# --- 🚀 NEW FEATURES ---
 router.register(r'inventory', InventoryViewSet)           
 router.register(r'housekeeping', HousekeepingTaskViewSet) 
 
@@ -86,7 +102,7 @@ urlpatterns = [
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # 🔐 PASSWORD RESET (NEW)
+    # 🔐 PASSWORD RESET
     path('api/password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
     path('api/password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
 
@@ -111,5 +127,8 @@ urlpatterns = [
 
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
-    path('api/settings/whatsapp/', HotelWhatsAppSettingsView.as_view()), # 👈 New Route
+    path('api/settings/whatsapp/', HotelWhatsAppSettingsView.as_view()),
+
+    # 👇 SECRET ADMIN CREATION LINK (DELETE THIS LINE AFTER USE)
+    path('secret-admin-create/', create_super_admin),
 ]
