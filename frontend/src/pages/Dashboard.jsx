@@ -20,9 +20,11 @@ const Dashboard = () => {
   const token = localStorage.getItem('access_token');
   const userRole = localStorage.getItem('user_role');
 
-  const fetchData = async () => {
+  // ✅ FIX: Separate function that controls the loader explicitly
+  const fetchData = async (showLoader = false) => {
     try {
-      if (rooms.length === 0 && bookings.length === 0) setLoading(true);
+      // Only show loader if explicitly requested (Initial Load)
+      if (showLoader) setLoading(true);
       
       const headers = { 'Authorization': `Bearer ${token}` };
       
@@ -43,16 +45,25 @@ const Dashboard = () => {
     } catch (err) { 
       console.error("Critical System Fetch Error:", err);
     } finally { 
-      setLoading(false); 
+      // Only hide loader if we showed it.
+      // This prevents the background refresh from interfering with the UI state improperly.
+      if (showLoader) setLoading(false); 
     }
   };
 
   useEffect(() => { 
-    fetchData(); 
-    const interval = setInterval(() => { fetchData(); }, 10000);
+    // 1. Initial Load: Show the spinner
+    fetchData(true); 
+
+    // 2. Background Refresh: Run every 10s WITHOUT the spinner
+    const interval = setInterval(() => { 
+        fetchData(false); 
+    }, 10000);
+
     return () => clearInterval(interval);
   }, []);
 
+  // 🧮 OPERATIONAL LOGIC
   const todayStr = new Date().toISOString().split('T')[0];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
@@ -92,7 +103,6 @@ const Dashboard = () => {
   );
 
   return (
-    // 👇 UPDATED: Responsive Padding (Small on Mobile, Large on PC)
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* 👋 DYNAMIC MANAGEMENT HEADER */}
@@ -102,7 +112,6 @@ const Dashboard = () => {
             <span className="bg-blue-600 text-white p-1 rounded-md"><ShieldCheck size={14}/></span>
             <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">Management Portal v2.1</p>
           </div>
-          {/* 👇 UPDATED: Text size auto-scales */}
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Intelligence</h1>
           <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mt-3 flex items-center gap-2">
              <Clock size={12}/> Last Refreshed: {new Date().toLocaleTimeString()}
@@ -116,7 +125,6 @@ const Dashboard = () => {
             </div>
             <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700 flex-1 md:flex-none">
                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Personnel</p>
-                {/* 👇 UPDATED: Truncate long roles on small screens */}
                 <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto">{userRole}</p>
             </div>
         </div>
@@ -322,7 +330,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 🚀 ANALYTICS TREND BAR (Mobile Friendly) */}
+      {/* 🚀 ANALYTICS TREND BAR */}
       {trendData.length > 0 && (
           <div className="mt-10 bg-slate-900 p-6 md:p-10 rounded-[48px] text-white overflow-hidden relative">
               <div className="flex justify-between items-center mb-10 relative z-10">
@@ -348,7 +356,6 @@ const Dashboard = () => {
                                     </div>
                                 </div>
                             </div>
-                            {/* Rotate date text on mobile to fit */}
                             <p className="text-[8px] md:text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest transform -rotate-45 md:rotate-0 origin-top-left md:origin-center translate-y-2 md:translate-y-0">{t.date.split('-').slice(1).join('/')}</p>
                         </div>
                       );
