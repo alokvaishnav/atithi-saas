@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
   Save, Building, CreditCard, Mail, Phone, MapPin, 
-  Percent, Globe, Loader2, Building2, Key, ShieldCheck, Utensils, Send
+  Percent, Globe, Loader2, Building2, Key, ShieldCheck, Utensils, Send, MessageSquare
 } from 'lucide-react'; 
 import { API_URL } from '../config'; 
 import { useAuth } from '../context/AuthContext'; 
@@ -32,6 +32,13 @@ const Settings = () => {
     password: ''
   });
 
+  // 3. 👇 WhatsApp Automation State (NEW)
+  const [waData, setWaData] = useState({
+    sid: '',
+    token: '',
+    phone: ''
+  });
+
   const [settingId, setSettingId] = useState(null);
   const token = localStorage.getItem('access_token');
 
@@ -40,11 +47,10 @@ const Settings = () => {
     const loadAllSettings = async () => {
       try {
         setLoading(true);
+        const headers = { 'Authorization': `Bearer ${token}` };
         
         // A. Fetch Property Settings
-        const propRes = await fetch(`${API_URL}/api/settings/`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const propRes = await fetch(`${API_URL}/api/settings/`, { headers });
         const propData = await propRes.json();
         
         if (Array.isArray(propData) && propData.length > 0) {
@@ -53,13 +59,17 @@ const Settings = () => {
         }
 
         // B. Fetch Email Settings
-        const emailRes = await fetch(`${API_URL}/api/settings/email/`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const emailRes = await fetch(`${API_URL}/api/settings/email/`, { headers });
         if (emailRes.ok) {
             const eData = await emailRes.json();
-            // We only get the email back, password is hidden for security
             if (eData.email) setEmailData(prev => ({ ...prev, email: eData.email }));
+        }
+
+        // C. 👇 Fetch WhatsApp Settings (NEW)
+        const waRes = await fetch(`${API_URL}/api/settings/whatsapp/`, { headers });
+        if (waRes.ok) {
+            const wData = await waRes.json();
+            if (wData.sid) setWaData(prev => ({ ...prev, sid: wData.sid, phone: wData.phone }));
         }
 
       } catch (err) {
@@ -77,6 +87,11 @@ const Settings = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` 
+      };
+
       // 1. Save Property Settings
       const method = settingId ? 'PUT' : 'POST';
       const url = settingId 
@@ -85,27 +100,28 @@ const Settings = () => {
 
       const propReq = fetch(url, {
         method: method,
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
+        headers: headers,
         body: JSON.stringify(formData)
       });
 
       // 2. Save Email Settings
       const emailReq = fetch(`${API_URL}/api/settings/email/`, {
           method: 'POST',
-          headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` 
-          },
+          headers: headers,
           body: JSON.stringify(emailData)
       });
 
-      // Wait for both
-      const [propRes, emailRes] = await Promise.all([propReq, emailReq]);
+      // 3. 👇 Save WhatsApp Settings (NEW)
+      const waReq = fetch(`${API_URL}/api/settings/whatsapp/`, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(waData)
+      });
 
-      if (propRes.ok && emailRes.ok) {
+      // Wait for all requests
+      const [propRes, emailRes, waRes] = await Promise.all([propReq, emailReq, waReq]);
+
+      if (propRes.ok && emailRes.ok && waRes.ok) {
         updateGlobalProfile(formData.hotel_name);
         alert("✅ All System Configurations Updated Successfully!");
       } else {
@@ -279,48 +295,87 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* SECTION 4: EMAIL AUTOMATION */}
-        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
-          <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
-            <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Send size={20}/></div>
-            <div>
-                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">SMTP Email Automation</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Connect Your Gmail to Send Confirmations & Invoices</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Sender Gmail Address</label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-                <input 
-                  type="email" 
-                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-purple-500 outline-none transition-all"
-                  value={emailData.email}
-                  onChange={e => setEmailData({...emailData, email: e.target.value})}
-                  placeholder="your-hotel@gmail.com"
-                />
-              </div>
-            </div>
+        {/* SECTION 4: AUTOMATION GRID (EMAIL + WHATSAPP) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Gmail App Password</label>
-              <div className="relative">
-                <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
-                <input 
-                  type="password" 
-                  className="w-full bg-slate-50 p-4 pl-12 rounded-2xl font-bold border-2 border-transparent focus:border-purple-500 outline-none transition-all"
-                  value={emailData.password}
-                  onChange={e => setEmailData({...emailData, password: e.target.value})}
-                  placeholder="xxxx xxxx xxxx xxxx"
-                />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1 font-bold ml-2">
-                 <ShieldCheck size={12}/> Use a <strong>Google App Password</strong> (Not your login password).
-              </p>
+            {/* EMAIL AUTOMATION */}
+            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
+                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                    <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><Send size={20}/></div>
+                    <div>
+                        <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">SMTP Email</h3>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Gmail / Outlook</p>
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Sender Email</label>
+                        <input 
+                            type="email" 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-500 transition-all" 
+                            placeholder="your-hotel@gmail.com" 
+                            value={emailData.email} 
+                            onChange={e => setEmailData({...emailData, email: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">App Password</label>
+                        <input 
+                            type="password" 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-purple-500 transition-all" 
+                            placeholder="xxxx xxxx xxxx xxxx" 
+                            value={emailData.password} 
+                            onChange={e => setEmailData({...emailData, password: e.target.value})}
+                        />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 flex items-center gap-1 font-bold ml-2">
+                        <ShieldCheck size={12}/> Use a <strong>Google App Password</strong>.
+                    </p>
+                </div>
             </div>
-          </div>
+
+            {/* 👇 WHATSAPP AUTOMATION (NEW) */}
+            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
+                <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
+                    <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center"><MessageSquare size={20}/></div>
+                    <div>
+                        <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">WhatsApp API</h3>
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Twilio</p>
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Twilio Account SID</label>
+                        <input 
+                            type="text" 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-green-500 transition-all" 
+                            placeholder="AC..." 
+                            value={waData.sid} 
+                            onChange={e => setWaData({...waData, sid: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Auth Token</label>
+                        <input 
+                            type="password" 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-green-500 transition-all" 
+                            placeholder="Token" 
+                            value={waData.token} 
+                            onChange={e => setWaData({...waData, token: e.target.value})}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Twilio Phone Number</label>
+                        <input 
+                            type="text" 
+                            className="w-full bg-slate-50 p-4 rounded-2xl font-bold text-sm outline-none border-2 border-transparent focus:border-green-500 transition-all" 
+                            placeholder="+1415..." 
+                            value={waData.phone} 
+                            onChange={e => setWaData({...waData, phone: e.target.value})}
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
 
         {/* ACTION BUTTON */}
@@ -330,7 +385,7 @@ const Settings = () => {
           className="bg-slate-900 text-white w-full py-5 rounded-[24px] font-black text-sm uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
         >
           {isSaving ? <Loader2 className="animate-spin" /> : <Save size={20}/>}
-          {isSaving ? 'Saving Changes...' : 'Update System Configuration'}
+          {isSaving ? 'Saving Configuration...' : 'Update System Configuration'}
         </button>
 
       </form>

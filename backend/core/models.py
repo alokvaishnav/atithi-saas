@@ -152,3 +152,17 @@ class HotelSMTPSettings(models.Model):
 
     def __str__(self):
         return f"SMTP Config for {self.owner.username}"
+
+# 👇 NEW: WhatsApp Settings per Hotel
+class HotelWhatsAppSettings(models.Model):
+    """
+    Stores Twilio credentials for each specific hotel owner.
+    This allows 'Hotel A' to send WhatsApps from their own business number.
+    """
+    owner = models.OneToOneField(User, on_delete=models.CASCADE, related_name='whatsapp_settings')
+    twilio_sid = models.CharField(max_length=100, help_text="Twilio Account SID")
+    twilio_token = models.CharField(max_length=100, help_text="Twilio Auth Token")
+    twilio_phone = models.CharField(max_length=20, help_text="Twilio WhatsApp Number (e.g. +1415...)")
+
+    def __str__(self):
+        return f"WhatsApp Config for {self.owner.username}"

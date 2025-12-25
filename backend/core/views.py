@@ -5,8 +5,19 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken 
 from django.contrib.auth import get_user_model
 from django.db.models import Q 
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.core.mail import send_mail
+from django.conf import settings
+
 from .models import SaaSConfig
-from .serializers import UserSerializer, SaaSConfigSerializer
+from .serializers import (
+    UserSerializer, 
+    SaaSConfigSerializer,
+    PasswordResetRequestSerializer, 
+    PasswordResetConfirmSerializer
+)
 
 User = get_user_model()
 
@@ -114,3 +125,60 @@ class SaaSConfigView(viewsets.ReadOnlyModelViewSet):
     queryset = SaaSConfig.objects.all()
     serializer_class = SaaSConfigSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+# ==========================================
+# 🔐 PASSWORD RESET FLOW
+# ==========================================
+
+class PasswordResetRequestView(APIView):
+    """
+    Step 1: User requests password reset.
+    - Validates email.
+    - Generates Token.
+    - Sends Email with reset link.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            user = User.objects.get(email=email)
+            
+            # Generate Token & ID
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = PasswordResetTokenGenerator().make_token(user)
+            
+            # Construct Link (Points to React Frontend)
+            # Ensure FRONTEND_URL is set in your settings.py
+            reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
+            
+            # Send Email
+            try:
+                send_mail(
+                    "Password Reset Request - Atithi SaaS",
+                    f"Click the link below to reset your password:\n\n{reset_link}\n\nIf you didn't request this, ignore this email.",
+                    settings.DEFAULT_FROM_EMAIL,
+                    [email],
+                    fail_silently=False,
+                )
+                return Response({"status": "Password reset link sent to email."})
+            except Exception as e:
+                return Response({"email": ["Failed to send email. Please try again later."]}, status=500)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class PasswordResetConfirmView(APIView):
+    """
+    Step 2: User submits new password with the token.
+    - Validates Token & UID.
+    - Sets new password.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"status": "Password reset successfully."})
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -14,13 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # --------------------------------------------------------
 # 🔐 SECURITY CONFIGURATION
 # --------------------------------------------------------
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*kyl6lbp(%f@79b_+tp*bo6_ppe(0m=v')
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-
-# 🚀 SECURITY FIX: Allow specific hosts
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # --------------------------------------------------------
@@ -32,7 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'whitenoise.runserver_nostatic', # Optimized Static Files
+    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
     
     # ⚡ 3rd Party SaaS Apps
@@ -49,9 +44,9 @@ INSTALLED_APPS = [
 # ⚙️ MIDDLEWARE
 # --------------------------------------------------------
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # 👈 Must be at the very top
+    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', # 👈 Optimized Static File Serving
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -80,20 +75,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'atithi_api.wsgi.application'
 
 # --------------------------------------------------------
-# 🗄️ DATABASE CONFIGURATION (Render.com)
+# 🗄️ DATABASE CONFIGURATION
 # --------------------------------------------------------
-
-# 🚀 PRODUCTION DATABASE CONNECTION
-# ✅ SECURITY FIX: Removed hardcoded URL. Now reads strictly from Environment Variable.
 MANUAL_DB_URL = os.environ.get('MANUAL_DB_URL') 
 
 if os.environ.get('DATABASE_URL'):
-    # 1. Production Environment (Render automatically sets DATABASE_URL)
     DATABASES = {
         'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
     }
 elif MANUAL_DB_URL:
-    # 2. Local/Manual Connection (If MANUAL_DB_URL is set in .env)
     DATABASES = {
         'default': dj_database_url.config(
             default=MANUAL_DB_URL,
@@ -102,7 +92,6 @@ elif MANUAL_DB_URL:
         )
     }
 else:
-    # 3. Fallback to SQLite (Safe for local dev without internet)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -122,36 +111,38 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '20/minute', 
+        'user': '1000/day'
+    }
 }
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7), # Extended for better UX
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
 }
 
 # --------------------------------------------------------
-# 🌐 CORS & CSRF (Critical for Frontend Connection)
+# 🌐 CORS & CSRF
 # --------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "https://atithi-saas-frontend.vercel.app", # Your Frontend URL
+    "https://atithi-saas-frontend.vercel.app", 
+    # "http://localhost:5173", # Keep for local testing
 ]
 
-# 🚀 Allow all origins in production if strict list fails (Optional but helpful for beta)
-CORS_ALLOW_ALL_ORIGINS = True 
-
-# 🛡️ CSRF Trusted Origins (Required for Django 4.0+)
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
     "https://atithi-saas.onrender.com",
     "https://atithi-saas-frontend.vercel.app",
 ]
 
 # --------------------------------------------------------
-# 📧 EMAIL AUTOMATION
+# 📧 EMAIL AUTOMATION & PASSWORD RESET
 # --------------------------------------------------------
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
@@ -159,33 +150,48 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_USER', 'your-hotel-email@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS', 'your-app-password')
-DEFAULT_FROM_EMAIL = f"Atithi Hotel Manager <{EMAIL_HOST_USER}>"
+DEFAULT_FROM_EMAIL = f"Atithi Support <{EMAIL_HOST_USER}>"
+
+# URL used in Password Reset Emails (Points to Frontend)
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://atithi-saas-frontend.vercel.app')
+
+# --------------------------------------------------------
+# 🚀 CELERY & REDIS (Async Tasks)
+# --------------------------------------------------------
+# Use Redis Cloud URL in production, localhost in development
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+
+# --------------------------------------------------------
+# 📱 TWILIO / WHATSAPP CONFIG
+# --------------------------------------------------------
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER') # e.g., '+123456789' or 'whatsapp:+14155238886'
 
 # --------------------------------------------------------
 # 📁 MEDIA & STATIC FILES
 # --------------------------------------------------------
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Kolkata' # 🇮🇳 Indian Standard Time
+TIME_ZONE = 'Asia/Kolkata' 
 USE_I18N = True
 USE_TZ = True 
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
-# Media files (ID Proofs, Invoices)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # --------------------------------------------------------
 # 💳 RAZORPAY CONFIGURATION
 # --------------------------------------------------------
-# Replace the defaults below with your actual keys from Razorpay Dashboard
-RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_test_YOUR_KEY_HERE")
-RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "YOUR_SECRET_HERE")
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', "rzp_test_KEY")
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', "SECRET")
 
-# Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},

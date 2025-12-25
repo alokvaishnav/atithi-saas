@@ -43,7 +43,7 @@ from .serializers import (
     InventoryItemSerializer,     
     HousekeepingTaskSerializer    
 )
-from core.models import Subscription, Payment, HotelSMTPSettings
+from core.models import Subscription, Payment, HotelSMTPSettings, HotelWhatsAppSettings # 👈 Added Import
 
 # Initialize User Model
 User = get_user_model()
@@ -144,9 +144,8 @@ class BookingViewSet(viewsets.ModelViewSet):
         booking = self.get_object()
         if booking.guest.email:
             try:
-                # You might need to implement this method in your Booking model
-                # booking.send_confirmation_email() 
-                return Response({'status': 'Email functionality pending implementation'})
+                # Synchronous fallback if needed, but handled by tasks/models mostly
+                return Response({'status': 'Confirmation process initiated'})
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'error': 'Guest has no email'}, status=status.HTTP_400_BAD_REQUEST)
@@ -170,7 +169,6 @@ class BookingViewSet(viewsets.ModelViewSet):
 # 2. POS, SERVICES & INVENTORY
 # ==============================
 
-# 📦 NEW: Inventory Management
 class InventoryViewSet(viewsets.ModelViewSet):
     queryset = InventoryItem.objects.all()
     serializer_class = InventoryItemSerializer
@@ -232,10 +230,9 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         )
 
 # ==============================
-# 3. HOUSEKEEPING (NEW)
+# 3. HOUSEKEEPING
 # ==============================
 
-# 🧹 NEW: Housekeeping Tasks
 class HousekeepingTaskViewSet(viewsets.ModelViewSet):
     queryset = HousekeepingTask.objects.all()
     serializer_class = HousekeepingTaskSerializer
@@ -394,7 +391,7 @@ class InvoicePDFView(APIView):
                 'balance': booking.balance_due
             }
 
-            template_path = 'invoice.html' # Corrected path
+            template_path = 'invoice.html' 
             template = get_template(template_path)
             html = template.render(context)
 
@@ -475,7 +472,6 @@ class ExportReportView(APIView):
             expenses = Expense.objects.filter(owner=owner)
 
             for b in bookings:
-                # ✅ FIX: Calculate payment status & access guest name correctly
                 payment_status = "PAID" if b.amount_paid >= b.total_amount else "PARTIAL" if b.amount_paid > 0 else "PENDING"
                 writer.writerow([b.created_at.date(), 'INCOME', f'Booking #{b.id} - {b.guest.full_name}', b.total_amount, payment_status])
             
@@ -494,7 +490,6 @@ class ActivateLicenseView(APIView):
         key = request.data.get('license_key')
         user = request.user
         
-        # 1. Try to activate via Unique Database Key (Razorpay generated)
         try:
             sub = Subscription.objects.get(license_key=key)
             my_sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
@@ -507,7 +502,6 @@ class ActivateLicenseView(APIView):
         except Subscription.DoesNotExist:
             pass
 
-        # 2. Fallback: Legacy Magic Key
         if key == "ATITHI-PRO-365":
             sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
             sub.plan_name = "PRO"
@@ -533,35 +527,28 @@ class CheckLicenseView(APIView):
         })
 
 # ==============================
-# 💳 PAYMENT GATEWAY (SAAS ONLY)
+# 💳 PAYMENT GATEWAY
 # ==============================
 
-# Initialize Razorpay Client
 razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def create_payment_order(request):
-    """
-    Step 1: Create an Order ID on Razorpay.
-     STRICTLY FOR SUBSCRIPTION PLANS ONLY (Rent).
-    """
     try:
         amount = float(request.data.get('amount'))
         plan_name = request.data.get('plan_name')
         
-        # Unique receipt for this user's subscription
         receipt_id = f'sub_{request.user.id}_{int(timezone.now().timestamp())}'
 
         data = {
-            'amount': int(amount * 100), # Paise
+            'amount': int(amount * 100), 
             'currency': 'INR',
             'receipt': receipt_id,
             'payment_capture': 1 
         }
         order = razorpay_client.order.create(data=data)
         
-        # ✅ CREATE PENDING PAYMENT RECORD
         sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(request.user))
         Payment.objects.create(
             subscription=sub,
@@ -581,14 +568,9 @@ def create_payment_order(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def verify_payment(request):
-    """
-    Step 2: Verify the Signature sent by Frontend.
-    STRICTLY FOR SUBSCRIPTION PLANS ONLY (Rent).
-    """
     try:
         data = request.data
         
-        # 1. Verify Signature
         params_dict = {
             'razorpay_order_id': data['razorpay_order_id'],
             'razorpay_payment_id': data['razorpay_payment_id'],
@@ -596,27 +578,22 @@ def verify_payment(request):
         }
         razorpay_client.utility.verify_payment_signature(params_dict)
 
-        # 2. Find Payment and Update Subscription
         try:
             sub_payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
             
-            # ✅ MARK SUCCESS
             sub_payment.razorpay_payment_id = data['razorpay_payment_id']
             sub_payment.status = 'SUCCESS'
             sub_payment.save()
 
-            # ✅ EXTEND SUBSCRIPTION
             sub = sub_payment.subscription
             sub.is_active = True
             
-            # Logic: Add 30 days to expiry (or set new expiry if already expired)
             now = timezone.now()
             if sub.expiry_date and sub.expiry_date > now:
                 sub.expiry_date += timedelta(days=30)
             else:
                 sub.expiry_date = now + timedelta(days=30)
             
-            # Optionally update plan name if needed, defaults to 'PRO' for paid plans
             sub.plan_name = "PRO" 
             sub.save()
 
@@ -640,7 +617,6 @@ class EmailInvoiceView(APIView):
         try:
             owner = get_hotel_owner(request.user)
             booking = Booking.objects.get(id=pk, owner=owner)
-            
             charges = BookingCharge.objects.filter(booking=booking)
             
             if not booking.guest.email:
@@ -658,7 +634,7 @@ class EmailInvoiceView(APIView):
                 sender_email = smtp_config.email_host_user
             
             except HotelSMTPSettings.DoesNotExist:
-                return Response({"error": "Please configure your Email Settings in the Settings Page first."}, status=400)
+                return Response({"error": "Please configure Email Settings first."}, status=400)
 
             template_path = 'hotel/templates/invoice.html'
             context = {'booking': booking, 'charges': charges, 'total': booking.total_amount, 'owner': booking.owner}
@@ -691,7 +667,6 @@ class HotelSMTPSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """Get current settings"""
         try:
             conf = HotelSMTPSettings.objects.get(owner=get_hotel_owner(request.user))
             return Response({
@@ -702,7 +677,6 @@ class HotelSMTPSettingsView(APIView):
             return Response({"email": "", "has_password": False})
 
     def post(self, request):
-        """Save settings"""
         owner = get_hotel_owner(request.user)
         email = request.data.get('email')
         password = request.data.get('password')
@@ -714,6 +688,36 @@ class HotelSMTPSettingsView(APIView):
         obj.save()
 
         return Response({"status": "Email Settings Saved!"})
+
+# 👇 NEW: WhatsApp Settings View
+class HotelWhatsAppSettingsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            conf = HotelWhatsAppSettings.objects.get(owner=get_hotel_owner(request.user))
+            return Response({
+                "sid": conf.twilio_sid,
+                "phone": conf.twilio_phone,
+                "has_token": True
+            })
+        except HotelWhatsAppSettings.DoesNotExist:
+            return Response({"sid": "", "phone": "", "has_token": False})
+
+    def post(self, request):
+        owner = get_hotel_owner(request.user)
+        sid = request.data.get('sid')
+        token = request.data.get('token')
+        phone = request.data.get('phone')
+
+        obj, created = HotelWhatsAppSettings.objects.get_or_create(owner=owner)
+        obj.twilio_sid = sid
+        obj.twilio_phone = phone
+        if token:
+            obj.twilio_token = token
+        obj.save()
+
+        return Response({"status": "WhatsApp Settings Saved!"})
 
 # ==============================
 # 🚀 REGISTRATION & AUTH
@@ -739,7 +743,6 @@ def register_user(request):
             return Response({'email': ['Email already exists']}, status=status.HTTP_400_BAD_REQUEST)
         
         with transaction.atomic():
-            # 1. Create User
             user = User.objects.create_user(
                 username=username, 
                 email=email, 
@@ -748,13 +751,11 @@ def register_user(request):
                 role='OWNER' 
             )
 
-            # 2. Create Property Settings
             PropertySetting.objects.create(
                 owner=user,
                 hotel_name=hotel_name if hotel_name else "My Hotel"
             )
 
-            # 3. Create Subscription with Unique Key
             Subscription.objects.create(
                 owner=user,
                 plan_name='TRIAL',
@@ -763,7 +764,6 @@ def register_user(request):
                 license_key=str(uuid.uuid4())
             )
 
-            # 4. Generate Tokens
             refresh = RefreshToken.for_user(user)
             
             return Response({

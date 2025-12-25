@@ -27,12 +27,19 @@ from hotel.views import (
     verify_payment,
     EmailInvoiceView,
     HotelSMTPSettingsView,
+    HotelWhatsAppSettingsView, # 👈 Added Import
     register_user,
     CustomTokenObtainPairView 
 )
 
 # 🏢 CORE APP IMPORTS
-from core.views import StaffViewSet, SaaSConfigView
+from core.views import (
+    StaffViewSet, 
+    SaaSConfigView,
+    # 👇 NEW: Password Reset Views
+    PasswordResetRequestView,
+    PasswordResetConfirmView
+)
 
 # ==========================================
 # 1. VIEWS & ROUTING
@@ -79,6 +86,10 @@ urlpatterns = [
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
+    # 🔐 PASSWORD RESET (NEW)
+    path('api/password-reset/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+    path('api/password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+
     # 📈 EXECUTIVE ANALYTICS
     path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
     path('api/reports/analytics/', AdvancedAnalyticsView.as_view()),
@@ -91,7 +102,7 @@ urlpatterns = [
     path('api/invoice/<int:booking_id>/pdf/', InvoicePDFView.as_view(), name='invoice_pdf'),
     path('api/invoice/<int:pk>/email/', EmailInvoiceView.as_view()),
 
-    # 💳 LICENSE & PAYMENTS (UPDATED)
+    # 💳 LICENSE & PAYMENTS
     path('api/license/activate/', ActivateLicenseView.as_view()),
     path('api/license/check/', CheckLicenseView.as_view()),
     
@@ -100,4 +111,5 @@ urlpatterns = [
 
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
+    path('api/settings/whatsapp/', HotelWhatsAppSettingsView.as_view()), # 👈 New Route
 ]

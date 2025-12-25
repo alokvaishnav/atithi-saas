@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ShieldAlert, LogOut, Loader2, Menu } from 'lucide-react'; // 👈 Added Menu Icon
-import { useState } from 'react'; // 👈 Added useState for Mobile Sidebar
+import { ShieldAlert, LogOut, Loader2, Menu } from 'lucide-react'; 
+import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // --- COMPONENTS ---
@@ -11,7 +11,10 @@ import LicenseLock from './components/LicenseLock';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register'; 
-import DigitalFolio from './pages/DigitalFolio'; 
+import DigitalFolio from './pages/DigitalFolio';
+// 👇 NEW IMPORTS
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // --- CORE OPERATIONS ---
 import Dashboard from './pages/Dashboard';
@@ -224,6 +227,11 @@ const AppContent = () => {
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} /> 
+        
+        {/* 👇 NEW PASSWORD RESET ROUTES */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
+
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
         <Route path="/*" element={<AppLayout />} />
     </Routes>

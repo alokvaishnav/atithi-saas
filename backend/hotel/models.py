@@ -3,8 +3,12 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from decimal import Decimal
-# ✅ IMPORT EMAIL UTILITIES
+from django.db.models import F # 👈 For Race Condition Fix
 from django.core.mail import EmailMessage, get_connection
+
+# ✅ IMPORT ASYNC TASKS
+# We import inside methods to avoid circular dependency issues if tasks.py imports models
+# from .tasks import send_booking_confirmation_email, send_booking_whatsapp 
 
 # ==========================================
 # 1. ROOM MANAGEMENT
@@ -31,6 +35,11 @@ class Room(models.Model):
     
     class Meta:
         unique_together = ('owner', 'room_number')
+        # ⚡ Indexing for faster room lookups
+        indexes = [
+            models.Index(fields=['owner', 'status']),
+            models.Index(fields=['owner', 'room_number']),
+        ]
 
     def __str__(self):
         return f"Room {self.room_number} [{self.get_status_display()}]"
@@ -48,6 +57,13 @@ class Guest(models.Model):
     address = models.TextField(blank=True)
     nationality = models.CharField(max_length=50, default="Indian")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # ⚡ Indexing for faster guest search
+        indexes = [
+            models.Index(fields=['owner', 'phone']),
+            models.Index(fields=['owner', 'full_name']),
+        ]
 
     def __str__(self):
         return self.full_name
@@ -99,6 +115,14 @@ class Booking(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='bookings_created')
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        # ⚡ Indexing for faster booking queries (Dashboard/Calendar)
+        indexes = [
+            models.Index(fields=['owner', 'check_in_date']),
+            models.Index(fields=['owner', 'check_out_date']),
+            models.Index(fields=['owner', 'status']),
+        ]
+
     def clean(self):
         if self.check_in_date and self.check_out_date:
             if self.check_out_date <= self.check_in_date:
@@ -137,17 +161,26 @@ class Booking(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-        # 2. ✅ AUTOMATED EMAIL (Using Hotel's Custom SMTP)
-        if is_new and self.guest.email:
-            self.send_confirmation_email()
+        # 2. TRIGGER ASYNC NOTIFICATIONS
+        if is_new:
+            try:
+                # Import tasks here to avoid circular imports
+                from .tasks import send_booking_confirmation_email, send_booking_whatsapp
+                
+                # Fire and forget (Background Task)
+                send_booking_confirmation_email.delay(self.id)
+                send_booking_whatsapp.delay(self.id)
+            except ImportError:
+                # Fallback if Celery isn't running: Try synchronous send (safe failover)
+                if self.guest.email:
+                    self.send_confirmation_email_sync()
 
-    def send_confirmation_email(self):
+    def send_confirmation_email_sync(self):
         """
-        Sends email using the HOTEL OWNER'S SMTP credentials.
-        Prevents app crash if settings are missing.
+        Synchronous fallback for sending email using HOTEL OWNER'S SMTP.
+        Used if Celery is not configured or fails.
         """
         try:
-            # Import strictly inside method to avoid circular dependency
             from core.models import HotelSMTPSettings
             
             # 1. Get SMTP Settings
@@ -195,7 +228,7 @@ class Booking(models.Model):
             print(f"Email sent via {smtp_config.email_host_user}")
 
         except Exception as e:
-            # 🛡️ Silently fail so the Booking still saves!
+            # Silently fail so the Booking still saves!
             print(f"Email delivery failed: {e}")
 
     @property
@@ -255,11 +288,20 @@ class BookingCharge(models.Model):
             self.total_cost = self.subtotal + self.tax_amount
             
             if is_new and self.service.linked_inventory_item:
+                # 🛡️ RACE CONDITION FIX: Use F() expression
                 item = self.service.linked_inventory_item
+                
+                # We still need to check logic in Python for validation
+                # But actual decrement happens at DB level
                 if item.current_stock < self.quantity:
                     raise ValidationError(f"Not enough stock! Only {item.current_stock} left of {item.name}.")
-                item.current_stock -= self.quantity
+                
+                # Atomic Decrement
+                item.current_stock = F('current_stock') - self.quantity
                 item.save()
+                
+                # Refresh from DB to get the actual integer value for UI
+                item.refresh_from_db()
 
         super().save(*args, **kwargs)
 

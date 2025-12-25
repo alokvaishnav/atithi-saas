@@ -30,13 +30,7 @@ const Login = () => {
 
       if (response.ok) {
         // 🧠 CALL CONTEXT LOGIN
-        // This function inside AuthContext handles:
-        // 1. LocalStorage saving
-        // 2. State updates (Role, User, HotelName)
-        // 3. Setting isAuthenticated = true
         await login(data);
-        
-        // Navigate based on logic (optional, usually handled by AuthContext or Router)
         navigate('/'); 
       } else {
         setError(data.detail || 'Invalid Credentials. Please check access details.');
@@ -103,6 +97,16 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+          </div>
+
+          {/* 👇 ADDED FORGOT PASSWORD LINK */}
+          <div className="flex justify-end">
+            <Link 
+              to="/forgot-password" 
+              className="text-[10px] font-bold text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
+            >
+              Forgot Password?
+            </Link>
           </div>
 
           <button
