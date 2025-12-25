@@ -11,7 +11,6 @@ from django.utils import timezone
 from django.db.models import Sum, Q
 from django.db.models.functions import TruncDate
 from django.http import JsonResponse, HttpResponse
-# Removed call_command import
 from django.template.loader import get_template, render_to_string
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -498,9 +497,6 @@ class ActivateLicenseView(APIView):
         # 1. Try to activate via Unique Database Key (Razorpay generated)
         try:
             sub = Subscription.objects.get(license_key=key)
-            # Ensure this key belongs to the current user (or is unassigned logic if you add that later)
-            # For now, we update the current user's subscription based on the validity of this key
-            
             my_sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(user))
             my_sub.plan_name = "PRO"
             my_sub.expiry_date = timezone.now() + timedelta(days=365)
@@ -537,7 +533,7 @@ class CheckLicenseView(APIView):
         })
 
 # ==============================
-# 💳 PAYMENT GATEWAY (RAZORPAY)
+# 💳 PAYMENT GATEWAY (SAAS ONLY)
 # ==============================
 
 # Initialize Razorpay Client
@@ -546,20 +542,34 @@ razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZOR
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def create_payment_order(request):
-    """Step 1: Create an Order ID on Razorpay"""
+    """
+    Step 1: Create an Order ID on Razorpay.
+     STRICTLY FOR SUBSCRIPTION PLANS ONLY (Rent).
+    """
     try:
         amount = float(request.data.get('amount'))
-        booking_id = request.data.get('booking_id')
+        plan_name = request.data.get('plan_name')
         
-        # Razorpay expects amount in PAISE (e.g. ₹100 = 10000 paise)
+        # Unique receipt for this user's subscription
+        receipt_id = f'sub_{request.user.id}_{int(timezone.now().timestamp())}'
+
         data = {
-            'amount': int(amount * 100), 
+            'amount': int(amount * 100), # Paise
             'currency': 'INR',
-            'receipt': f'receipt_{booking_id}',
+            'receipt': receipt_id,
             'payment_capture': 1 
         }
         order = razorpay_client.order.create(data=data)
         
+        # ✅ CREATE PENDING PAYMENT RECORD
+        sub, created = Subscription.objects.get_or_create(owner=get_hotel_owner(request.user))
+        Payment.objects.create(
+            subscription=sub,
+            razorpay_order_id=order['id'],
+            amount=amount,
+            status='PENDING'
+        )
+
         return Response({
             'order_id': order['id'],
             'amount': data['amount'],
@@ -571,7 +581,10 @@ def create_payment_order(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def verify_payment(request):
-    """Step 2: Verify the Signature sent by Frontend"""
+    """
+    Step 2: Verify the Signature sent by Frontend.
+    STRICTLY FOR SUBSCRIPTION PLANS ONLY (Rent).
+    """
     try:
         data = request.data
         
@@ -583,85 +596,38 @@ def verify_payment(request):
         }
         razorpay_client.utility.verify_payment_signature(params_dict)
 
-        # 2. Update Database if Verified
-        booking_id = data.get('booking_id')
-        amount_paid = float(data.get('amount'))
-        
-        booking = Booking.objects.get(id=booking_id)
-        # Check if booking amount_paid is stored as Decimal or Float in your model
-        # Assuming DecimalField or FloatField:
-        booking.amount_paid = float(booking.amount_paid) + amount_paid
-        booking.save()
-
-        return Response({'status': 'Payment Verified & Updated'})
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
-
-# Also keeping the Class-Based Views for subscription payments if needed by other parts of your app
-class CreatePaymentOrderView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
+        # 2. Find Payment and Update Subscription
         try:
-            plan_price = request.data.get('amount')
+            sub_payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
             
-            data = {
-                "amount": int(plan_price) * 100,
-                "currency": "INR",
-                "receipt": f"sub_{request.user.id}",
-                "payment_capture": 1
-            }
-            order = razorpay_client.order.create(data=data)
-            
-            sub = Subscription.objects.get(owner=get_hotel_owner(request.user))
-            Payment.objects.create(
-                subscription=sub,
-                razorpay_order_id=order['id'],
-                amount=plan_price,
-                status='PENDING'
-            )
+            # ✅ MARK SUCCESS
+            sub_payment.razorpay_payment_id = data['razorpay_payment_id']
+            sub_payment.status = 'SUCCESS'
+            sub_payment.save()
 
-            return Response(order)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
-
-class VerifyPaymentView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        try:
-            data = request.data
+            # ✅ EXTEND SUBSCRIPTION
+            sub = sub_payment.subscription
+            sub.is_active = True
             
-            check = {
-                'razorpay_order_id': data['razorpay_order_id'],
-                'razorpay_payment_id': data['razorpay_payment_id'],
-                'razorpay_signature': data['razorpay_signature']
-            }
-            
-            if razorpay_client.utility.verify_payment_signature(check):
-                payment = Payment.objects.get(razorpay_order_id=data['razorpay_order_id'])
-                payment.razorpay_payment_id = data['razorpay_payment_id']
-                payment.status = 'SUCCESS'
-                payment.save()
-                
-                sub = payment.subscription
-                sub.is_active = True
-                
-                now = timezone.now()
-                if sub.expiry_date and sub.expiry_date > now:
-                    sub.expiry_date += timedelta(days=30)
-                else:
-                    sub.expiry_date = now + timedelta(days=30)
-                
-                sub.save()
-                
-                return Response({"status": "Payment Verified & License Extended!"})
+            # Logic: Add 30 days to expiry (or set new expiry if already expired)
+            now = timezone.now()
+            if sub.expiry_date and sub.expiry_date > now:
+                sub.expiry_date += timedelta(days=30)
             else:
-                return Response({"error": "Signature Verification Failed"}, status=400)
-                
-        except Exception as e:
-            print(e)
-            return Response({"error": "Verification Failed"}, status=500)
+                sub.expiry_date = now + timedelta(days=30)
+            
+            # Optionally update plan name if needed, defaults to 'PRO' for paid plans
+            sub.plan_name = "PRO" 
+            sub.save()
+
+            return Response({'status': 'Subscription Extended Successfully!'})
+
+        except Payment.DoesNotExist:
+            return Response({'error': 'Payment record not found.'}, status=400)
+
+    except Exception as e:
+        print(f"VERIFY ERROR: {e}")
+        return Response({'error': str(e)}, status=400)
 
 # ==============================
 # 📧 EMAIL AUTOMATION

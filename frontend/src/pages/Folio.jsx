@@ -2,8 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, Download, CreditCard, CheckCircle, 
-  Clock, Calendar, User, ShieldCheck, Mail, Phone, 
-  Loader2, ArrowLeft, FileText, IndianRupee, Send, LogOut, Globe 
+  Clock, Calendar, User, Send, LogOut, ArrowLeft, FileText, Phone, Mail, Loader2
 } from 'lucide-react'; 
 import { useReactToPrint } from 'react-to-print';
 import { API_URL } from '../config';
@@ -20,7 +19,6 @@ const Folio = () => {
   const [pdfLoading, setPdfLoading] = useState(false); 
   const [emailLoading, setEmailLoading] = useState(false); 
   const [paymentAmount, setPaymentAmount] = useState('');
-  const [payingOnline, setPayingOnline] = useState(false); // 👈 For Razorpay Spinner
 
   const token = localStorage.getItem('access_token');
   const componentRef = useRef();
@@ -64,7 +62,7 @@ const Folio = () => {
 
   const { roomTotal, extrasTotal, grandTotal, advance, balance } = calculateTotals();
 
-  // 💰 HANDLE MANUAL PAYMENT (Cash/Card)
+  // 💰 HANDLE MANUAL PAYMENT (Cash/Card) ONLY
   const handleManualPayment = async () => {
       if (!paymentAmount || parseFloat(paymentAmount) <= 0) return alert("Enter valid amount");
       try {
@@ -80,94 +78,6 @@ const Folio = () => {
               fetchFolioData();
           }
       } catch (err) { console.error(err); }
-  };
-
-  // 🌐 HANDLE RAZORPAY ONLINE PAYMENT
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-        const script = document.createElement("script");
-        script.src = "https://checkout.razorpay.com/v1/checkout.js";
-        script.onload = () => resolve(true);
-        script.onerror = () => resolve(false);
-        document.body.appendChild(script);
-    });
-  };
-
-  const handleOnlinePayment = async () => {
-    if (!paymentAmount || parseFloat(paymentAmount) <= 0) return alert("Enter valid amount");
-    
-    setPayingOnline(true);
-    const res = await loadRazorpayScript();
-
-    if (!res) {
-        alert("Razorpay SDK failed to load. Check your internet connection.");
-        setPayingOnline(false);
-        return;
-    }
-
-    try {
-        // 1. Create Order on Backend
-        const orderRes = await fetch(`${API_URL}/api/payment/create/`, {
-            method: "POST",
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ amount: paymentAmount, booking_id: bookingId })
-        });
-        const orderData = await orderRes.json();
-
-        if (!orderRes.ok) throw new Error(orderData.error);
-
-        // 2. Open Razorpay Options
-        const options = {
-            key: orderData.key_id, 
-            amount: orderData.amount, 
-            currency: "INR",
-            name: "Atithi Hotel",
-            description: `Payment for Booking #${bookingId}`,
-            order_id: orderData.order_id,
-            handler: async function (response) {
-                // 3. Verify Payment on Backend
-                try {
-                    const verifyRes = await fetch(`${API_URL}/api/payment/verify/`, {
-                        method: "POST",
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({
-                            razorpay_order_id: response.razorpay_order_id,
-                            razorpay_payment_id: response.razorpay_payment_id,
-                            razorpay_signature: response.razorpay_signature,
-                            booking_id: bookingId,
-                            amount: paymentAmount
-                        })
-                    });
-                    
-                    if (verifyRes.ok) {
-                        alert("✅ Payment Successful!");
-                        setPaymentAmount('');
-                        fetchFolioData();
-                    } else {
-                        alert("⚠️ Payment Verification Failed");
-                    }
-                } catch (err) {
-                    console.error(err);
-                    alert("Server Error during Verification");
-                }
-            },
-            prefill: {
-                name: booking.guest_details?.full_name,
-                email: booking.guest_details?.email,
-                contact: booking.guest_details?.phone
-            },
-            theme: { color: "#2563eb" }
-        };
-
-        const paymentObject = new window.Razorpay(options);
-        paymentObject.open();
-
-    } catch (err) {
-        console.error("Payment Error:", err);
-        alert("Error initializing payment.");
-    } finally {
-        setPayingOnline(false);
-    }
   };
 
   // --- Utility Functions ---
@@ -336,7 +246,7 @@ const Folio = () => {
             <div className="bg-slate-900 text-white p-8 rounded-[30px] shadow-xl relative overflow-hidden">
                 <div className="relative z-10">
                     <h3 className="text-xl font-black italic tracking-tighter uppercase mb-1">Quick Actions</h3>
-                    <p className="text-slate-400 text-xs mb-6 font-medium">Manage payment & status.</p>
+                    <p className="text-slate-400 text-xs mb-6 font-medium">Record guest payments.</p>
                     
                     {/* Payment Input */}
                     <div className="mb-4">
@@ -352,20 +262,12 @@ const Folio = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="grid grid-cols-1 gap-3 mb-3">
                         <button 
                             onClick={handleManualPayment} 
                             className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-xl font-bold flex flex-col items-center justify-center gap-2 transition-all text-[10px] uppercase tracking-widest"
                         >
-                            <CreditCard size={18}/> Record Cash
-                        </button>
-                        <button 
-                            onClick={handleOnlinePayment} 
-                            disabled={payingOnline}
-                            className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold flex flex-col items-center justify-center gap-2 transition-all text-[10px] uppercase tracking-widest shadow-lg"
-                        >
-                            {payingOnline ? <Loader2 className="animate-spin" size={18}/> : <Globe size={18}/>}
-                            Pay Online
+                            <CreditCard size={18}/> Record Cash / Card
                         </button>
                     </div>
                     

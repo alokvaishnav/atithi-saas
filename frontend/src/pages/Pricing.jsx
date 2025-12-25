@@ -45,13 +45,13 @@ const Pricing = () => {
 
       // C. Open Razorpay Options
       const options = {
-        // ✅ FIXED: Using dynamic key_id from backend to fix 401 Unauthorized error
         key: orderData.key_id, 
         amount: orderData.amount, 
         currency: "INR",
         name: "Atithi SaaS",
         description: `Upgrade to ${planName} Plan`,
-        order_id: orderData.id, 
+        // ✅ FIX: Backend returns 'order_id', not 'id'
+        order_id: orderData.order_id, 
         handler: async function (response) {
             // D. Verify Payment on Backend
             const verifyRes = await fetch(`${API_URL}/api/payment/verify/`, {
@@ -70,7 +70,7 @@ const Pricing = () => {
             
             if (verifyRes.ok) {
                 alert("🎉 Payment Successful! License Extended.");
-                window.location.href = '/'; // Redirect to Dashboard
+                window.location.href = '/dashboard'; 
             } else {
                 alert(verifyData.error || "Payment Verification Failed.");
             }
