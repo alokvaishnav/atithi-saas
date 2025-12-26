@@ -3,8 +3,8 @@ from django.urls import path, include
 from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
-from django.conf import settings
-from django.conf.urls.static import static
+# 👇 Import used for admin creation
+from django.contrib.auth import get_user_model
 
 # 🏨 HOTEL APP IMPORTS
 from hotel.views import (
@@ -41,6 +41,9 @@ from core.views import (
     PasswordResetConfirmView
 )
 
+from django.conf import settings
+from django.conf.urls.static import static
+
 # ==========================================
 # 1. VIEWS & ROUTING
 # ==========================================
@@ -51,6 +54,18 @@ def home_view(request):
         "version": "2.5 (Full Enterprise Features)",
         "admin_panel": "/admin/"
     })
+
+# 👇 SECRET ADMIN CREATOR (Keep this if your DB resets on deploy)
+def create_super_admin(request):
+    User = get_user_model()
+    try:
+        if not User.objects.filter(username="admin").exists():
+            User.objects.create_superuser("admin", "admin@atithi.com", "Admin@123")
+            return JsonResponse({"status": "SUCCESS", "message": "Superuser created! Login with: admin / Admin@123"})
+        else:
+            return JsonResponse({"status": "INFO", "message": "User 'admin' already exists. Password: Admin@123"})
+    except Exception as e:
+        return JsonResponse({"status": "ERROR", "message": str(e)})
 
 router = DefaultRouter()
 # --- Existing Features ---
@@ -112,8 +127,11 @@ urlpatterns = [
     # ⚙️ HOTEL CONFIGURATION
     path('api/settings/email/', HotelSMTPSettingsView.as_view()),
     path('api/settings/whatsapp/', HotelWhatsAppSettingsView.as_view()),
+
+    # 👇 RESTORED SECRET LINK
+    path('secret-admin-create/', create_super_admin),
 ]
 
-# 👇 MEDIA FILES CONFIGURATION (Required for Logos/PDFs)
-if settings.DEBUG or True:  # Force allow media serving in Prod for now
+# 👇 MEDIA FILES CONFIGURATION (Images/PDFs)
+if settings.DEBUG or True:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
