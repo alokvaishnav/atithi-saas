@@ -12,8 +12,9 @@ class RoomSerializer(serializers.ModelSerializer):
     """
     Handles Room inventory data including status and pricing.
     """
-    # ✅ FIX: Make owner read-only so frontend isn't asked for it
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    # 👇 NEW: Helps Super Admin see which hotel this room belongs to
+    hotel_name = serializers.CharField(source='owner.hotel_profile.hotel_name', read_only=True)
 
     class Meta:
         model = Room
@@ -24,6 +25,8 @@ class GuestSerializer(serializers.ModelSerializer):
     Complete Guest Profile including GRC identity fields.
     """
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
+    # 👇 NEW: Helps Super Admin identify guest origin
+    hotel_name = serializers.CharField(source='owner.hotel_profile.hotel_name', read_only=True)
 
     class Meta:
         model = Guest
@@ -104,6 +107,9 @@ class BookingSerializer(serializers.ModelSerializer):
     """
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     
+    # 👇 NEW: Shows which hotel this booking belongs to (Crucial for Super Admin)
+    hotel_name = serializers.CharField(source='owner.hotel_profile.hotel_name', read_only=True)
+    
     # Nested Read-Only details for the UI
     room_details = RoomSerializer(source='room', read_only=True)
     guest_details = GuestSerializer(source='guest', read_only=True)
@@ -117,7 +123,7 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = [
-            'id', 'owner',
+            'id', 'owner', 'hotel_name', # 👈 Added hotel_name here
             'guest', 
             'guest_details', 
             'room', 
@@ -192,11 +198,13 @@ class ExpenseSerializer(serializers.ModelSerializer):
     """
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     paid_by_username = serializers.ReadOnlyField(source='paid_by.username')
+    # 👇 NEW: Helps Super Admin see which hotel spent this money
+    hotel_name = serializers.CharField(source='owner.hotel_profile.hotel_name', read_only=True)
 
     class Meta:
         model = Expense
         fields = [
-            'id', 'owner', 'title', 'category', 'amount', 
+            'id', 'owner', 'hotel_name', 'title', 'category', 'amount', 
             'date', 'description', 'paid_by', 
             'paid_by_username', 'created_at'
         ]

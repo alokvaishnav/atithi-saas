@@ -14,11 +14,23 @@ const LicenseLock = ({ children }) => {
   // ✅ FIXED: Soft Logout (No 404 Error)
   const handleLogout = () => {
       localStorage.clear();
-      navigate('/login'); // 👈 Use navigate hook instead of window reload
+      sessionStorage.clear(); // 👈 Added: Clear session cache on logout
+      navigate('/login'); 
   };
 
   // 1. Check License Status
   const checkLicense = async () => {
+    // ⚡ OPTIMIZATION: Check Session Storage first to reduce API calls
+    const cachedStatus = sessionStorage.getItem('license_status');
+    if (cachedStatus) {
+        try {
+            setStatus(JSON.parse(cachedStatus));
+            return;
+        } catch (e) {
+            sessionStorage.removeItem('license_status');
+        }
+    }
+
     try {
         const res = await fetch(`${API_URL}/api/license/check/`, {
             headers: { 'Authorization': `Bearer ${token}` }
@@ -32,6 +44,10 @@ const LicenseLock = ({ children }) => {
 
         const data = await res.json();
         setStatus(data);
+        
+        // ⚡ Save to Session Storage so we don't ask API again this session
+        sessionStorage.setItem('license_status', JSON.stringify(data));
+
     } catch (e) { 
         console.error("License Check Failed:", e); 
         // Fallback: If API is down, assume locked but allow logout
@@ -67,6 +83,7 @@ const LicenseLock = ({ children }) => {
           
           if(res.ok) {
               alert("✅ License Activated! Welcome Pro User. 🚀");
+              sessionStorage.removeItem('license_status'); // 👈 Clear cache so new license takes effect
               window.location.reload(); 
           } else {
               alert(data.error || "Invalid License Key. Try: ATITHI-PRO-365");

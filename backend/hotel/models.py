@@ -6,10 +6,6 @@ from decimal import Decimal
 from django.db.models import F # 👈 For Race Condition Fix
 from django.core.mail import EmailMessage, get_connection
 
-# ✅ IMPORT ASYNC TASKS
-# We import inside methods to avoid circular dependency issues if tasks.py imports models
-# from .tasks import send_booking_confirmation_email, send_booking_whatsapp 
-
 # ==========================================
 # 1. ROOM MANAGEMENT
 # ==========================================
