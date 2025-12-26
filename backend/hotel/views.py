@@ -43,7 +43,7 @@ from .serializers import (
     InventoryItemSerializer,     
     HousekeepingTaskSerializer    
 )
-from core.models import Subscription, Payment, HotelSMTPSettings, HotelWhatsAppSettings # 👈 Added Import
+from core.models import Subscription, Payment, HotelSMTPSettings, HotelWhatsAppSettings 
 
 # Initialize User Model
 User = get_user_model()
@@ -517,7 +517,13 @@ class CheckLicenseView(APIView):
     
     def get(self, request):
         owner = get_hotel_owner(request.user)
-        if not owner: return Response({"status": "Active", "days": 999})
+        # 👇 FIXED: Return proper JSON structure for Admin/Superusers
+        if not owner: 
+            return Response({
+                "is_active": True, 
+                "days_left": 9999, 
+                "plan": "LIFETIME"
+            })
         
         sub, created = Subscription.objects.get_or_create(owner=owner)
         return Response({
@@ -689,7 +695,7 @@ class HotelSMTPSettingsView(APIView):
 
         return Response({"status": "Email Settings Saved!"})
 
-# 👇 NEW: WhatsApp Settings View
+# 👇 NEW: WhatsApp Settings per Hotel
 class HotelWhatsAppSettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
