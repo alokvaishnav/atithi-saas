@@ -21,6 +21,7 @@ from django.utils.dateparse import parse_date
 import csv
 import razorpay
 import uuid 
+import logging
 from datetime import timedelta
 from io import BytesIO
 from xhtml2pdf import pisa
@@ -45,8 +46,9 @@ from .serializers import (
 )
 from core.models import Subscription, Payment, HotelSMTPSettings, HotelWhatsAppSettings 
 
-# Initialize User Model
+# Initialize User Model & Logger
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 # ==============================
 # 🔐 UTILITY: Get the Hotel Owner
@@ -139,6 +141,19 @@ class BookingViewSet(viewsets.ModelViewSet):
             room.status = 'OCCUPIED'
             room.save()
 
+    def perform_update(self, serializer):
+        # 🛡️ SMART STATUS LOGIC: Free up room if booking is cancelled
+        old_instance = self.get_object()
+        old_status = old_instance.status
+        
+        booking = serializer.save()
+        
+        if booking.status == 'CANCELLED' and old_status != 'CANCELLED':
+            if booking.room:
+                booking.room.status = 'AVAILABLE'
+                booking.room.save()
+                logger.info(f"Room {booking.room.room_number} freed due to cancellation of Booking #{booking.id}")
+
     @action(detail=True, methods=['post'], url_path='send-confirmation')
     def send_confirmation(self, request, pk=None):
         booking = self.get_object()
@@ -147,6 +162,7 @@ class BookingViewSet(viewsets.ModelViewSet):
                 # Synchronous fallback if needed, but handled by tasks/models mostly
                 return Response({'status': 'Confirmation process initiated'})
             except Exception as e:
+                logger.error(f"Confirmation Error: {str(e)}")
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'error': 'Guest has no email'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -407,6 +423,7 @@ class InvoicePDFView(APIView):
         except Booking.DoesNotExist:
             return HttpResponse("Booking not found", status=404)
         except Exception as e:
+            logger.error(f"PDF Gen Error: {str(e)}")
             return HttpResponse(f"Error generating PDF: {str(e)}", status=500)
 
 # ==============================
@@ -569,6 +586,7 @@ def create_payment_order(request):
             'key_id': settings.RAZORPAY_KEY_ID
         })
     except Exception as e:
+        logger.error(f"Payment Create Error: {str(e)}")
         return Response({'error': str(e)}, status=400)
 
 @api_view(['POST'])
@@ -609,7 +627,7 @@ def verify_payment(request):
             return Response({'error': 'Payment record not found.'}, status=400)
 
     except Exception as e:
-        print(f"VERIFY ERROR: {e}")
+        logger.error(f"Payment Verify Error: {str(e)}")
         return Response({'error': str(e)}, status=400)
 
 # ==============================
@@ -666,7 +684,7 @@ class EmailInvoiceView(APIView):
             return Response({"status": "Email Sent from Hotel Account! 📧"})
 
         except Exception as e:
-            print(f"EMAIL ERROR: {e}")
+            logger.error(f"Email Send Error: {str(e)}")
             return Response({"error": str(e)}, status=500)
         
 class HotelSMTPSettingsView(APIView):
@@ -781,7 +799,7 @@ def register_user(request):
             }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        print(f"REGISTRATION CRASH: {str(e)}") 
+        logger.critical(f"REGISTRATION CRASH: {str(e)}") 
         return Response({'detail': f'Registration failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

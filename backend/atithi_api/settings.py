@@ -111,8 +111,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1), # Extended for better UX
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60), # 🛡️ SECURE: 60 mins access token
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),    # 7 Days refresh window
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }

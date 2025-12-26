@@ -42,18 +42,40 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 import SuperAdmin from './pages/SuperAdmin'; // 👈 NEW IMPORT
 
+// 🦴 LOADING SKELETON (UX Improvement)
+const AppSkeleton = () => (
+  <div className="flex h-screen bg-slate-50 overflow-hidden">
+    {/* Sidebar Skeleton */}
+    <div className="w-72 bg-slate-900 h-full hidden md:flex flex-col p-4 border-r border-slate-800">
+      <div className="h-16 bg-slate-800 rounded-xl mb-8 animate-pulse w-full"></div>
+      <div className="space-y-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="h-10 bg-slate-800/50 rounded-lg animate-pulse w-full"></div>
+        ))}
+      </div>
+    </div>
+    {/* Content Skeleton */}
+    <div className="flex-1 flex flex-col">
+      <div className="h-16 bg-white border-b border-slate-200 w-full animate-pulse"></div>
+      <div className="p-6 space-y-6">
+        <div className="h-32 bg-white rounded-2xl shadow-sm border border-slate-100 animate-pulse w-full"></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           <div className="h-24 bg-white rounded-xl shadow-sm border border-slate-100 animate-pulse"></div>
+           <div className="h-24 bg-white rounded-xl shadow-sm border border-slate-100 animate-pulse"></div>
+           <div className="h-24 bg-white rounded-xl shadow-sm border border-slate-100 animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 // 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, role, loading } = useAuth(); 
 
-  // 0. Loading State (Prevents flicker)
+  // 0. Loading State (Shows Skeleton instead of Spinner)
   if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-slate-50 gap-3">
-        <Loader2 className="animate-spin text-blue-600" />
-        <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">Verifying Access...</span>
-      </div>
-    );
+    return <AppSkeleton />;
   }
 
   // A. Check if logged in
@@ -226,7 +248,7 @@ const AppLayout = () => {
 const AppContent = () => {
   const { isAuthenticated, loading } = useAuth(); 
 
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-900"><Loader2 className="text-white animate-spin"/></div>;
+  if (loading) return <AppSkeleton />;
 
   return (
     <Routes>

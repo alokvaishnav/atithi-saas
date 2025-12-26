@@ -1,3 +1,4 @@
+import logging
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -5,6 +6,9 @@ from django.utils import timezone
 from decimal import Decimal
 from django.db.models import F # 👈 For Race Condition Fix
 from django.core.mail import EmailMessage, get_connection
+
+# ✅ Initialize Logger
+logger = logging.getLogger(__name__)
 
 # ==========================================
 # 1. ROOM MANAGEMENT
@@ -183,7 +187,7 @@ class Booking(models.Model):
             smtp_config = HotelSMTPSettings.objects.filter(owner=self.owner).first()
             
             if not smtp_config:
-                print(f"Skipping email: No SMTP Settings found for {self.owner.username}")
+                logger.warning(f"Skipping email: No SMTP Settings found for {self.owner.username}")
                 return
 
             # 2. Create Custom Connection
@@ -221,11 +225,11 @@ class Booking(models.Model):
                 connection=connection        # VIA: Hotel Credentials
             )
             email.send()
-            print(f"Email sent via {smtp_config.email_host_user}")
+            logger.info(f"Email sent via {smtp_config.email_host_user} for Booking {self.id}")
 
         except Exception as e:
-            # Silently fail so the Booking still saves!
-            print(f"Email delivery failed: {e}")
+            # Silently fail so the Booking still saves, but log the error!
+            logger.error(f"Email delivery failed for Booking {self.id}: {e}")
 
     @property
     def balance_due(self):
