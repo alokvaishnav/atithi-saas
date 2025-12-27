@@ -1,6 +1,7 @@
 """
 Django settings for atithi_api project.
 Updated for Atithi HMS Enterprise v2.5 - Production Ready
+Stack: Vercel (Compute) + Supabase (DB/Storage)
 """
 
 from pathlib import Path
@@ -16,7 +17,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # --------------------------------------------------------
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=n8%jjzrhdr)$7&npl*kyl6lbp(%f@79b_+tp*bo6_ppe(0m=v')
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-ALLOWED_HOSTS = ['*']  # Allow Render to route requests
+
+# Allow Vercel and Localhost
+ALLOWED_HOSTS = ['.vercel.app', '.now.sh', 'localhost', '127.0.0.1']
 
 # --------------------------------------------------------
 # 📦 INSTALLED APPS
@@ -29,10 +32,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'whitenoise.runserver_nostatic',
     
-    # ☁️ Cloudinary (Must be before staticfiles)
-    'cloudinary_storage',
+    # ☁️ Supabase Storage (S3 Compatible)
+    'storages',
     'django.contrib.staticfiles',
-    'cloudinary',
     
     # ⚡ 3rd Party SaaS Apps
     'rest_framework',
@@ -84,11 +86,12 @@ WSGI_APPLICATION = 'atithi_api.wsgi.application'
 # --------------------------------------------------------
 # 🗄️ DATABASE CONFIGURATION
 # --------------------------------------------------------
-# Prioritize DATABASE_URL from Render, fallback to SQLite for local dev
+# Prioritize DATABASE_URL from Supabase, fallback to SQLite for local dev
 DATABASES = {
     'default': dj_database_url.config(
         default='sqlite:///db.sqlite3',
-        conn_max_age=600
+        conn_max_age=600,
+        ssl_require=True # Supabase Postgres requires SSL
     )
 }
 
@@ -122,17 +125,20 @@ SIMPLE_JWT = {
 }
 
 # --------------------------------------------------------
-# 🌐 CORS & CSRF (CRITICAL FIX FOR VERCEL)
+# 🌐 CORS & CSRF (Configured for Vercel)
 # --------------------------------------------------------
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",                # Local React
-    "http://127.0.0.1:5173",
-    "https://atithi-saas.vercel.app",       # 👈 YOUR VERCEL FRONTEND
+    "http://localhost:5173",
+    # Add your Vercel Frontend URL here later
+    # e.g., "https://atithi-saas.vercel.app"
+    os.environ.get('FRONTEND_URL', 'http://localhost:5173'),
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://atithi-saas.onrender.com",     # Your Backend
-    "https://atithi-saas.vercel.app",       # Your Frontend
+    "http://localhost:8000",
+    # Add your Backend URL here later
+    os.environ.get('BACKEND_URL', 'http://localhost:8000'),
+    os.environ.get('FRONTEND_URL', 'http://localhost:5173'),
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -160,7 +166,7 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_PASS', '')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # URL used in Password Reset Emails (Points to Frontend)
-FRONTEND_URL = "https://atithi-saas.vercel.app"
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
 # --------------------------------------------------------
 # 🚀 CELERY & REDIS (Async Tasks)
@@ -179,21 +185,6 @@ TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
 TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER', '')
 
 # --------------------------------------------------------
-# 📁 MEDIA & STATIC FILES
-# --------------------------------------------------------
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Kolkata' 
-USE_I18N = True
-USE_TZ = True 
-
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-# --------------------------------------------------------
 # 💳 RAZORPAY CONFIGURATION
 # --------------------------------------------------------
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', '')
@@ -209,14 +200,51 @@ AUTH_PASSWORD_VALIDATORS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --------------------------------------------------------
-# ☁️ CLOUDINARY STORAGE (Persistent Images)
+# ☁️ SUPABASE STORAGE (S3 Compatible)
 # --------------------------------------------------------
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.environ.get('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET'),
-}
+# SYSTEM SETTINGS
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'Asia/Kolkata' 
+USE_I18N = True
+USE_TZ = True 
 
-# Only use Cloudinary in Production (prevents image loss on Render)
+# Whitenoise for Static Files
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 if not DEBUG:
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    # Production: Use Supabase S3 Storage for Media
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": os.environ.get('SUPABASE_ACCESS_KEY_ID'),
+                "secret_key": os.environ.get('SUPABASE_SECRET_ACCESS_KEY'),
+                "bucket_name": os.environ.get('SUPABASE_BUCKET_NAME', 'media'),
+                "endpoint_url": os.environ.get('SUPABASE_S3_ENDPOINT'), # e.g. https://<project>.supabase.co/storage/v1/s3
+                "region_name": "us-east-1", # Required placeholder for Supabase
+                "default_acl": "public-read",
+                "querystring_auth": False,
+                "object_parameters": {
+                    "CacheControl": "max-age=86400",
+                },
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+
+    # Construct Public URL for Media
+    SUPABASE_PROJECT_ID = os.environ.get('SUPABASE_PROJECT_ID')
+    SUPABASE_BUCKET_NAME = os.environ.get('SUPABASE_BUCKET_NAME', 'media')
+    
+    if SUPABASE_PROJECT_ID:
+        MEDIA_URL = f"https://{SUPABASE_PROJECT_ID}.supabase.co/storage/v1/object/public/{SUPABASE_BUCKET_NAME}/"
+    else:
+        MEDIA_URL = '/media/'
+else:
+    # Local Development
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'

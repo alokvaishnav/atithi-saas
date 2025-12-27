@@ -1,0 +1,28 @@
+{
+  "builds": [
+    {
+      "src": "backend/atithi_api/wsgi.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" }
+    },
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "backend/atithi_api/wsgi.py"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "backend/staticfiles/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "frontend/index.html"
+    }
+  ]
+}

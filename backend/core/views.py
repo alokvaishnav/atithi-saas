@@ -43,6 +43,7 @@ class StaffViewSet(viewsets.ModelViewSet):
         """
         user = self.request.user
         
+        # Security: Prevent unauthenticated access
         if not user.is_authenticated:
             return User.objects.none()
 
@@ -127,7 +128,7 @@ class StaffViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """
         🚫 SAFETY LOGIC:
-        Prevent users from accidentally deleting their own account.
+        Prevent users from accidentally deleting their own administrative account.
         """
         instance = self.get_object()
         if instance == request.user:
@@ -143,12 +144,18 @@ class StaffViewSet(viewsets.ModelViewSet):
 class SaaSConfigView(viewsets.ModelViewSet):
     """
     Publicly accessible (authenticated) view to get Support Info.
+    Fetched from the 'Software Company Settings' in Admin Panel.
     Write access is restricted to Super Admin only.
     """
     queryset = SaaSConfig.objects.all()
     serializer_class = SaaSConfigSerializer
     
     def get_permissions(self):
+        """
+        Custom Permissions:
+        - Read (GET): Authenticated Users (Hotel Owners/Staff)
+        - Write (POST/PUT/DELETE): Super Admin Only
+        """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAdminUser()]
         return [permissions.IsAuthenticated()]
@@ -178,7 +185,7 @@ class PasswordResetRequestView(APIView):
                 uid = urlsafe_base64_encode(force_bytes(user.pk))
                 token = PasswordResetTokenGenerator().make_token(user)
                 
-                # Construct Link
+                # Construct Link (Points to React Frontend)
                 reset_link = f"{settings.FRONTEND_URL}/reset-password/{uid}/{token}"
                 
                 # Send Email
