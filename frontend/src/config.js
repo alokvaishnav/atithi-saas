@@ -4,7 +4,8 @@
 // Toggle the comments below depending on where you are working.
 // ----------------------------------------------------------------------
 
-// 🚀 LIVE PRODUCTION URL (Render) - ACTIVE FOR DEPLOYMENT
+// 🚀 LIVE PRODUCTION URL (Vercel)
+// If your Frontend & Backend are in the SAME Vercel project (Monorepo):
 export const API_URL = 'https://atithi-saas.vercel.app';
 
 // 💻 LOCAL DEVELOPMENT URL - DISABLED
