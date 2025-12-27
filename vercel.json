@@ -21,11 +21,15 @@
       "dest": "backend/staticfiles/$1"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
       "handle": "filesystem"
     },
     {
-      "src": "/(?!assets/|favicon.ico)(.*)",
-      "dest": "frontend/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
