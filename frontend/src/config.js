@@ -1,12 +1,10 @@
 // ----------------------------------------------------------------------
 // 🔌 API CONFIGURATION
 // ----------------------------------------------------------------------
-// Toggle the comments below depending on where you are working.
-// ----------------------------------------------------------------------
 
-// 🚀 LIVE PRODUCTION URL (Vercel)
-// If your Frontend & Backend are in the SAME Vercel project (Monorepo):
-export const API_URL = 'https://atithi-saas.vercel.app';
+// "import.meta.env.PROD" is a special variable provided by Vite.
+// It is TRUE when deployed to Vercel, and FALSE when running locally.
 
-// 💻 LOCAL DEVELOPMENT URL - DISABLED
-// export const API_URL = 'http://127.0.0.1:8000';
+export const API_URL = import.meta.env.PROD 
+  ? 'https://atithi-saas.vercel.app'  // 🚀 Production URL (Vercel)
+  : 'http://127.0.0.1:8000';          // 💻 Local Development URL
