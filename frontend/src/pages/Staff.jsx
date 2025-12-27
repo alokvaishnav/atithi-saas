@@ -71,8 +71,9 @@ const Staff = () => {
       const method = isEdit ? 'PATCH' : 'POST';
 
       // If editing and password is empty, remove it so we don't overwrite it
+      // If creating and password is empty, backend will trigger Invite Email
       const payload = { ...formData };
-      if (isEdit && !payload.password) delete payload.password;
+      if (!payload.password) delete payload.password;
 
       const res = await fetch(url, {
         method: method,
@@ -86,7 +87,13 @@ const Staff = () => {
       if (res.ok) {
         setShowModal(false);
         fetchUsers();
-        alert(isEdit ? "Staff profile updated! ✅" : "Staff account created! 🔑");
+        if (isEdit) {
+            alert("Staff profile updated! ✅");
+        } else if (payload.password) {
+            alert("Staff account created with password! 🔑");
+        } else {
+            alert("✅ Invitation Sent! The staff member will receive an email to set their password.");
+        }
       } else {
         const errorData = await res.json();
         alert(errorData.detail || "Operation failed.");
@@ -136,7 +143,7 @@ const Staff = () => {
             onClick={handleCreate} 
             className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-3 shadow-xl hover:bg-blue-600 transition-all active:scale-95 uppercase tracking-widest text-xs"
           >
-            <UserPlus size={18}/> Onboard Personnel
+            <UserPlus size={18}/> Invite Personnel
           </button>
         )}
       </div>
@@ -209,14 +216,14 @@ const Staff = () => {
             <div className="p-10">
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
-                    {editingUser ? 'Update Profile' : 'New System Identity'}
+                    {editingUser ? 'Update Profile' : 'Invite New Staff'}
                 </h3>
                 <button onClick={() => setShowModal(false)} className="text-slate-300 hover:text-slate-900 transition-colors"><X size={28}/></button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Login Username</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Staff Name</label>
                   <input 
                     type="text" 
                     className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold outline-none transition-all" 
@@ -228,7 +235,7 @@ const Staff = () => {
                 </div>
                 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Email Address</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Email Address (For Invite)</label>
                   <input 
                     type="email" 
                     className="w-full p-5 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold outline-none transition-all" 
@@ -240,16 +247,16 @@ const Staff = () => {
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">
-                    {editingUser ? 'New Password (Optional)' : 'Access Password'}
+                    {editingUser ? 'New Password (Optional)' : 'Manual Password (Optional)'}
                   </label>
                   <div className="relative">
                       <Key className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
                       <input 
                         type="password"  
-                        className="w-full pl-12 p-5 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold outline-none transition-all" 
+                        className="w-full pl-12 p-5 bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl font-bold outline-none transition-all placeholder:font-medium placeholder:text-slate-300" 
                         value={formData.password}
                         onChange={e => setFormData({...formData, password: e.target.value})} 
-                        required={!editingUser}
+                        placeholder={editingUser ? "Leave blank to keep current" : "Leave blank to send invite email"}
                       />
                   </div>
                 </div>
@@ -281,8 +288,8 @@ const Staff = () => {
                 <div className="flex gap-4 pt-6">
                   <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-black text-slate-400 uppercase text-xs tracking-widest hover:text-slate-600 transition-colors">Cancel</button>
                   <button type="submit" disabled={isSubmitting} className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2">
-                    {isSubmitting ? <Loader2 className="animate-spin" size={16}/> : (editingUser ? <Edit2 size={16}/> : <UserPlus size={16}/>)}
-                    {isSubmitting ? 'Saving...' : (editingUser ? 'Save Changes' : 'Generate Account')}
+                    {isSubmitting ? <Loader2 className="animate-spin" size={16}/> : (editingUser ? <Edit2 size={16}/> : <Mail size={16}/>)}
+                    {isSubmitting ? 'Processing...' : (editingUser ? 'Save Changes' : (formData.password ? 'Create Account' : 'Send Invitation'))}
                   </button>
                 </div>
               </form>

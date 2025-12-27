@@ -2,7 +2,10 @@ from rest_framework import serializers
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
-from .models import User, SaaSConfig, Subscription
+from django.contrib.auth import get_user_model
+from .models import SaaSConfig, Subscription
+
+User = get_user_model()
 
 # 👇 NEW: Subscription Serializer for Admin View
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -32,8 +35,9 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined', 'hotel_owner', 'hotel_name', 'subscription', 'is_superuser']
         
         extra_kwargs = {
-            'password': {'write_only': True},
-            'email': {'required': True}
+            'password': {'write_only': True, 'required': False}, # 👈 Changed to False for Invite Flow
+            'email': {'required': True},
+            'hotel_owner': {'read_only': True} 
         }
 
     def create(self, validated_data):
@@ -122,31 +126,25 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
-    def validate_email(self, value):
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("User with this email does not exist.")
-        return value
-
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    password = serializers.CharField(write_only=True, min_length=6)
+    new_password = serializers.CharField(write_only=True) # Renamed to match View
+    uid = serializers.CharField()
     token = serializers.CharField()
-    uidb64 = serializers.CharField()
 
-    def validate(self, attrs):
-        try:
-            uid = force_str(urlsafe_base64_decode(attrs['uidb64']))
-            user = User.objects.get(pk=uid)
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            raise serializers.ValidationError("Invalid Token or User ID")
-
-        if not PasswordResetTokenGenerator().check_token(user, attrs['token']):
-            raise serializers.ValidationError("Token is invalid or expired")
-
-        attrs['user'] = user
-        return attrs
+    def validate(self, data):
+        return data
 
     def save(self):
-        user = self.validated_data['user']
-        user.set_password(self.validated_data['password'])
-        user.save()
-        return user
+        try:
+            uid = force_str(urlsafe_base64_decode(self.validated_data['uid']))
+            user = User.objects.get(pk=uid)
+            token = self.validated_data['token']
+            
+            if not PasswordResetTokenGenerator().check_token(user, token):
+                raise serializers.ValidationError("Invalid or expired token")
+                
+            user.set_password(self.validated_data['new_password'])
+            user.save()
+            return user
+        except Exception:
+            raise serializers.ValidationError("Invalid Token")
