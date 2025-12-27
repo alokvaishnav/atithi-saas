@@ -24,7 +24,7 @@
       "handle": "filesystem"
     },
     {
-      "src": "/(.*)",
+      "src": "/(?!assets/|favicon.ico)(.*)",
       "dest": "frontend/index.html"
     }
   ]
