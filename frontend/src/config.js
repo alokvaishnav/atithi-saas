@@ -5,7 +5,7 @@
 // ----------------------------------------------------------------------
 
 // 🚀 LIVE PRODUCTION URL (Render) - ACTIVE FOR DEPLOYMENT
-export const API_URL = 'https://atithi-saas.onrender.com';
+export const API_URL = 'https://atithi-saas.vercel.app';
 
 // 💻 LOCAL DEVELOPMENT URL - DISABLED
 // export const API_URL = 'http://127.0.0.1:8000';
