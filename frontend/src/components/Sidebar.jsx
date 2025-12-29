@@ -49,6 +49,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   };
 
+  // Define Groups with Professional Role-Based Access Control (RBAC)
   const groups = [
     {
       title: "Main",
@@ -71,9 +72,11 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
-        { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
-        { icon: <Package size={18} />, label: 'Inventory', path: '/inventory' } 
+        ...(role !== 'HOUSEKEEPING' ? [
+            { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
+            { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
+            { icon: <Package size={18} />, label: 'Inventory', path: '/inventory' } 
+        ] : [])
       ]
     },
     {
