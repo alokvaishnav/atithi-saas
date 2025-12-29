@@ -1,26 +1,15 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, SaaSConfig
+from django.contrib.auth.admin import UserAdmin
+from .models import User
 
-# Branding
-admin.site.site_header = "Atithi SaaS Admin"
-admin.site.site_title = "Atithi Portal"
-admin.site.index_title = "Welcome to Master Control"
-
-@admin.register(User)
-class UserAdmin(BaseUserAdmin):
-    # Add our custom fields to the list view
-    list_display = ('username', 'email', 'role', 'is_staff', 'hotel_owner')
-    list_filter = ('role', 'is_staff', 'is_active')
-    
-    # Add our custom fields to the edit form
-    fieldsets = BaseUserAdmin.fieldsets + (
-        ('Atithi Role Info', {'fields': ('role', 'phone', 'hotel_owner')}),
+class CustomUserAdmin(UserAdmin):
+    model = User
+    list_display = ['username', 'email', 'role', 'hotel_owner', 'is_staff']
+    fieldsets = UserAdmin.fieldsets + (
+        ('SaaS Fields', {'fields': ('role', 'hotel_owner')}),
     )
-    add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        ('Atithi Role Info', {'fields': ('role', 'phone', 'email')}),
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('SaaS Fields', {'fields': ('role', 'hotel_owner')}),
     )
 
-@admin.register(SaaSConfig)
-class SaaSConfigAdmin(admin.ModelAdmin):
-    list_display = ('company_name', 'support_email')
+admin.site.register(User, CustomUserAdmin)
