@@ -1,179 +1,153 @@
-import { useEffect, useState } from 'react';
-import api from './api';
-import Login from './Login';
-import AddRoomModal from './AddRoomModal'; 
-import CheckInModal from './CheckInModal'; 
-import { Building2, BedDouble, Wifi, LogOut, Plus } from 'lucide-react'; 
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ShieldAlert, LogOut, Loader2, Menu } from 'lucide-react'; 
+import { useState } from 'react'; 
+import { AuthProvider, useAuth } from './context/AuthContext';
+
+// --- COMPONENTS ---
+import Sidebar from './components/Sidebar';
+import LicenseLock from './components/LicenseLock'; 
+
+// --- PUBLIC PAGES ---
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register'; 
+import DigitalFolio from './pages/DigitalFolio';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+
+// --- CORE OPERATIONS ---
+import Dashboard from './pages/Dashboard';
+import FrontDesk from './pages/FrontDesk';
+import Bookings from './pages/Bookings';
+import CalendarView from './pages/CalendarView';
+import Folio from './pages/Folio';
+import POS from './pages/POS';
+import PrintGRC from './pages/PrintGRC';
+
+// --- MANAGEMENT MODULES ---
+import Rooms from './pages/Rooms';
+import Guests from './pages/Guests';
+import EditGuest from './pages/EditGuest'; 
+import Services from './pages/Services';
+import Inventory from './pages/Inventory';
+import Housekeeping from './pages/Housekeeping';
+
+// --- ADMIN & FINANCE ---
+import Expenses from './pages/Expenses';
+import Reports from './pages/Reports';
+import Staff from './pages/Staff';       
+import Accounting from './pages/Accounting'; 
+import Support from './pages/Support'; 
+import Settings from './pages/Settings'; 
+import Pricing from './pages/Pricing';
+import SuperAdmin from './pages/SuperAdmin'; 
+
+const AppSkeleton = () => (
+  <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="w-72 bg-slate-900 h-full hidden md:flex flex-col p-4 border-r border-slate-800">
+      <div className="h-16 bg-slate-800 rounded-xl mb-8 animate-pulse w-full"></div>
+    </div>
+    <div className="flex-1 flex flex-col">
+      <div className="h-16 bg-white border-b border-slate-200 w-full animate-pulse"></div>
+      <div className="p-6 space-y-6">
+        <div className="h-32 bg-white rounded-2xl shadow-sm border border-slate-100 animate-pulse w-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { isAuthenticated, role, loading } = useAuth(); 
+  if (loading) return <AppSkeleton />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="text-center p-8 bg-white shadow-2xl rounded-[40px] border border-red-100 max-w-md">
+          <ShieldAlert size={40} className="text-red-500 mx-auto mb-6"/>
+          <h2 className="text-2xl font-black text-slate-800 mb-3">Access Restricted</h2>
+          <a href="/dashboard" className="inline-block w-full bg-slate-900 text-white px-8 py-4 rounded-2xl font-black mt-4">Return to HQ</a>
+        </div>
+      </div>
+    );
+  }
+  return children;
+};
+
+const AppLayout = () => {
+    const { role, logout, hotelName, loading } = useAuth(); 
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    return (
+      <ProtectedRoute loading={loading}>
+        <LicenseLock>
+          <div className="flex h-screen bg-slate-50 overflow-hidden">
+            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+            <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              <header className="bg-white border-b border-slate-200 p-4 md:p-5 flex justify-between items-center z-10 shadow-sm sticky top-0">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 text-slate-500"><Menu size={24} /></button>
+                    <div><h2 className="text-lg md:text-2xl font-black text-slate-800 italic">{hotelName || "ATITHI ENTERPRISE"}</h2></div>
+                </div>
+                <button onClick={() => { if(window.confirm("Logout?")) logout() }} className="text-slate-400 hover:text-red-600"><LogOut size={20} /></button>
+              </header>
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/front-desk" element={<FrontDesk />} />
+                  <Route path="/rooms" element={<Rooms />} />
+                  <Route path="/guests" element={<Guests />} />
+                  <Route path="/guests/edit/:id" element={<EditGuest />} />
+                  <Route path="/bookings" element={<Bookings />} />
+                  <Route path="/calendar" element={<CalendarView />} />
+                  <Route path="/folio/:bookingId" element={<Folio />} />
+                  <Route path="/pos" element={<POS />} />
+                  <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
+                  <Route path="/support" element={<Support />} />
+                  <Route path="/super-admin" element={<SuperAdmin />} />
+                  <Route path="/staff" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}><Staff /></ProtectedRoute>} />
+                  <Route path="/pricing" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}><Pricing /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute allowedRoles={['OWNER']}><Settings /></ProtectedRoute>} />
+                  <Route path="/accounting" element={<ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}><Accounting /></ProtectedRoute>} />
+                  <Route path="/expenses" element={<ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}><Expenses /></ProtectedRoute>} />
+                  <Route path="/reports" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'ACCOUNTANT']}><Reports /></ProtectedRoute>} />
+                  <Route path="/inventory" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Inventory /></ProtectedRoute>} />
+                  <Route path="/housekeeping" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}><Housekeeping /></ProtectedRoute>} />
+                  <Route path="/services" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </div>
+            </main>
+          </div>
+        </LicenseLock>
+      </ProtectedRoute>
+    );
+};
+
+const AppContent = () => {
+  const { isAuthenticated, loading } = useAuth(); 
+  if (loading) return <AppSkeleton />;
+  return (
+    <Routes>
+        <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} /> 
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
+        <Route path="/folio-live/:id" element={<DigitalFolio />} />
+        <Route path="/*" element={<AppLayout />} />
+    </Routes>
+  );
+}
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [rooms, setRooms] = useState([]);
-  const [error, setError] = useState(null);
-  
-  // State for Modals
-  const [showModal, setShowModal] = useState(false); // Add Room Modal
-  const [selectedRoom, setSelectedRoom] = useState(null); // Check-In Modal
-
-  // Check if we are already logged in when the app starts
-  useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-        setIsAuthenticated(true);
-        fetchRooms();
-    }
-  }, []);
-
-  const fetchRooms = async () => {
-    try {
-      const response = await api.get('/rooms/');
-      setRooms(response.data);
-    } catch (err) {
-      console.error("API Error:", err);
-      if (err.response && err.response.status === 401) {
-          handleLogout();
-      } else {
-          setError("Could not load rooms.");
-      }
-    }
-  };
-
-  const handleLoginSuccess = () => {
-      setIsAuthenticated(true);
-      fetchRooms(); 
-  };
-
-  const handleLogout = () => {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setIsAuthenticated(false);
-      setRooms([]);
-  };
-
-  // 🏨 NEW: Checkout Logic
-  const handleCheckout = async (room) => {
-    if (!window.confirm(`Check out guest from Room ${room.room_number}?`)) return;
-
-    try {
-      // 1. Mark the room as AVAILABLE again
-      await api.patch(`/rooms/${room.id}/`, {
-        status: 'AVAILABLE'
-      });
-      
-      // 2. Refresh the list (Room turns Green)
-      fetchRooms();
-      alert(`Room ${room.room_number} is now clean and available!`);
-    } catch (error) {
-      console.error(error);
-      alert("Checkout failed.");
-    }
-  };
-
-  // 🔒 If not logged in, show Login Screen
-  if (!isAuthenticated) {
-      return <Login onLogin={handleLoginSuccess} />;
-  }
-
-  // 🔓 If logged in, show Dashboard
   return (
-    <div className="min-h-screen p-10 bg-slate-50">
-      <header className="flex items-center justify-between mb-10">
-        <div className="flex items-center gap-4">
-            <div className="bg-blue-600 p-3 rounded-xl text-white shadow-lg shadow-blue-200">
-                <Building2 size={32} />
-            </div>
-            <div>
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight">Atithi SaaS <span className="text-blue-600">Cloud</span></h1>
-                <p className="text-slate-500 font-medium">Enterprise Hotel Management</p>
-            </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-4">
-            <button 
-                onClick={() => setShowModal(true)} 
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm"
-            >
-                <Plus size={20} /> Add Room
-            </button>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-600 font-bold transition-colors">
-                <LogOut size={20} />
-            </button>
-        </div>
-      </header>
-
-      {error ? (
-        <div className="bg-red-50 text-red-600 p-6 rounded-2xl border border-red-100 font-bold">
-          🚨 {error}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {rooms.map((room) => (
-            <div key={room.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-              <div className="flex justify-between items-start mb-4">
-                <div className="bg-slate-100 p-2 rounded-lg text-slate-600">
-                    <BedDouble size={24} />
-                </div>
-                {/* Dynamic Status Badge */}
-                <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase ${
-                    room.status === 'AVAILABLE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
-                    {room.status}
-                </span>
-              </div>
-              <h2 className="text-2xl font-bold text-slate-800">Room {room.room_number}</h2>
-              <div className="flex gap-2 mt-2">
-                  <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">{room.room_type}</span>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 flex items-center gap-1"><Wifi size={10}/> WiFi</span>
-              </div>
-              
-              <div className="mt-6 pt-6 border-t border-slate-50 flex justify-between items-end">
-                <div>
-                    <span className="text-3xl font-black text-blue-600 tracking-tighter">₹{room.price}</span>
-                    <span className="text-[10px] text-slate-400 font-bold tracking-widest ml-1">/ NIGHT</span>
-                </div>
-                
-                {/* 🟢 SMART ACTION BUTTON 🟢 */}
-                {room.status === 'OCCUPIED' ? (
-                    <button 
-                        onClick={() => handleCheckout(room)}
-                        className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-red-200 transition-colors border border-red-200"
-                    >
-                        Check Out
-                    </button>
-                ) : (
-                    <button 
-                        onClick={() => setSelectedRoom(room)}
-                        className="bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-black transition-colors"
-                    >
-                        Book Now
-                    </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 1. Add Room Modal */}
-      {showModal && (
-        <AddRoomModal 
-            onClose={() => setShowModal(false)} 
-            onRoomAdded={fetchRooms} 
-        />
-      )}
-
-      {/* 2. Check-In Modal */}
-      {selectedRoom && (
-        <CheckInModal 
-            room={selectedRoom}
-            onClose={() => setSelectedRoom(null)}
-            onBookingSuccess={() => {
-                setSelectedRoom(null);
-                fetchRooms(); 
-            }}
-        />
-      )}
-    </div>
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 }
 
