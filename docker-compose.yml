@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # 🗄️ DATABASE SERVICE (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=atithi_db
+      - POSTGRES_USER=atithi_user
+      - POSTGRES_PASSWORD=super_secret_password
+    restart: always
+
+  # 🧠 BACKEND SERVICE (Django)
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app  # Syncs your code changes instantly
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=dev_secret_key
+      # 👇 CHANGED: Allow All Hosts (Required for AWS)
+      - DJANGO_ALLOWED_HOSTS=* # Connect to the 'db' service defined above
+      - SQL_ENGINE=django.db.backends.postgresql
+      - SQL_DATABASE=atithi_db
+      - SQL_USER=atithi_user
+      - SQL_PASSWORD=super_secret_password
+      - SQL_HOST=db
+      - SQL_PORT=5432
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
