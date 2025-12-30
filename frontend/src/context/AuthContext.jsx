@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }) => {
     const detectedRole = data.is_superuser ? 'OWNER' : (data.user_role || 'STAFF');
     
     // C. Save User Profile Data
-    localStorage.setItem('username', data.username);
+    localStorage.setItem('username', detectedRole);
     localStorage.setItem('user_role', detectedRole);
     localStorage.setItem('user_id', data.id || '');
     localStorage.setItem('is_superuser', data.is_superuser || false);

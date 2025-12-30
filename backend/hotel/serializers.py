@@ -6,13 +6,14 @@ from .models import (
 )
 from core.models import User
 
-# 0. User & Identity Serializer (CRITICAL FOR ROLE FIX)
+# 0. User & Identity Serializer - SYNCED WITH DATABASE 'role' FIELD
 class UserSerializer(serializers.ModelSerializer):
-    role_display = serializers.CharField(source='get_user_role_display', read_only=True)
+    # Fixed source to use 'get_role_display' instead of 'get_user_role_display'
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_role', 'role_display', 'is_staff']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_display', 'is_staff', 'is_superuser']
         read_only_fields = ['id', 'is_staff']
 
 # 1. Global Branding & Configuration
@@ -60,7 +61,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['owner']
 
-# 5. Folio Components (Nested in Booking)
+# 5. Folio Components
 class ChargeSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookingCharge
@@ -73,7 +74,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = BookingPayment
         fields = '__all__'
 
-# 6. Master Booking Serializer (Enhanced with GST & Totals)
+# 6. Master Booking Serializer
 class BookingSerializer(serializers.ModelSerializer):
     guest_details = GuestSerializer(source='guest', read_only=True)
     room_details = RoomSerializer(source='room', read_only=True)
@@ -105,25 +106,24 @@ class BookingSerializer(serializers.ModelSerializer):
         except:
             return "Atithi HMS"
 
-# 7. Staff & HR (Ensures user_role is set during creation)
+# 7. Staff & HR - SYNCED WITH DATABASE 'role' FIELD
 class StaffSerializer(serializers.ModelSerializer):
-    role_display = serializers.CharField(source='get_user_role_display', read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_role', 'role_display', 'password']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'role_display', 'password']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        # Explicitly set the role if provided, otherwise default is usually set in model
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
         
         request = self.context.get('request')
         if request and request.user:
-            user.hotel_name = request.user.hotel_name 
-            if hasattr(user, 'hotel_owner'):
+            # Sync with owner profile
+            if hasattr(request.user, 'hotel_owner'):
                 user.hotel_owner = request.user.hotel_owner or request.user
             user.save()
         return user
@@ -156,6 +156,8 @@ class LicenseSerializer(serializers.ModelSerializer):
         fields = ['key', 'is_active', 'expiry_date', 'days_left', 'is_expired']
 
     def get_is_expired(self, obj):
-        # Handle potential None values for days_left
-        left = obj.days_left()
-        return left <= 0 if left is not None else True
+        try:
+            left = obj.days_left()
+            return left <= 0 if left is not None else True
+        except:
+            return True

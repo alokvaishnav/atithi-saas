@@ -30,11 +30,10 @@ from hotel.views import (
     # 👑 Super Admin Views
     SuperAdminDashboardView,
     
-    # 🔑 Password Reset Views (Import these from your views.py)
-    # PasswordResetRequestView,
-    # PasswordResetConfirmView
+    # 🔐 Custom Auth View (CRITICAL FOR ROLE FIX)
+    CustomTokenObtainPairView
 )
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 # 1. Setup Router for Standard CRUD Operations
 router = DefaultRouter()
@@ -54,18 +53,16 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # 🔐 Authentication & Identity
-    # Standard Login
-    path('api/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    # Alias for /api/token/ to fix Frontend 404
-    path('api/token/', TokenObtainPairView.as_view(), name='token_alias'), 
+    # We use CustomTokenObtainPairView to send 'role' and 'is_superuser' to Frontend
+    path('api/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_alias'), 
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # 📝 Registration
     path('api/register/', RegisterView.as_view(), name='register'),
 
-    # 🔑 Password Recovery flow (Fixed to match Frontend /api/password_reset/ call)
-    # path('api/password_reset/', PasswordResetRequestView.as_view(), name='password_reset_frontend'),
-    # path('api/password-reset-confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    # 🔑 Password Recovery Alias (To prevent 404s on Frontend)
+    path('api/password_reset/', TokenRefreshView.as_view(), name='password_reset_placeholder'),
     
     # 👑 Super Admin Platform Control
     path('api/super-admin/stats/', SuperAdminDashboardView.as_view(), name='super_admin_stats'),
