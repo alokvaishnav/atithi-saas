@@ -1,22 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   CheckCircle, LogIn, LogOut, User, 
-  Briefcase, Grid, AlertTriangle, Calendar
+  Briefcase, Grid, AlertTriangle, Calendar,
+  Search, Loader2, BedDouble, Clock, ShieldAlert,
+  ConciergeBell, FileText, Calculator, ChevronRight, Zap
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
 
 const FrontDesk = () => {
+  // --- YOUR ORIGINAL STATES ---
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('MATRIX'); 
+  const [searchTerm, setSearchTerm] = useState('');
 
+  // --- NEW MISSION CONTROL STATES ---
+  const [gstBase, setGstBase] = useState(0);
   const navigate = useNavigate();
   const token = localStorage.getItem('access_token');
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const fetchData = async () => {
+  // --- MASTER FETCH DATA (PRESERVED & ENHANCED) ---
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -24,32 +31,49 @@ const FrontDesk = () => {
           fetch(`${API_URL}/api/rooms/`, { headers }),
           fetch(`${API_URL}/api/bookings/`, { headers })
       ]);
-      if (roomRes.ok) setRooms(await roomRes.json());
-      if (bookingRes.ok) setBookings(await bookingRes.json());
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
-  };
+      if (roomRes.ok) setRooms(await roomRes.ok ? await roomRes.json() : []);
+      if (bookingRes.ok) setBookings(await bookingRes.ok ? await bookingRes.json() : []);
+    } catch (err) { 
+        console.error("Reception Sync Error:", err); 
+    } finally { 
+        setLoading(false); 
+    }
+  }, [token]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
+  // --- YOUR ORIGINAL ACTIONS (PRESERVED) ---
   const updateBookingStatus = async (id, newStatus) => {
-    if(!window.confirm(`Confirm: Mark guest as ${newStatus}?`)) return;
-    await fetch(`${API_URL}/api/bookings/${id}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ status: newStatus })
-    });
-    fetchData();
+    const actionLabel = newStatus === 'CHECKED_IN' ? 'Check In' : 'Check Out';
+    if(!window.confirm(`Confirm ${actionLabel} for this guest?`)) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: newStatus })
+        });
+        if(res.ok) fetchData();
+    } catch (err) { console.error(err); }
   };
 
   const markRoomClean = async (id) => {
-    await fetch(`${API_URL}/api/rooms/${id}/mark-clean/`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    fetchData();
+    if(!window.confirm("Mark room as clean and ready?")) return;
+    try {
+        await fetch(`${API_URL}/api/rooms/${id}/mark-clean/`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        fetchData();
+    } catch (err) { console.error(err); }
   };
 
+  // --- PDF GENERATOR (NEW FEATURE) ---
+  const generateNightAudit = () => {
+    window.open(`${API_URL}/api/reports/daily-pdf/?token=${token}`, '_blank');
+  };
+
+  // --- YOUR ORIGINAL DERIVED DATA (PRESERVED) ---
   const activeBookingsMap = {};
   bookings.filter(b => b.status === 'CHECKED_IN').forEach(b => {
       if(b.room) activeBookingsMap[b.room] = b;
@@ -59,75 +83,254 @@ const FrontDesk = () => {
   const departures = bookings.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN');
   const inHouse = bookings.filter(b => b.status === 'CHECKED_IN');
 
-  if (loading) return <div className="p-20 text-center text-slate-400 font-bold uppercase">Loading Reception...</div>;
+  const getFilteredList = (list) => {
+      return list.filter(b => 
+          b.guest_details?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          b.room_details?.room_number?.toString().includes(searchTerm)
+      );
+  };
+
+  if (loading) return (
+    <div className="p-20 text-center flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-6">
+        <Loader2 className="animate-spin text-blue-600" size={60}/> 
+        <span className="font-black text-slate-400 uppercase tracking-[0.3em] text-xs animate-pulse">Initializing Mission Control...</span>
+    </div>
+  );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen">
-      <div className="flex justify-between items-center mb-8">
+    <div className="p-4 md:p-8 bg-[#f8fafc] min-h-screen font-sans animate-in fade-in duration-500">
+      
+      {/* 1. MANAGEMENT HEADER & STATS */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-10 gap-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter italic uppercase">Front Desk</h1>
-          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest mt-1">Live Operations Control</p>
+          <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase flex items-center gap-4">
+            <ConciergeBell className="text-blue-600" size={40}/> Front Desk
+          </h1>
+          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em] mt-3 flex items-center gap-2">
+            <Clock size={12}/> Live Status: {new Date().toLocaleTimeString()} • Operations Core
+          </p>
         </div>
-        <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 flex items-center gap-2">
-          <Calendar size={16} className="text-blue-500"/> {new Date().toLocaleDateString()}
+        
+        <div className="flex flex-wrap gap-4 w-full xl:w-auto">
+            <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
+                <LogIn size={18} className="text-blue-500"/> Arrivals: {arrivals.length}
+            </div>
+            <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
+                <LogOut size={18} className="text-red-500"/> Departures: {departures.length}
+            </div>
+            <div className="bg-slate-900 p-4 px-8 rounded-2xl text-xs font-black text-white flex items-center gap-3 shadow-xl">
+                <BedDouble size={18} className="text-blue-400"/> {Math.round((inHouse.length / rooms.length) * 100) || 0}% Cap.
+            </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 mb-8">
-        {['MATRIX', 'ARRIVALS', 'DEPARTURES', 'IN_HOUSE'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 min-w-[150px] p-4 rounded-2xl border-2 transition-all font-black text-xs uppercase tracking-widest ${activeTab === t ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-white'}`}>
-                {t.replace('_', ' ')}
-            </button>
-        ))}
+      {/* 2. MISSION CONTROL PANELS (NEW FEATURES) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+          
+          {/* Quick GST Calculator (12%) */}
+          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
+            <div className="flex justify-between items-center mb-6">
+                <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest italic flex items-center gap-2">
+                    <Calculator size={18} className="text-blue-600"/> Quick Folio Calculator
+                </h3>
+                <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-tighter">Standard 12% GST</span>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+                <div className="relative w-full">
+                    <input 
+                      type="number" 
+                      placeholder="Enter Base Amount..." 
+                      className="w-full p-5 bg-slate-50 rounded-2xl font-black text-slate-900 outline-none border-2 border-transparent focus:border-blue-500 transition-all shadow-inner"
+                      onChange={(e) => setGstBase(Number(e.target.value))}
+                    />
+                </div>
+                <div className="flex gap-4 w-full sm:w-auto">
+                    <div className="bg-blue-600 p-5 rounded-2xl text-center flex-1 sm:min-w-[140px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">
+                        <p className="text-[8px] font-black text-blue-100 uppercase tracking-widest mb-1">Final Bill</p>
+                        <p className="text-xl font-black text-white tracking-tighter italic">₹{(gstBase * 1.12).toFixed(2)}</p>
+                    </div>
+                </div>
+            </div>
+          </div>
+
+          {/* Night Audit PDF Actions */}
+          <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-6">
+             <div className="relative z-10 text-center sm:text-left">
+                <h3 className="font-black text-white uppercase text-xs tracking-widest italic flex items-center justify-center sm:justify-start gap-2 mb-2">
+                    <FileText size={18} className="text-blue-400"/> Daily Night Audit
+                </h3>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+                    Generate government compliant <br/> Financial audit reports for today.
+                </p>
+             </div>
+             <button 
+                onClick={generateNightAudit}
+                className="relative z-10 bg-blue-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-500 transition-all flex items-center gap-3 shadow-xl shadow-blue-900/40 group-hover:px-10"
+             >
+                <Zap size={16}/> Build PDF Report
+             </button>
+             <FileText className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-1000" />
+          </div>
       </div>
 
+      {/* 3. TABS & SEARCH */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+          <div className="flex gap-2 bg-white p-2 rounded-[25px] border border-slate-200 shadow-sm w-full md:w-auto overflow-x-auto">
+            {['MATRIX', 'ARRIVALS', 'DEPARTURES', 'IN_HOUSE'].map(t => (
+                <button 
+                    key={t} 
+                    onClick={() => setActiveTab(t)} 
+                    className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap ${
+                        activeTab === t ? 'bg-slate-900 text-white shadow-xl translate-y-[-2px]' : 'text-slate-400 hover:bg-slate-50'
+                    }`}
+                >
+                    {t.replace('_', ' ')}
+                </button>
+            ))}
+          </div>
+
+          <div className="relative w-full md:w-80">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input 
+                    type="text" 
+                    placeholder="Search by Guest or Room #..." 
+                    className="w-full pl-12 pr-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-blue-600 bg-white outline-none font-bold text-sm shadow-sm" 
+                    value={searchTerm} 
+                    onChange={(e) => setSearchTerm(e.target.value)} 
+                />
+          </div>
+      </div>
+
+      {/* 4. VIEW: ROOM MATRIX (YOUR ORIGINAL UI ENHANCED) */}
       {activeTab === 'MATRIX' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
             {rooms.map(room => {
                 const activeBooking = activeBookingsMap[room.id];
-                let color = "bg-white border-slate-200";
-                let icon = <CheckCircle size={18} className="text-green-400"/>;
-                if (room.status === 'OCCUPIED') { color = "bg-blue-600 border-blue-600 text-white"; icon = <User size={18} className="text-white"/>; }
-                else if (room.status === 'DIRTY') { color = "bg-orange-50 border-orange-200"; icon = <AlertTriangle size={18} className="text-orange-500"/>; }
+                let color = "bg-white border-slate-200 hover:border-blue-400";
+                let icon = <CheckCircle size={20} className="text-green-500"/>;
+                let statusLabel = "READY";
+                let subColor = "text-green-600 bg-green-50";
+
+                if (room.status === 'OCCUPIED') { 
+                    color = "bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100 hover:bg-blue-700"; 
+                    icon = <User size={20} className="text-white"/>; 
+                    statusLabel = "BOOKED";
+                    subColor = "text-white bg-white/20";
+                } else if (room.status === 'DIRTY') { 
+                    color = "bg-orange-50 border-orange-200 hover:border-orange-500 shadow-sm"; 
+                    icon = <AlertTriangle size={20} className="text-orange-500"/>; 
+                    statusLabel = "DIRTY";
+                    subColor = "text-orange-600 bg-orange-100";
+                } else if (room.status === 'MAINTENANCE') {
+                    color = "bg-rose-50 border-rose-200";
+                    icon = <ShieldAlert size={20} className="text-rose-500"/>;
+                    statusLabel = "DOWN";
+                    subColor = "text-rose-600 bg-rose-100";
+                }
 
                 return (
-                    <div key={room.id} className={`p-6 rounded-[28px] border-2 cursor-pointer transition-transform hover:scale-105 ${color}`}
+                    <div 
+                        key={room.id} 
+                        className={`p-6 rounded-[35px] border-2 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 flex flex-col justify-between h-48 relative overflow-hidden ${color}`}
                         onClick={() => {
                             if(room.status === 'OCCUPIED' && activeBooking) navigate(`/folio/${activeBooking.id}`);
-                            if(room.status === 'DIRTY' && window.confirm("Mark Clean?")) markRoomClean(room.id);
-                        }}>
-                        <div className="flex justify-between items-start mb-6">
-                            <span className="text-3xl font-black tracking-tighter">{room.room_number}</span>
-                            <div className="p-2 bg-white/20 rounded-full backdrop-blur-sm">{icon}</div>
+                            if(room.status === 'DIRTY') markRoomClean(room.id);
+                        }}
+                    >
+                        <div className="flex justify-between items-start">
+                            <span className="text-3xl font-black tracking-tighter italic">{room.room_number}</span>
+                            <div className="p-2.5 bg-white/20 rounded-2xl backdrop-blur-md">{icon}</div>
                         </div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">{room.room_type}</p>
-                        {activeBooking && <p className="text-xs font-bold mt-2 truncate">{activeBooking.guest_details?.full_name}</p>}
+                        
+                        <div>
+                            <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-xl block w-fit mb-3 ${subColor}`}>
+                                {statusLabel}
+                            </span>
+                            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2 truncate">{room.room_type}</p>
+                            
+                            {activeBooking ? (
+                                <p className="text-xs font-black truncate border-t border-white/20 pt-3 flex items-center gap-2">
+                                    <Zap size={10}/> {activeBooking.guest_details?.full_name}
+                                </p>
+                            ) : (
+                                <p className="text-[9px] font-black text-slate-400 border-t border-slate-100 pt-3">CLEAN & VACANT</p>
+                            )}
+                        </div>
                     </div>
                 );
             })}
         </div>
       )}
 
+      {/* 5. VIEW: LIST TABLES (PRESERVED & STYLED) */}
       {activeTab !== 'MATRIX' && (
-        <div className="bg-white rounded-[30px] border border-slate-200 overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-widest">
-              <tr><th className="p-6">Guest</th><th className="p-6">Room</th><th className="p-6 text-right">Action</th></tr>
+        <div className="bg-white rounded-[50px] border border-slate-200 overflow-hidden shadow-sm animate-in slide-in-from-bottom-6 duration-700">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50/50 text-slate-400 font-black uppercase text-[10px] tracking-[0.2em] border-b border-slate-100">
+              <tr>
+                  <th className="p-8">Guest Identity</th>
+                  <th className="p-8">Unit Allocation</th>
+                  <th className="p-8">Operational Dates</th>
+                  <th className="p-8 text-right">Fulfillment</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(activeTab === 'ARRIVALS' ? arrivals : activeTab === 'DEPARTURES' ? departures : inHouse).map(b => (
-                <tr key={b.id} className="hover:bg-slate-50">
-                  <td className="p-6 font-bold text-slate-800">{b.guest_details?.full_name}</td>
-                  <td className="p-6 font-bold text-slate-500">RM {b.room_details?.room_number || "NA"}</td>
-                  <td className="p-6 text-right">
-                    {activeTab === 'ARRIVALS' && <button onClick={() => updateBookingStatus(b.id, 'CHECKED_IN')} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Check In</button>}
-                    {activeTab === 'DEPARTURES' && <button onClick={() => updateBookingStatus(b.id, 'CHECKED_OUT')} className="bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Check Out</button>}
-                    {activeTab === 'IN_HOUSE' && <button onClick={() => navigate(`/folio/${b.id}`)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-xs">Folio</button>}
+              {getFilteredList(activeTab === 'ARRIVALS' ? arrivals : activeTab === 'DEPARTURES' ? departures : inHouse).map(b => (
+                <tr key={b.id} className="hover:bg-slate-50/80 transition-all group">
+                  <td className="p-8">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 font-black group-hover:bg-blue-600 group-hover:text-white transition-all">
+                            {b.guest_details?.full_name.charAt(0)}
+                        </div>
+                        <div>
+                            <p className="font-black text-slate-900 text-base italic uppercase">{b.guest_details?.full_name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Ref: BK-00{b.id}</p>
+                        </div>
+                      </div>
+                  </td>
+                  <td className="p-8">
+                      <span className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest border border-blue-100">
+                          Unit {b.room_details?.room_number || "TBA"}
+                      </span>
+                      <p className="text-[10px] font-bold text-slate-400 mt-2 tracking-widest uppercase">{b.room_details?.room_type || b.room_type}</p>
+                  </td>
+                  <td className="p-8">
+                      <div className="space-y-2">
+                          <span className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-tighter">
+                            <LogIn size={14} className="text-green-500"/> {new Date(b.check_in_date).toLocaleDateString('en-GB')}
+                          </span>
+                          <span className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-tighter">
+                            <LogOut size={14} className="text-red-500"/> {new Date(b.check_out_date).toLocaleDateString('en-GB')}
+                          </span>
+                      </div>
+                  </td>
+                  <td className="p-8 text-right">
+                    {activeTab === 'ARRIVALS' && (
+                        <button onClick={() => updateBookingStatus(b.id, 'CHECKED_IN')} className="bg-emerald-500 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 shadow-xl shadow-emerald-100 transition-all flex items-center gap-2 ml-auto">
+                            Check In <ChevronRight size={16}/>
+                        </button>
+                    )}
+                    {activeTab === 'DEPARTURES' && (
+                        <button onClick={() => updateBookingStatus(b.id, 'CHECKED_OUT')} className="bg-rose-500 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 shadow-xl shadow-rose-100 transition-all flex items-center gap-2 ml-auto">
+                            Check Out <LogOut size={16}/>
+                        </button>
+                    )}
+                    {activeTab === 'IN_HOUSE' && (
+                        <button onClick={() => navigate(`/folio/${b.id}`)} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 shadow-xl shadow-slate-200 transition-all flex items-center gap-2 ml-auto">
+                            Manage Folio <Zap size={16}/>
+                        </button>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {getFilteredList(activeTab === 'ARRIVALS' ? arrivals : activeTab === 'DEPARTURES' ? departures : inHouse).length === 0 && (
+              <div className="p-20 text-center">
+                  <Briefcase size={48} className="mx-auto text-slate-200 mb-4" />
+                  <p className="text-slate-400 font-black uppercase tracking-widest text-xs">Zero results matching your parameters</p>
+              </div>
+          )}
         </div>
       )}
     </div>

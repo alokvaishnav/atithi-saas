@@ -4,58 +4,66 @@ import {
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
   BookOpen, ChevronRight, Settings, Package, CreditCard, X, 
-  Server // 👈 Server Icon for Super Admin
+  Server, BarChart3
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
-// 👇 Accept props for Mobile handling
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // 🛡️ USE CONTEXT (The Brain)
+  // USE CONTEXT
   const { hotelName, role, user, logout, updateGlobalProfile } = useAuth(); 
 
-  // 📱 AUTO-CLOSE: Close sidebar on mobile when a link is clicked
+  // MOBILE AUTO-CLOSE
   useEffect(() => {
-    if (onClose) onClose();
+    if (onClose && window.innerWidth < 768) {
+        onClose();
+    }
   }, [location.pathname]);
 
-  // 🏨 FETCH BRANDING
+  // FETCH BRANDING
   useEffect(() => {
     const fetchBranding = async () => {
       try {
         const token = localStorage.getItem('access_token');
+        if (!token) return;
+
         const res = await fetch(`${API_URL}/api/settings/`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const data = await res.json();
         
-        if (Array.isArray(data) && data.length > 0) {
-            updateGlobalProfile(data[0].hotel_name.toUpperCase());
+        if (res.ok) {
+            const data = await res.json();
+            // Handle both array and object responses from different API versions
+            const settings = Array.isArray(data) ? data[0] : data;
+            if (settings && settings.hotel_name) {
+                updateGlobalProfile(settings.hotel_name.toUpperCase());
+            }
         }
       } catch (err) {
         console.log("Using cached/default branding");
       }
     };
     fetchBranding();
-  }, []); 
+  }, [updateGlobalProfile]); 
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
       logout(); 
+      navigate('/login');
     }
   };
 
-  // Define Groups with Professional Role-Based Access Control (RBAC)
+  // RBAC Navigation Logic
   const groups = [
     {
       title: "Main",
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT'],
       items: [
-        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
+        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/' },
       ]
     },
     {
@@ -88,12 +96,13 @@ const Sidebar = ({ isOpen, onClose }) => {
       ]
     },
     {
-      title: "Finance & HR",
+      title: "Finance & Reports",
       roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
-        { icon: <Wallet size={18} />, label: 'Expenses & Costs', path: '/expenses' },
+        { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
         { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' },
-        { icon: <FileText size={18} />, label: 'Tax & Audit Reports', path: '/reports' },
+        { icon: <BarChart3 size={18} />, label: 'Analytics', path: '/analytics' },
+        { icon: <FileText size={18} />, label: 'Audit Reports', path: '/reports' },
       ]
     },
     {
@@ -115,7 +124,7 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* 📱 MOBILE OVERLAY */}
+      {/* MOBILE OVERLAY */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm transition-opacity"
@@ -123,7 +132,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         ></div>
       )}
 
-      {/* 🛡️ SIDEBAR CONTAINER */}
+      {/* SIDEBAR CONTAINER */}
       <div className={`
         fixed inset-y-0 left-0 z-50 w-72 bg-slate-950 text-white flex flex-col border-r border-slate-800 shadow-2xl transition-transform duration-300 ease-in-out
         md:relative md:translate-x-0 
@@ -140,7 +149,7 @@ const Sidebar = ({ isOpen, onClose }) => {
               <h1 className="text-sm font-black text-white italic tracking-tighter leading-none uppercase truncate max-w-[120px]">
                 {hotelName || "ATITHI HMS"}
               </h1>
-              <p className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">Enterprise Cloud HMS</p>
+              <p className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">Enterprise Cloud</p>
             </div>
           </div>
           
@@ -182,31 +191,30 @@ const Sidebar = ({ isOpen, onClose }) => {
             )
           ))}
 
-          {/* 👑 SUPER ADMIN BUTTON */}
+          {/* SUPER ADMIN SECTION */}
           {user && user.is_superuser && (
              <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-                <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
-                  System Control
-                </div>
-                <button
-                  onClick={() => navigate('/super-admin')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
-                    location.pathname === '/super-admin' 
-                      ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
-                      : 'text-purple-300 hover:bg-purple-500/10'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
-                      <Server size={18} />
-                    </span>
-                    <span className="uppercase tracking-widest">Super Admin</span>
-                  </div>
-                  <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                </button>
+               <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
+                 System Control
+               </div>
+               <button
+                 onClick={() => navigate('/super-admin')}
+                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
+                   location.pathname === '/super-admin' 
+                     ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
+                     : 'text-purple-300 hover:bg-purple-500/10'
+                 }`}
+               >
+                 <div className="flex items-center space-x-3">
+                   <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
+                     <Server size={18} />
+                   </span>
+                   <span className="uppercase tracking-widest">Global Stats</span>
+                 </div>
+                 <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+               </button>
              </div>
           )}
-
         </nav>
 
         {/* User Session Footer */}
@@ -216,8 +224,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <ShieldCheck size={16} className="text-blue-400"/>
               </div>
               <div>
-                 <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
-                 <p className="text-[11px] font-black text-white tracking-tight">{role}</p>
+                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
+                  <p className="text-[11px] font-black text-white tracking-tight">{role}</p>
               </div>
           </div>
           <button 

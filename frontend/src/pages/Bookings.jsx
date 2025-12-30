@@ -82,7 +82,7 @@ const Bookings = () => {
         });
 
         if (res.ok) {
-            alert("Booking Created Successfully! 🎉");
+            // alert("Booking Created Successfully! 🎉"); // Removed for smoother UX, can be uncommented
             setShowModal(false);
             setFormData({ guest_name: '', guest_phone: '', room_id: '', check_in: '', check_out: '', adults: 1, children: 0 });
             fetchData();

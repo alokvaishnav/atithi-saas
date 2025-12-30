@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ShieldAlert, LogOut, Loader2, Menu } from 'lucide-react'; 
+import { ShieldAlert, LogOut, Loader2, Menu, User, Hotel } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -40,13 +40,12 @@ import Accounting from './pages/Accounting';
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
-import SuperAdmin from './pages/SuperAdmin'; // 👈 NEW IMPORT
+import SuperAdmin from './pages/SuperAdmin'; 
 
 // 🦴 LOADING SKELETON (UX Improvement)
 const AppSkeleton = () => (
   <div className="flex h-screen bg-slate-50 overflow-hidden">
-    {/* Sidebar Skeleton */}
-    <div className="w-72 bg-slate-900 h-full hidden md:flex flex-col p-4 border-r border-slate-800">
+    <div className="w-72 bg-slate-950 h-full hidden md:flex flex-col p-4 border-r border-slate-800">
       <div className="h-16 bg-slate-800 rounded-xl mb-8 animate-pulse w-full"></div>
       <div className="space-y-4">
         {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -54,7 +53,6 @@ const AppSkeleton = () => (
         ))}
       </div>
     </div>
-    {/* Content Skeleton */}
     <div className="flex-1 flex flex-col">
       <div className="h-16 bg-white border-b border-slate-200 w-full animate-pulse"></div>
       <div className="p-6 space-y-6">
@@ -73,17 +71,12 @@ const AppSkeleton = () => (
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, role, loading } = useAuth(); 
 
-  // 0. Loading State (Shows Skeleton instead of Spinner)
-  if (loading) {
-    return <AppSkeleton />;
-  }
+  if (loading) return <AppSkeleton />;
 
-  // A. Check if logged in
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  // B. Check if role is authorized
   if (allowedRoles && !allowedRoles.includes(role)) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -95,9 +88,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm md:text-base">
             The <strong>{role}</strong> role is not authorized to access this department.
           </p>
-          <a href="/dashboard" className="inline-block w-full bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-black transition-all shadow-xl shadow-slate-200 uppercase text-xs tracking-widest">
+          <button 
+            onClick={() => window.location.href = '/dashboard'}
+            className="inline-block w-full bg-slate-900 text-white px-8 py-4 rounded-2xl font-black hover:bg-black transition-all shadow-xl shadow-slate-200 uppercase text-xs tracking-widest"
+          >
             Return to HQ
-          </a>
+          </button>
         </div>
       </div>
     );
@@ -106,142 +102,144 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// 🏗️ THE APP LAYOUT (Sidebar + Header + Content)
+// 🏗️ THE APP LAYOUT
 const AppLayout = () => {
-    const { role, logout, hotelName, loading } = useAuth(); 
-    const [sidebarOpen, setSidebarOpen] = useState(false); // 👈 Mobile Menu State
+    const { role, logout, hotelName, user } = useAuth(); 
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     return (
-      <ProtectedRoute loading={loading}>
-        <LicenseLock>
-          <div className="flex h-screen bg-slate-50 overflow-hidden">
-            
-            {/* 🛡️ SIDEBAR with Mobile Props */}
-            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <LicenseLock>
+        <div className="flex h-screen bg-slate-50 overflow-hidden">
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-              <header className="bg-white border-b border-slate-200 p-4 md:p-5 md:px-10 flex justify-between items-center z-10 shadow-sm sticky top-0">
-                
-                <div className="flex items-center gap-4">
-                    {/* 🍔 MOBILE HAMBURGER BUTTON */}
-                    <button 
-                        onClick={() => setSidebarOpen(true)}
-                        className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-                    >
-                        <Menu size={24} />
-                    </button>
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <header className="bg-white border-b border-slate-200 p-4 md:p-5 md:px-10 flex justify-between items-center z-10 shadow-sm sticky top-0">
+              
+              <div className="flex items-center gap-4">
+                  <button 
+                      onClick={() => setSidebarOpen(true)}
+                      className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
+                  >
+                      <Menu size={24} />
+                  </button>
 
-                    <div>
-                        <h2 className="text-lg md:text-2xl font-black text-slate-800 tracking-tighter italic leading-none truncate max-w-[200px] md:max-w-none">
-                            {hotelName || "ATITHI ENTERPRISE"}
-                        </h2>
-                        <p className="text-[8px] md:text-[10px] font-black text-blue-600 uppercase tracking-[0.3em] mt-1 hidden md:block">Property Operations Cloud</p>
-                    </div>
-                </div>
-
-                <div className="flex items-center space-x-4 md:space-x-8">
-                  <div className="text-right hidden md:block">
-                    <p className="text-sm font-black text-slate-800 leading-none">Management Console</p>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Identity: {role}</span>
+                  <div className="flex items-center gap-3">
+                      <div className="bg-blue-600 p-2 rounded-lg hidden sm:block">
+                        <Hotel size={18} className="text-white" />
+                      </div>
+                      <div>
+                          <h2 className="text-lg md:text-xl font-black text-slate-800 tracking-tighter italic leading-none truncate max-w-[150px] md:max-w-none uppercase">
+                              {hotelName || "ATITHI ENTERPRISE"}
+                          </h2>
+                          <p className="text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1 hidden md:block">Property Management Cloud</p>
+                      </div>
                   </div>
-                  
-                  <div className="flex items-center gap-3 md:border-l md:pl-8 border-slate-100">
-                    <button 
-                      onClick={() => { if(window.confirm("Logout?")) logout() }} 
-                      className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
-                      title="System Logout"
-                    >
-                      <LogOut size={20} />
-                    </button>
-                    
-                    <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black shadow-xl shadow-slate-200 transform hover:scale-105 transition-transform cursor-pointer text-sm md:text-base">
-                      {role ? role.charAt(0).toUpperCase() : 'U'}
-                    </div>
-                  </div>
-                </div>
-              </header>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
-                <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/front-desk" element={<FrontDesk />} />
-                  <Route path="/rooms" element={<Rooms />} />
-                  <Route path="/guests" element={<Guests />} />
-                  <Route path="/guests/edit/:id" element={<EditGuest />} />
-                  <Route path="/bookings" element={<Bookings />} />
-                  <Route path="/calendar" element={<CalendarView />} />
-                  <Route path="/folio/:bookingId" element={<Folio />} />
-                  <Route path="/pos" element={<POS />} />
-                  <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
-                  <Route path="/support" element={<Support />} />
-                  
-                  {/* 👇 NEW SUPER ADMIN ROUTE */}
-                  <Route path="/super-admin" element={
-                    // Note: Your backend will also enforce admin-only access
-                    <SuperAdmin />
-                  } />
-
-                  <Route path="/staff" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
-                      <Staff />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/pricing" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
-                      <Pricing />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/settings" element={
-                    <ProtectedRoute allowedRoles={['OWNER']}>
-                      <Settings />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/accounting" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
-                      <Accounting />
-                    </ProtectedRoute>
-                  } />
-                  <Route path="/expenses" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
-                      <Expenses />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/reports" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'ACCOUNTANT']}>
-                      <Reports />
-                    </ProtectedRoute>
-                  } />
-                  
-                  <Route path="/inventory" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
-                      <Inventory />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/housekeeping" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
-                      <Housekeeping />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="/services" element={
-                    <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
-                      <Services />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
               </div>
-            </main>
-          </div>
-        </LicenseLock>
-      </ProtectedRoute>
+
+              <div className="flex items-center space-x-4 md:space-x-8">
+                <div className="text-right hidden md:block">
+                  <p className="text-xs font-black text-slate-800 leading-none mb-1 uppercase tracking-tighter">{user?.username || 'User Account'}</p>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">Access: {role}</span>
+                </div>
+                
+                <div className="flex items-center gap-3 md:border-l md:pl-8 border-slate-100">
+                  <button 
+                    onClick={() => { if(window.confirm("Logout?")) logout() }} 
+                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
+                    title="System Logout"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                  
+                  <div className="w-10 h-10 md:w-11 md:h-11 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black shadow-lg shadow-slate-200 transform hover:scale-105 transition-transform cursor-pointer">
+                    <User size={20} />
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <Routes>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/front-desk" element={<FrontDesk />} />
+                <Route path="/rooms" element={<Rooms />} />
+                <Route path="/guests" element={<Guests />} />
+                <Route path="/guests/edit/:id" element={<EditGuest />} />
+                <Route path="/bookings" element={<Bookings />} />
+                <Route path="/calendar" element={<CalendarView />} />
+                <Route path="/folio/:bookingId" element={<Folio />} />
+                <Route path="/pos" element={<POS />} />
+                <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
+                <Route path="/support" element={<Support />} />
+                
+                {/* 👑 SUPER ADMIN (Backend also validates) */}
+                <Route path="/super-admin" element={
+                  <ProtectedRoute allowedRoles={['OWNER']}>
+                    <SuperAdmin />
+                  </ProtectedRoute>
+                } />
+
+                {/* 🔐 ROLE PROTECTED ROUTES */}
+                <Route path="/staff" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
+                    <Staff />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/pricing" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
+                    <Pricing />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/settings" element={
+                  <ProtectedRoute allowedRoles={['OWNER']}>
+                    <Settings />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/accounting" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
+                    <Accounting />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/expenses" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
+                    <Expenses />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/reports" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'ACCOUNTANT']}>
+                    <Reports />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/inventory" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
+                    <Inventory />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/housekeeping" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
+                    <Housekeeping />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="/services" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
+                    <Services />
+                  </ProtectedRoute>
+                } />
+
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </Routes>
+            </div>
+          </main>
+        </div>
+      </LicenseLock>
     );
 };
 
@@ -252,16 +250,26 @@ const AppContent = () => {
 
   return (
     <Routes>
+        {/* ROOT LOGIC */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} /> 
         
-        {/* 👇 PASSWORD RESET ROUTES */}
+        {/* PUBLIC AUTH ROUTES */}
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} /> 
+        
+        {/* PASSWORD RECOVERY flow */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
+        {/* EXTERNAL GUEST FACING */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
-        <Route path="/*" element={<AppLayout />} />
+
+        {/* CATCH ALL PROTECTED LAYOUT */}
+        <Route path="/*" element={
+          <ProtectedRoute>
+            <AppLayout />
+          </ProtectedRoute>
+        } />
     </Routes>
   );
 }

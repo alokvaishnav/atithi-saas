@@ -1,9 +1,40 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from hotel.views import *
+from hotel.views import (
+    # ViewSets
+    RoomViewSet, 
+    GuestViewSet, 
+    BookingViewSet, 
+    ServiceViewSet, 
+    InventoryViewSet, 
+    ExpenseViewSet, 
+    HousekeepingViewSet, 
+    StaffViewSet, 
+    SettingsViewSet,
+    SystemLogViewSet, # 📜 Audit Trail logic
+    
+    # Special Logic Views
+    AnalyticsView, 
+    RegisterView, 
+    POSChargeView,
+    
+    # Reporting & Exports
+    EndOfDayReportView, # 📄 Daily Night Audit Engine
+    ExportReportView,
+    
+    # License & Security
+    license_status, 
+    activate_license,
+    
+    # 👑 Super Admin Views
+    SuperAdminDashboardView,
+    # Assuming you have a Tenant viewset for CRUD in SuperAdmin.js
+    # TenantViewSet 
+)
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+# 1. Setup Router for Standard CRUD Operations
 router = DefaultRouter()
 router.register(r'rooms', RoomViewSet, basename='room')
 router.register(r'guests', GuestViewSet, basename='guest')
@@ -14,19 +45,39 @@ router.register(r'expenses', ExpenseViewSet, basename='expense')
 router.register(r'housekeeping', HousekeepingViewSet, basename='housekeeping')
 router.register(r'staff', StaffViewSet, basename='staff')
 router.register(r'settings', SettingsViewSet, basename='settings')
+router.register(r'logs', SystemLogViewSet, basename='logs')
 
+# 2. Main URL Patterns
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # 🔐 Authentication
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # 🔐 Authentication & Identity
+    path('api/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', RegisterView.as_view(), name='register'),
+
+    # 🔑 Password Recovery flow (Integrates with ForgotPassword.js)
+    # Note: These usually map to django-templated or custom views in views.py
+    # path('api/password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),
+    # path('api/password-reset-confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     
-    # 📊 Special Logic
+    # 👑 Super Admin Platform Control
+    path('api/super-admin/stats/', SuperAdminDashboardView.as_view(), name='super_admin_stats'),
+    # If using the 'Power Cycle' or 'Suspend' buttons in SuperAdmin.js:
+    # path('api/super-admin/tenants/<int:pk>/', SuperAdminTenantDetailView.as_view(), name='super_admin_tenant_detail'),
+    
+    # 📊 Business Intelligence & POS
     path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
     path('api/pos/charge/', POSChargeView.as_view(), name='pos_charge'),
+    
+    # 📄 Reporting Engine (PDF & CSV)
+    path('api/reports/daily-pdf/', EndOfDayReportView.as_view(), name='daily_pdf'),
+    path('api/reports/export/', ExportReportView.as_view(), name='export_report'),
 
-    # 🏨 Standard APIs
+    # 🛡️ License System (SaaS Lock)
+    path('api/license/status/', license_status, name='license_status'),
+    path('api/license/activate/', activate_license, name='activate_license'),
+
+    # 🏨 Main Hotel Modules
     path('api/', include(router.urls)),
 ]

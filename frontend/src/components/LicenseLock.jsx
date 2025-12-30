@@ -1,25 +1,171 @@
 import { useEffect, useState } from 'react';
-import { Lock } from 'lucide-react';
+import { 
+  Lock, Loader2, ShieldAlert, KeyRound, 
+  CheckCircle, AlertTriangle, RefreshCw, Mail 
+} from 'lucide-react';
+import { API_URL } from '../config';
 
 const LicenseLock = ({ children }) => {
-  const [valid, setValid] = useState(true);
+  const [status, setStatus] = useState('LOADING'); // LOADING | ACTIVE | WARNING | EXPIRED
+  const [daysLeft, setDaysLeft] = useState(0);
+  const [inputKey, setInputKey] = useState('');
+  const [activating, setActivating] = useState(false);
+  const [error, setError] = useState('');
 
-  // Simple check (In production, verify with backend)
+  const token = localStorage.getItem('access_token');
+
+  // 1. Verify License on Mount
   useEffect(() => {
-    setValid(true); 
+    checkLicense();
   }, []);
 
-  if (!valid) return (
-    <div className="h-screen bg-black flex items-center justify-center text-white">
-        <div className="text-center">
-            <Lock size={48} className="mx-auto text-red-500 mb-4"/>
-            <h1 className="text-2xl font-black uppercase tracking-widest text-red-500">License Expired</h1>
-            <p className="text-slate-500 mt-2">Please contact support to renew your access.</p>
+  const checkLicense = async () => {
+    try {
+        // In a real app, this endpoint returns { status: 'ACTIVE', days_left: 30 }
+        // For development safety, we default to ACTIVE if API fails
+        const res = await fetch(`${API_URL}/api/license/status/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            setDaysLeft(data.days_left);
+            
+            if (data.is_expired) {
+                setStatus('EXPIRED');
+            } else if (data.days_left <= 7) {
+                setStatus('WARNING'); // Grace period / Low days
+            } else {
+                setStatus('ACTIVE');
+            }
+        } else {
+            // Fallback for demo purposes (Remove this line in strict production)
+            setStatus('ACTIVE'); 
+        }
+    } catch (err) {
+        console.error("License Check Failed:", err);
+        setStatus('ACTIVE'); // Fail open for connectivity issues
+    }
+  };
+
+  // 2. Handle New Key Submission
+  const handleActivate = async (e) => {
+    e.preventDefault();
+    setActivating(true);
+    setError('');
+
+    try {
+        const res = await fetch(`${API_URL}/api/license/activate/`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ license_key: inputKey })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            alert(`Activation Successful! Valid until: ${data.expiry_date}`);
+            checkLicense(); // Refresh status
+        } else {
+            setError("Invalid License Key. Please check and try again.");
+        }
+    } catch (err) {
+        setError("Network error. Unable to verify key.");
+    } finally {
+        setActivating(false);
+    }
+  };
+
+  // --- RENDER STATES ---
+
+  // A. Loading Screen
+  if (status === 'LOADING') return (
+    <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
+        <Loader2 className="animate-spin text-blue-500" size={48}/>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
+    </div>
+  );
+
+  // B. Locked Screen (Expired)
+  if (status === 'EXPIRED') return (
+    <div className="h-screen bg-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
+        
+        {/* Background FX */}
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-red-600 rounded-full blur-[150px] opacity-20"></div>
+
+        <div className="bg-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-700 relative z-10 text-center">
+            
+            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                <Lock size={40} className="text-red-500"/>
+            </div>
+
+            <h1 className="text-2xl font-black uppercase tracking-widest text-white mb-2">System Locked</h1>
+            <p className="text-slate-400 text-sm mb-8">Your subscription has expired. Please enter a valid renewal key to continue.</p>
+
+            <form onSubmit={handleActivate} className="space-y-4">
+                <div className="relative">
+                    <KeyRound className="absolute left-4 top-3.5 text-slate-500" size={18}/>
+                    <input 
+                        type="text" 
+                        required
+                        placeholder="XXXX-XXXX-XXXX-XXXX" 
+                        className="w-full pl-12 p-3 bg-slate-900 text-white rounded-xl font-mono font-bold border border-slate-700 focus:border-blue-500 outline-none uppercase tracking-widest"
+                        value={inputKey}
+                        onChange={e => setInputKey(e.target.value)}
+                    />
+                </div>
+                
+                {error && (
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold bg-red-400/10 p-3 rounded-xl border border-red-400/20">
+                        <ShieldAlert size={14}/> {error}
+                    </div>
+                )}
+
+                <button 
+                    type="submit" 
+                    disabled={activating || !inputKey}
+                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-500 transition-all flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {activating ? <Loader2 className="animate-spin" size={16}/> : "Reactivate System"}
+                </button>
+            </form>
+
+            <div className="mt-8 pt-8 border-t border-white/5 flex justify-center gap-6">
+                 <a href="mailto:support@atithi.com" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+                    <Mail size={14}/> Contact Support
+                 </a>
+                 <button onClick={checkLicense} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+                    <RefreshCw size={14}/> Refresh Status
+                 </button>
+            </div>
         </div>
     </div>
   );
 
-  return children;
+  // C. Active App (With potential warning)
+  return (
+    <>
+        {children}
+        
+        {/* Grace Period Warning Banner */}
+        {status === 'WARNING' && (
+            <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg animate-in slide-in-from-bottom-full">
+                <div className="flex items-center gap-3 container mx-auto max-w-7xl">
+                    <AlertTriangle size={18} className="animate-pulse"/>
+                    <span className="text-xs font-black uppercase tracking-widest">
+                        License Expiring Soon: {daysLeft} Days Remaining
+                    </span>
+                </div>
+                <button className="text-xs font-bold bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition-colors uppercase">
+                    Renew Now
+                </button>
+            </div>
+        )}
+    </>
+  );
 };
 
 export default LicenseLock;

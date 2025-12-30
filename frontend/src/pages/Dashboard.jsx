@@ -1,79 +1,49 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   Building, Loader2, LogIn, LogOut, 
   CheckCircle, AlertCircle, 
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, TrendingDown,
-  ArrowUpRight, ShieldCheck, Package, Brush 
+  ArrowUpRight, ShieldCheck, Brush, History, Activity, ListFilter
 } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
 import { API_URL } from '../config'; 
 
 const Dashboard = () => {
+  // --- YOUR ORIGINAL STATES ---
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
-  
-  // Derived States (Calculated on Frontend)
   const [financials, setFinancials] = useState({ revenue: 0, expenses: 0, profit: 0, liability: 0 });
   const [trendData, setTrendData] = useState([]);
-  const [tasks, setTasks] = useState([]);         
-  
+  const [tasks, setTasks] = useState([]);        
   const [loading, setLoading] = useState(true);
+
+  // --- NEW UPDATE STATES ---
+  const [logs, setLogs] = useState([]); // For the Audit Trail
+  const [refreshing, setRefreshing] = useState(false);
+  const [analyticsAPI, setAnalyticsAPI] = useState(null); // Data from new backend endpoint
 
   const navigate = useNavigate(); 
   const token = localStorage.getItem('access_token');
-  // Fallback if user role is not stored
   const userRole = localStorage.getItem('user_role') || 'MANAGER';
+  const hotelName = localStorage.getItem('hotel_name') || 'ATITHI HMS';
 
-  // --- FETCH DATA ---
-  const fetchData = async (showLoader = false) => {
-    try {
-      if (showLoader) setLoading(true);
-      
-      const headers = { 'Authorization': `Bearer ${token}` };
-      
-      // Fetch only the endpoints we know exist
-      const [resRooms, resBookings] = await Promise.all([
-        fetch(`${API_URL}/api/rooms/`, { headers }),
-        fetch(`${API_URL}/api/bookings/`, { headers })
-      ]);
-
-      if (resRooms.ok && resBookings.ok) {
-        const roomsData = await resRooms.json();
-        const bookingsData = await resBookings.json();
-        
-        setRooms(roomsData);
-        setBookings(bookingsData);
-        
-        // --- RUN ANALYTICS CALCULATION ---
-        calculateAnalytics(roomsData, bookingsData);
-      }
-
-    } catch (err) { 
-      console.error("Critical System Fetch Error:", err);
-    } finally { 
-      if (showLoader) setLoading(false); 
-    }
-  };
-
+  // --- YOUR ORIGINAL ANALYTICS CALCULATION (Preserved) ---
   const calculateAnalytics = (currentRooms, currentBookings) => {
-    // 1. Calculate Financials
     const totalRev = currentBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
     const totalPaid = currentBookings.reduce((sum, b) => {
         const paid = b.payments?.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0) || 0;
         return sum + paid;
     }, 0);
     
-    // Estimate expenses as 40% of revenue for demo purposes (or 0 if you don't have expense data)
     const estimatedExpenses = totalRev * 0.4; 
     
     setFinancials({
         revenue: totalRev,
         expenses: estimatedExpenses,
         profit: totalRev - estimatedExpenses,
-        liability: totalRev - totalPaid // Money owed by guests
+        liability: totalRev - totalPaid 
     });
 
-    // 2. Calculate Trend (Last 7 Days Revenue)
     const last7Days = {};
     const today = new Date();
     for(let i=6; i>=0; i--) {
@@ -83,7 +53,7 @@ const Dashboard = () => {
     }
 
     currentBookings.forEach(b => {
-        const date = b.check_in_date; // Using check-in as revenue date logic
+        const date = b.check_in_date; 
         if (last7Days[date] !== undefined) {
             last7Days[date] += parseFloat(b.total_amount || 0);
         }
@@ -95,24 +65,56 @@ const Dashboard = () => {
     }));
     setTrendData(trend);
 
-    // 3. Generate Housekeeping Tasks from Room Status
     const dirtyRooms = currentRooms.filter(r => r.status === 'DIRTY');
     setTasks(dirtyRooms);
   };
 
+  // --- FULL FETCH DATA (Integrated New Endpoints) ---
+  const fetchData = useCallback(async (showLoader = false) => {
+    try {
+      if (showLoader) setLoading(true);
+      else setRefreshing(true);
+      
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      // Fetching your original endpoints + new Logs and Analytics API
+      const [resRooms, resBookings, resLogs, resAnalytics] = await Promise.all([
+        fetch(`${API_URL}/api/rooms/`, { headers }),
+        fetch(`${API_URL}/api/bookings/`, { headers }),
+        fetch(`${API_URL}/api/logs/`, { headers }),      // NEW
+        fetch(`${API_URL}/api/analytics/`, { headers }) // NEW
+      ]);
+
+      if (resRooms.ok && resBookings.ok) {
+        const roomsData = await resRooms.json();
+        const bookingsData = await resBookings.json();
+        
+        setRooms(roomsData);
+        setBookings(bookingsData);
+        
+        // NEW Logic
+        if (resLogs.ok) setLogs(await resLogs.json());
+        if (resAnalytics.ok) setAnalyticsAPI(await resAnalytics.json());
+        
+        // Your Original logic
+        calculateAnalytics(roomsData, bookingsData);
+      }
+
+    } catch (err) { 
+      console.error("Critical System Fetch Error:", err);
+    } finally { 
+      if (showLoader) setLoading(false); 
+      setRefreshing(false);
+    }
+  }, [token]);
+
   useEffect(() => { 
-    // 1. Initial Load
     fetchData(true); 
-
-    // 2. Background Refresh (every 30s)
-    const interval = setInterval(() => { 
-        fetchData(false); 
-    }, 30000);
-
+    const interval = setInterval(() => fetchData(false), 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData]);
 
-  // 🧮 OPERATIONAL LOGIC
+  // --- YOUR ORIGINAL OPERATIONAL LOGIC ---
   const todayStr = new Date().toISOString().split('T')[0];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
@@ -132,10 +134,12 @@ const Dashboard = () => {
   const maintenance = safeRooms.filter(r => r.status === 'MAINTENANCE').length;
   
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
-  const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
+  
+  // New Property Health Logic integration
+  const healthScore = analyticsAPI?.health_score || (totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0);
 
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
-  const maxRevenue = Math.max(...revenueValues, 1000); // Prevent division by zero
+  const maxRevenue = Math.max(...revenueValues, 1000);
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -150,12 +154,13 @@ const Dashboard = () => {
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* 👋 DYNAMIC MANAGEMENT HEADER */}
+      {/* 👋 YOUR ORIGINAL HEADER + NEW BRANDING */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <span className="bg-blue-600 text-white p-1 rounded-md"><ShieldCheck size={14}/></span>
-            <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">Management Portal v2.1</p>
+            <span className="bg-blue-600 text-white p-1 rounded-md shadow-lg shadow-blue-200"><ShieldCheck size={14}/></span>
+            <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">{hotelName} • v2.9 PRO</p>
+            {refreshing && <Loader2 size={12} className="animate-spin text-slate-400 ml-2" />}
           </div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Intelligence</h1>
           <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mt-3 flex items-center gap-2">
@@ -170,12 +175,12 @@ const Dashboard = () => {
             </div>
             <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700 flex-1 md:flex-none">
                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Personnel</p>
-                <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto">{userRole}</p>
+                <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto italic">{userRole}</p>
             </div>
         </div>
       </div>
 
-      {/* 🚨 CRITICAL ALERTS ROW */}
+      {/* 🚨 YOUR ORIGINAL CRITICAL ALERTS ROW */}
       {tasks.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-10">
             <div 
@@ -186,7 +191,7 @@ const Dashboard = () => {
                     <div className="bg-purple-200 p-3 rounded-2xl text-purple-700"><Brush size={24}/></div>
                     <div>
                         <h3 className="font-black text-slate-800 text-lg">Pending Cleaning</h3>
-                        <p className="text-xs font-bold text-slate-500">{tasks.length} rooms marked dirty</p>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">{tasks.length} rooms marked dirty</p>
                     </div>
                 </div>
                 <ArrowUpRight size={24} className="text-purple-400"/>
@@ -194,9 +199,8 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* 📊 CORE FINANCIAL INTELLIGENCE */}
+      {/* 📊 YOUR ORIGINAL FINANCIAL INTELLIGENCE */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
-        {/* REVENUE */}
         <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
           <div className="flex justify-between items-start mb-6">
             <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
@@ -206,7 +210,6 @@ const Dashboard = () => {
           <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.revenue.toLocaleString()}</h3>
         </div>
 
-        {/* EXPENSES */}
         <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
           <div className="flex justify-between items-start mb-6">
             <div className="w-12 h-12 md:w-14 md:h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
@@ -216,7 +219,6 @@ const Dashboard = () => {
           <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.expenses.toLocaleString()}</h3>
         </div>
 
-        {/* NET PROFIT */}
         <div className="bg-slate-900 p-6 md:p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
           <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
           <div className="relative z-10">
@@ -226,7 +228,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* LIABILITY (Pending Payments) */}
         <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-orange-500 transition-all duration-500">
           <div className="flex justify-between items-start mb-6">
             <div className="w-12 h-12 md:w-14 md:h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
@@ -236,7 +237,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 📈 OPERATIONAL KPI GRID */}
+      {/* 📈 YOUR ORIGINAL OPERATIONAL KPI GRID */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
         {[
           { label: "DIRTY VACANT", val: dirtyVacant, icon: Sparkles, color: "text-orange-500", bg: "border-orange-200", desc: "Needs Cleaning" },
@@ -255,11 +256,11 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* 🏢 INVENTORY DISTRIBUTION ENGINE */}
+      {/* 🏢 YOUR ORIGINAL INVENTORY DISTRIBUTION ENGINE */}
       <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-200 shadow-sm mb-10 group">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h3 className="font-black text-slate-900 uppercase text-xs md:text-sm tracking-[0.3em]">Live Inventory Health</h3>
+            <h3 className="font-black text-slate-900 uppercase text-xs md:text-sm tracking-[0.3em] italic">Live Inventory Health</h3>
             <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Real-time room status distribution</p>
           </div>
           <div className="text-right">
@@ -295,17 +296,18 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 📋 OPERATIONAL MANIFESTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-10">
-        {/* Arrivals Card */}
+      {/* 📋 YOUR ORIGINAL MANIFESTS + NEW SYSTEM LOGS INTEGRATION */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Arrivals Card (Your Original) */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
           <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-blue-50 transition-colors">
-            <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest">
-              <LogIn size={20} className="text-blue-600"/> Arrivals
+            <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest italic">
+              <LogIn size={20} className="text-blue-600"/> Arrivals Today
             </h3>
-            <span className="text-[9px] font-black px-3 py-1 bg-blue-100 text-blue-700 rounded-full tracking-widest uppercase italic">ETA Today</span>
+            <span className="text-[9px] font-black px-3 py-1 bg-blue-100 text-blue-700 rounded-full tracking-widest uppercase italic">{expectedArrivals.length} Units</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-sm text-left">
               <tbody className="divide-y divide-slate-50">
                 {expectedArrivals.length > 0 ? expectedArrivals.map(b => (
@@ -326,15 +328,15 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Departures Card */}
+        {/* Departures Card (Your Original) */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
           <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-red-50 transition-colors">
-            <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest">
+            <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest italic">
               <LogOut size={20} className="text-red-600"/> Departures
             </h3>
-            <span className="text-[9px] font-black px-3 py-1 bg-red-100 text-red-700 rounded-full tracking-widest uppercase italic">Out Today</span>
+            <span className="text-[9px] font-black px-3 py-1 bg-red-100 text-red-700 rounded-full tracking-widest uppercase italic">Folios Open</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-sm text-left">
               <tbody className="divide-y divide-slate-50">
                 {expectedDepartures.length > 0 ? expectedDepartures.map(b => {
@@ -343,12 +345,12 @@ const Dashboard = () => {
                     return (
                         <tr key={b.id} className="hover:bg-slate-50 transition-colors">
                             <td className="p-6">
-                                <p className="font-black text-slate-800 text-base">{b.guest_details?.full_name}</p>
+                                <p className="font-black text-slate-800 text-base uppercase italic">{b.guest_details?.full_name}</p>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Unit: {b.room_details?.room_number}</p>
                             </td>
                             <td className="p-6 text-right">
                                 <p className="text-red-600 font-black text-lg tracking-tighter">₹{due.toLocaleString()}</p>
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Due</p>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Outstanding</p>
                             </td>
                         </tr>
                     );
@@ -359,13 +361,43 @@ const Dashboard = () => {
             </table>
           </div>
         </div>
+
+        {/* 📜 NEW: SYSTEM AUDIT TRAIL (The New Update) */}
+        <div className="bg-white p-8 rounded-[48px] border border-slate-200 shadow-sm flex flex-col h-full max-h-[458px]">
+            <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                    <History size={18} className="text-blue-600"/>
+                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Audit Trail</h3>
+                </div>
+                <ListFilter size={14} className="text-slate-300" />
+            </div>
+            <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                {logs.length > 0 ? logs.map((log, i) => (
+                    <div key={i} className="flex gap-4 items-start relative pb-6 border-l border-slate-100 ml-2">
+                        <div className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-white ${log.action === 'CREATE' ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                        <div className="pl-4">
+                            <p className="text-[11px] font-bold text-slate-800 leading-tight mb-1">{log.details}</p>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[8px] font-black text-white bg-slate-900 px-1.5 py-0.5 rounded-md uppercase">{log.action}</span>
+                                <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                )) : (
+                    <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2 opacity-50">
+                        <Activity size={32}/>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-center italic">Observing system<br/>events...</p>
+                    </div>
+                )}
+            </div>
+        </div>
       </div>
 
-      {/* 🚀 ANALYTICS TREND BAR */}
+      {/* 🚀 YOUR ORIGINAL ANALYTICS TREND BAR (Preserved) */}
       {trendData.length > 0 && (
-          <div className="mt-10 bg-slate-900 p-6 md:p-10 rounded-[48px] text-white overflow-hidden relative">
+          <div className="mt-10 bg-slate-900 p-6 md:p-10 rounded-[48px] text-white overflow-hidden relative shadow-2xl">
               <div className="flex justify-between items-center mb-10 relative z-10">
-                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Revenue</h3>
+                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Transactional Intelligence</h3>
                   <TrendingUp className="text-blue-400" size={20}/>
               </div>
               
@@ -379,14 +411,14 @@ const Dashboard = () => {
                             <div className="w-full relative flex items-end justify-center" style={{height: '100%'}}>
                                 <div 
                                   style={{ height: `${heightPercent}%` }} 
-                                  className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 relative min-h-[4px]"
+                                  className="w-full bg-blue-600 rounded-t-lg transition-all duration-700 relative min-h-[4px] group-hover/trend:bg-white group-hover/trend:shadow-[0_0_20px_rgba(255,255,255,0.4)]"
                                 >
-                                    <div className="hidden md:block absolute -top-6 left-1/2 -translate-x-1/2 text-white text-[10px] font-bold opacity-70 group-hover/trend:opacity-100 transition-opacity whitespace-nowrap">
+                                    <div className="opacity-0 group-hover/trend:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 px-2 py-1 rounded text-[10px] font-black transition-all whitespace-nowrap shadow-xl">
                                         {dailyRevenue > 0 ? `₹${(dailyRevenue/1000).toFixed(1)}k` : ''}
                                     </div>
                                 </div>
                             </div>
-                            <p className="text-[8px] md:text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest transform -rotate-45 md:rotate-0 origin-top-left md:origin-center translate-y-2 md:translate-y-0">{t.date.split('-').slice(1).join('/')}</p>
+                            <p className="text-[8px] md:text-[10px] font-bold mt-3 text-slate-500 uppercase tracking-widest">{t.date.split('-').slice(1).join('/')}</p>
                         </div>
                       );
                   })}

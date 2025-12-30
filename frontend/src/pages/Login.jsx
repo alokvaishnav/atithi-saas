@@ -31,6 +31,7 @@ const Login = () => {
       }
 
       const data = await response.json();
+      // The login function from context should handle storing token and user state
       await login(data);
       navigate('/'); 
 
@@ -45,6 +46,7 @@ const Login = () => {
   return (
     <div className="flex h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
       
+      {/* Dynamic Background */}
       <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-10 animate-pulse"></div>
       <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-purple-600 rounded-full blur-[120px] opacity-10 animate-pulse delay-700"></div>
       

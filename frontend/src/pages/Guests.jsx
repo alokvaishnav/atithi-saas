@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
 import { 
-  Search, User, Mail, Phone, MapPin, 
-  Loader2, Edit3, Trash2, ShieldCheck 
+  User, Mail, Phone, Star, Search, 
+  MapPin, Loader2, MoreHorizontal, Plus,
+  Download, Ban, Briefcase, CreditCard, X, Save,
+  ShieldCheck
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useNavigate } from 'react-router-dom';
 
 const Guests = () => {
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  const navigate = useNavigate();
+  // Modal States
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedGuest, setSelectedGuest] = useState(null); // For detail/edit view
+  
+  const [newGuestData, setNewGuestData] = useState({
+      full_name: '', email: '', phone: '', 
+      id_proof_number: '', address: '', type: 'REGULAR'
+  });
+
   const token = localStorage.getItem('access_token');
 
   // --- FETCH GUESTS ---
@@ -21,24 +30,55 @@ const Guests = () => {
       const res = await fetch(`${API_URL}/api/guests/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
-        setGuests(await res.json());
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) setGuests(await res.json());
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchGuests(); }, []);
 
-  // --- FILTER ---
+  // --- ACTIONS ---
+  const toggleVIP = async (id, currentStatus) => {
+    // Optimistic update for UI speed
+    setGuests(guests.map(g => g.id === id ? { ...g, is_vip: !currentStatus } : g));
+    
+    try {
+        await fetch(`${API_URL}/api/guests/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ is_vip: !currentStatus })
+        });
+    } catch(err) { console.error(err); fetchGuests(); }
+  };
+
+  const handleCreate = async (e) => {
+      e.preventDefault();
+      try {
+        const res = await fetch(`${API_URL}/api/guests/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(newGuestData)
+        });
+        if(res.ok) {
+            alert("Guest Profile Created Successfully! 🎉");
+            setShowAddModal(false);
+            setNewGuestData({ full_name: '', email: '', phone: '', id_proof_number: '', address: '', type: 'REGULAR' });
+            fetchGuests(); 
+        }
+      } catch(err) { console.error(err); }
+  };
+
+  // --- CALCULATIONS & FILTER ---
   const filteredGuests = guests.filter(g => 
     g.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (g.phone && g.phone.includes(searchTerm)) ||
-    (g.email && g.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    g.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    g.phone?.includes(searchTerm)
   );
+
+  const vipCount = guests.filter(g => g.is_vip).length;
+  const corporateCount = guests.filter(g => g.type === 'CORPORATE').length;
+  // Calculate Total Revenue (Lifetime Value) from all guests
+  const totalLTV = guests.reduce((sum, g) => sum + (parseFloat(g.total_spent) || 0), 0);
 
   if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
 
@@ -46,70 +86,252 @@ const Guests = () => {
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
         <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Guest Directory</h2>
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Total Profiles: {guests.length}</p>
+          <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Guest Database</h2>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">CRM & Loyalty Management</p>
         </div>
         
-        <div className="relative w-full md:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search by Name, Phone, Email..." 
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none font-bold text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        <div className="flex gap-3">
+            <button className="bg-white border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2 shadow-sm">
+                <Download size={16}/> Export CSV
+            </button>
+            <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 flex items-center gap-2 shadow-lg transition-all">
+                <Plus size={16}/> New Guest
+            </button>
         </div>
       </div>
 
-      {/* GUEST GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredGuests.map(guest => (
-            <div key={guest.id} className="bg-white p-6 rounded-[32px] border border-slate-100 hover:shadow-xl transition-all group relative">
+      {/* STATS BAR */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><User size={20}/></div>
+              <div>
+                  <p className="text-2xl font-black text-slate-800">{guests.length}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Profiles</p>
+              </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl"><Star size={20}/></div>
+              <div>
+                  <p className="text-2xl font-black text-slate-800">{vipCount}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">VIP Guests</p>
+              </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><Briefcase size={20}/></div>
+              <div>
+                  <p className="text-2xl font-black text-slate-800">{corporateCount}</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Corporate</p>
+              </div>
+          </div>
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
+              <div className="p-3 bg-green-50 text-green-600 rounded-xl"><CreditCard size={20}/></div>
+              <div>
+                  <p className="text-2xl font-black text-slate-800">₹{(totalLTV/100000).toFixed(2)}L</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Revenue</p>
+              </div>
+          </div>
+      </div>
+
+      {/* SEARCH BAR */}
+      <div className="relative w-full max-w-md mb-6">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input 
+              type="text" placeholder="Search by Name, Phone, Email..." 
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-200 focus:border-blue-500 outline-none font-bold text-slate-700 placeholder:font-medium transition-all shadow-sm focus:shadow-md" 
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
+          />
+      </div>
+
+      {/* GUEST TABLE */}
+      <div className="bg-white rounded-[30px] border border-slate-200 shadow-sm overflow-hidden">
+        <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Profile</th>
+                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Contact</th>
+                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">History</th>
+                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Details</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+                {filteredGuests.map(guest => (
+                    <tr key={guest.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => setSelectedGuest(guest)}>
+                        <td className="p-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-400 text-lg">
+                                    {guest.full_name.charAt(0)}
+                                </div>
+                                <div>
+                                    <p className="font-black text-slate-800 text-sm">{guest.full_name}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mt-1">
+                                        <MapPin size={10}/> {guest.address || "Unknown"}
+                                    </p>
+                                </div>
+                            </div>
+                        </td>
+                        <td className="p-6">
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-slate-600 flex items-center gap-2"><Phone size={12}/> {guest.phone || "N/A"}</p>
+                                <p className="text-xs font-bold text-slate-400 flex items-center gap-2"><Mail size={12}/> {guest.email || "N/A"}</p>
+                            </div>
+                        </td>
+                        <td className="p-6">
+                            <div className="flex gap-2">
+                                {guest.is_vip && <span className="px-2 py-1 rounded-md bg-yellow-100 text-yellow-700 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 w-fit"><Star size={10} fill="currentColor"/> VIP</span>}
+                                {guest.type === 'CORPORATE' && <span className="px-2 py-1 rounded-md bg-purple-100 text-purple-700 text-[9px] font-black uppercase tracking-widest w-fit">CORP</span>}
+                                {guest.is_blacklisted && <span className="px-2 py-1 rounded-md bg-red-100 text-red-700 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 w-fit"><Ban size={10}/> BANNED</span>}
+                                {!guest.is_vip && !guest.is_blacklisted && guest.type !== 'CORPORATE' && <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-widest w-fit">REGULAR</span>}
+                            </div>
+                        </td>
+                        <td className="p-6">
+                            <p className="text-sm font-black text-slate-800">₹{(parseFloat(guest.total_spent) || 0).toLocaleString()}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{guest.total_stays || 0} Stays</p>
+                        </td>
+                        <td className="p-6 text-right">
+                            <button className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                                <MoreHorizontal size={20}/>
+                            </button>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+        {filteredGuests.length === 0 && <div className="p-10 text-center text-slate-400 font-bold uppercase tracking-widest">No guest profiles found.</div>}
+      </div>
+
+      {/* --- ADD GUEST MODAL --- */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <form onSubmit={handleCreate} className="bg-white p-8 rounded-[30px] w-full max-w-lg space-y-4 animate-in zoom-in duration-200">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-black text-slate-800 uppercase italic">Create Profile</h3>
+                    <button type="button" onClick={() => setShowAddModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20}/></button>
+                </div>
                 
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                        <User size={32}/>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                        <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                            onChange={e => setNewGuestData({...newGuestData, full_name: e.target.value})} />
                     </div>
                     <div>
-                        <h3 className="text-xl font-black text-slate-800 tracking-tight">{guest.full_name}</h3>
-                        {guest.id_proof_number && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 rounded-md text-[9px] font-black uppercase tracking-widest mt-1">
-                                <ShieldCheck size={10}/> Verified ID
-                            </span>
-                        )}
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone</label>
+                        <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                            onChange={e => setNewGuestData({...newGuestData, phone: e.target.value})} />
                     </div>
                 </div>
 
-                <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                        <Phone size={16} className="text-slate-400"/>
-                        <span className="text-xs font-bold text-slate-600">{guest.phone || "No Phone"}</span>
+                <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                    <input type="email" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                        onChange={e => setNewGuestData({...newGuestData, email: e.target.value})} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">ID Number</label>
+                        <input className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                            onChange={e => setNewGuestData({...newGuestData, id_proof_number: e.target.value})} />
                     </div>
-                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                        <Mail size={16} className="text-slate-400"/>
-                        <span className="text-xs font-bold text-slate-600 truncate">{guest.email || "No Email"}</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                        <MapPin size={16} className="text-slate-400"/>
-                        <span className="text-xs font-bold text-slate-600 truncate">{guest.address || "No Address"}</span>
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type</label>
+                        <select className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
+                            onChange={e => setNewGuestData({...newGuestData, type: e.target.value})}>
+                            <option value="REGULAR">Regular</option>
+                            <option value="VIP">VIP</option>
+                            <option value="CORPORATE">Corporate</option>
+                        </select>
                     </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-slate-100 flex gap-2">
-                    <button 
-                        onClick={() => navigate(`/guests/edit/${guest.id}`)}
-                        className="flex-1 py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <Edit3 size={14}/> Edit Profile
+                <div className="pt-4">
+                    <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+                        <Save size={16}/> Save Profile
+                    </button>
+                </div>
+            </form>
+        </div>
+      )}
+
+      {/* --- GUEST DETAIL SLIDEOVER/MODAL --- */}
+      {selectedGuest && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-end z-50">
+            <div className="bg-white w-full max-w-md h-full p-8 overflow-y-auto animate-in slide-in-from-right duration-300 shadow-2xl">
+                <div className="flex justify-between items-start mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-3xl bg-slate-900 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-slate-200">
+                            {selectedGuest.full_name.charAt(0)}
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-800 leading-none">{selectedGuest.full_name}</h2>
+                            <div className="flex gap-2 mt-2">
+                                {selectedGuest.id_proof_number && (
+                                    <span className="px-2 py-1 bg-green-50 text-green-700 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-1">
+                                        <ShieldCheck size={10}/> Verified
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <button onClick={() => setSelectedGuest(null)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X size={20}/></button>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="flex gap-2 mb-8">
+                    <button onClick={() => toggleVIP(selectedGuest.id, selectedGuest.is_vip)} className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 transition-all ${selectedGuest.is_vip ? 'border-yellow-400 bg-yellow-50 text-yellow-600' : 'border-slate-100 text-slate-400 hover:border-yellow-400'}`}>
+                        {selectedGuest.is_vip ? 'Remove VIP' : 'Make VIP'}
+                    </button>
+                    <button className="flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-slate-100 text-slate-400 hover:border-red-400 hover:text-red-500 transition-all">
+                        Blacklist
                     </button>
                 </div>
 
+                {/* Info Grid */}
+                <div className="space-y-8">
+                    <div className="bg-slate-50 p-6 rounded-[24px] border border-slate-100">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Contact Information</h4>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><Phone size={14}/></div> 
+                                {selectedGuest.phone || "N/A"}
+                            </div>
+                            <div className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><Mail size={14}/></div> 
+                                {selectedGuest.email || "N/A"}
+                            </div>
+                            <div className="flex items-center gap-3 text-sm font-bold text-slate-700">
+                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-400 shadow-sm"><MapPin size={14}/></div> 
+                                {selectedGuest.address || "No Address Provided"}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Financial Summary</h4>
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs font-bold text-slate-500">Total Visits</span>
+                            <span className="text-lg font-black text-slate-800">{selectedGuest.total_stays || 0}</span>
+                        </div>
+                        <div className="w-full h-px bg-slate-100 mb-2"></div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500">Lifetime Spend</span>
+                            <span className="text-lg font-black text-green-600">₹{(parseFloat(selectedGuest.total_spent) || 0).toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Staff Notes</h4>
+                        <textarea placeholder="Add notes about allergies, room preferences, etc." className="w-full p-4 bg-yellow-50 rounded-2xl text-sm font-medium text-yellow-900 placeholder:text-yellow-700/50 outline-none resize-none h-32 border-2 border-transparent focus:border-yellow-200 transition-all"></textarea>
+                        <button className="w-full mt-3 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-800">Save Notes</button>
+                    </div>
+                </div>
+
             </div>
-        ))}
-      </div>
+        </div>
+      )}
 
     </div>
   );
