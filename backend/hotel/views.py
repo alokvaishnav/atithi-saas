@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, views
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action
+from django.shortcuts import get_object_or_404
 from django.db.models import Sum
 from datetime import timedelta
 from django.utils import timezone
@@ -203,22 +204,68 @@ class POSChargeView(views.APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
+        """
+        Securely charge items to a room.
+        Expects:
+        {
+            "room_id": 123,
+            "items": [
+                { "service_id": 5, "description": "Burger" },
+                { "service_id": 8, "description": "Coke" }
+            ]
+        }
+        """
         room_id = request.data.get('room_id')
-        items = request.data.get('items', [])
+        items = request.data.get('items', []) # List of {service_id, description}
+
+        # 1. Identify Owner
+        user = request.user
+        owner = user.hotel_owner if user.hotel_owner else user
+
+        # 2. Find the Room belongs to this owner
+        room = get_object_or_404(Room, id=room_id, owner=owner)
+
+        # 3. Find Active Booking
+        # Priority 1: Status is 'CHECKED_IN'
+        booking = Booking.objects.filter(room=room, status='CHECKED_IN').last()
         
-        booking = Booking.objects.filter(room_id=room_id, status='CHECKED_IN').last()
+        # Priority 2: Fallback if they forgot to update status but didn't checkout
         if not booking:
-            # Fallback: Find occupied room
-            booking = Booking.objects.filter(room_id=room_id, is_checked_out=False).last()
+            booking = Booking.objects.filter(room=room, is_checked_out=False).last()
             
         if not booking:
-            return Response({'error': 'No active guest found in this room'}, status=400)
-            
+            return Response({'error': 'No active guest found in this room! Check if the room is occupied.'}, status=400)
+
+        total_charged = 0
+        charged_items = []
+
+        # 4. Process Items Securely
         for item in items:
+            service_id = item.get('service_id')
+            description = item.get('description', 'POS Item')
+
+            if service_id:
+                # Secure Lookup: Get price from DB
+                service = Service.objects.filter(id=service_id, owner=owner).first()
+                if service:
+                    amount = service.price
+                    final_desc = f"POS: {service.name}"
+                else:
+                    continue # Skip invalid service IDs
+            else:
+                # Fallback for manual items (if allowed) or skip
+                continue 
+
             BookingCharge.objects.create(
-                booking=booking, 
-                description=item['description'], 
-                amount=item['amount']
+                booking=booking,
+                description=final_desc,
+                amount=amount
             )
-            
-        return Response({'status': 'Charged to Room'})
+            total_charged += amount
+            charged_items.append(final_desc)
+
+        return Response({
+            'status': 'Charged successfully', 
+            'total': total_charged,
+            'items': charged_items
+        })

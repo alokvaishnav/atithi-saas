@@ -58,16 +58,27 @@ class BookingSerializer(serializers.ModelSerializer):
     hotel_name = serializers.CharField(source='owner.hotel_settings.hotel_name', read_only=True, default="Atithi Hotel")
     guest_name = serializers.CharField(source='guest.full_name', read_only=True)
     room_number = serializers.CharField(source='room.room_number', read_only=True)
+    
+    # Calculated Fields for Frontend Display
     days_stayed = serializers.SerializerMethodField()
+    room_rent = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = '__all__'
-        read_only_fields = ['owner', 'amount_paid', 'payment_status']
+        # Added 'total_amount' to read_only since it is now calculated automatically via Signals
+        read_only_fields = ['owner', 'amount_paid', 'payment_status', 'total_amount']
 
     def get_days_stayed(self, obj):
+        if not obj.check_in_date or not obj.check_out_date:
+            return 0
         delta = obj.check_out_date - obj.check_in_date
         return delta.days if delta.days > 0 else 1
+
+    def get_room_rent(self, obj):
+        # Explicitly calculate Room Cost (Days * Price) separate from Extras
+        days = self.get_days_stayed(obj)
+        return float(obj.room.price_per_night) * days
 
 class StaffSerializer(serializers.ModelSerializer):
     class Meta:

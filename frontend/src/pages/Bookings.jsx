@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false); // New: Handle form submission state
   const [filter, setFilter] = useState('ALL'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -53,6 +54,23 @@ const Bookings = () => {
   // --- CREATE BOOKING ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Basic Validation
+    if (new Date(formData.check_out) <= new Date(formData.check_in)) {
+        alert("Check-out date must be after Check-in date.");
+        return;
+    }
+
+    setSubmitting(true);
+
+    // Prepare payload with correct data types
+    const payload = {
+        ...formData,
+        room_id: parseInt(formData.room_id),
+        adults: parseInt(formData.adults),
+        children: parseInt(formData.children)
+    };
+
     try {
         const res = await fetch(`${API_URL}/api/bookings/`, {
             method: 'POST',
@@ -60,7 +78,7 @@ const Bookings = () => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}` 
             },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(payload)
         });
 
         if (res.ok) {
@@ -72,12 +90,18 @@ const Bookings = () => {
             const err = await res.json();
             alert("Error: " + JSON.stringify(err));
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error(err);
+        alert("Something went wrong. Please try again.");
+    } finally {
+        setSubmitting(false);
+    }
   };
 
   // --- FILTERING ---
   const filteredBookings = bookings.filter(b => {
-    const matchesSearch = b.guest_details?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const guestName = b.guest_details?.full_name || ""; // Safe access
+    const matchesSearch = guestName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           b.id.toString().includes(searchTerm);
     if (filter === 'ALL') return matchesSearch;
     return matchesSearch && b.status === filter;
@@ -153,10 +177,10 @@ const Bookings = () => {
                         {booking.room_details?.room_number || "NA"}
                     </div>
                     <div>
-                        <h3 className="text-lg font-black text-slate-800">{booking.guest_details?.full_name}</h3>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mt-1">
+                        <h3 className="text-lg font-black text-slate-800">{booking.guest_details?.full_name || "Unknown Guest"}</h3>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mt-1">
                             <Calendar size={12}/> {booking.check_in_date} <ArrowRight size={10}/> {booking.check_out_date}
-                        </p>
+                        </div>
                     </div>
                 </div>
 
@@ -166,7 +190,7 @@ const Bookings = () => {
                         {booking.status.replace('_', ' ')}
                     </span>
                     <div className="text-right">
-                        <p className="text-lg font-black text-slate-800">₹{parseFloat(booking.total_amount).toLocaleString()}</p>
+                        <p className="text-lg font-black text-slate-800">₹{parseFloat(booking.total_amount || 0).toLocaleString()}</p>
                         <p className={`text-[10px] font-bold uppercase tracking-widest ${booking.payment_status === 'PAID' ? 'text-green-500' : 'text-red-400'}`}>
                             {booking.payment_status}
                         </p>
@@ -194,7 +218,7 @@ const Bookings = () => {
       {/* ADD BOOKING MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white p-8 rounded-[30px] shadow-2xl w-full max-w-lg animate-in zoom-in duration-200">
+            <div className="bg-white p-8 rounded-[30px] shadow-2xl w-full max-w-lg animate-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-black text-slate-800 uppercase italic">New Reservation</h3>
                     <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20}/></button>
@@ -238,9 +262,26 @@ const Bookings = () => {
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Adults</label>
+                            <input required type="number" min="1" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                                value={formData.adults} onChange={e => setFormData({...formData, adults: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Children</label>
+                            <input required type="number" min="0" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                                value={formData.children} onChange={e => setFormData({...formData, children: e.target.value})} />
+                        </div>
+                    </div>
+
                     <div className="pt-4">
-                        <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg">
-                            Confirm Booking
+                        <button 
+                            type="submit" 
+                            disabled={submitting}
+                            className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg flex justify-center items-center gap-2 disabled:bg-slate-400 disabled:cursor-not-allowed"
+                        >
+                            {submitting ? <Loader2 className="animate-spin" size={20} /> : "Confirm Booking"}
                         </button>
                     </div>
                 </form>

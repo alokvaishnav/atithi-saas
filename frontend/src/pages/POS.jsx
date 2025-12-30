@@ -16,15 +16,19 @@ const POS = () => {
 
   useEffect(() => {
     const init = async () => {
-        const [resS, resR] = await Promise.all([
-            fetch(`${API_URL}/api/services/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/api/rooms/`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
-        if (resS.ok) setServices(await resS.json());
-        if (resR.ok) setRooms(await resR.json());
+        try {
+            const [resS, resR] = await Promise.all([
+                fetch(`${API_URL}/api/services/`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_URL}/api/rooms/`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+            if (resS.ok) setServices(await resS.json());
+            if (resR.ok) setRooms(await resR.json());
+        } catch (error) {
+            console.error("Failed to load POS data:", error);
+        }
     };
     init();
-  }, []);
+  }, [token]);
 
   const addToCart = (item) => {
     setCart([...cart, item]);
@@ -41,14 +45,14 @@ const POS = () => {
   const handleChargeRoom = async () => {
     if (!selectedRoom || cart.length === 0) return alert("Select a Room and Items first!");
     
-    // Find active booking for this room
-    // Note: In a real app, you'd fetch the active booking ID from the backend using the room ID.
-    // For simplicity here, we assume the backend handles finding the booking or we ask for booking ID.
-    // Let's assume we post to a special 'pos-charge' endpoint that finds the booking.
-    
+    // SECURITY FIX: Send Service IDs, not prices.
+    // The backend will look up the real price to prevent tampering.
     const payload = {
         room_id: selectedRoom,
-        items: cart.map(i => ({ description: i.name, amount: i.price }))
+        items: cart.map(i => ({ 
+            service_id: i.id,
+            description: i.name 
+        }))
     };
 
     try {
@@ -58,14 +62,19 @@ const POS = () => {
             body: JSON.stringify(payload)
         });
         
+        const data = await res.json();
+
         if (res.ok) {
-            alert("Charged to Room Successfully! 🍽️");
+            alert(`Charged ₹${data.total} to Room Successfully! 🍽️`);
             setCart([]);
             setSelectedRoom('');
         } else {
-            alert("Failed. Is the room currently occupied?");
+            alert(data.error || "Failed to charge room. Ensure guest is checked in.");
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error(err); 
+        alert("Network Error: Could not connect to server.");
+    }
   };
 
   const filteredServices = services.filter(s => filter === 'ALL' || s.category === filter);

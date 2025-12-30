@@ -2,24 +2,23 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, CreditCard, Send, CheckCircle, 
-  ArrowLeft, FileText, Download, Plus, Trash2 
+  ArrowLeft, FileText, Download, Plus, Trash2, Loader2 
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useReactToPrint } from 'react-to-print';
 
 const Folio = () => {
-  const { bookingId } = useParams();
+  const { id } = useParams(); // Standardized to 'id' to match Router
   const navigate = useNavigate();
-  const [booking, setBooking] = useState(null);
-  const [items, setItems] = useState([]); // Extra charges (Food, Laundry)
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
   
-  // New Payment Form
+  // Data State
+  const [booking, setBooking] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  
+  // Form State
   const [payAmount, setPayAmount] = useState('');
   const [payMode, setPayMode] = useState('CASH');
-
-  // New Charge Form
   const [newItem, setNewItem] = useState({ description: '', amount: '' });
 
   const token = localStorage.getItem('access_token');
@@ -29,101 +28,141 @@ const Folio = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const headers = { 'Authorization': `Bearer ${token}` };
+      const res = await fetch(`${API_URL}/api/bookings/${id}/`, { 
+        headers: { 'Authorization': `Bearer ${token}` } 
+      });
       
-      const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, { headers });
       if (res.ok) {
-        const data = await res.json();
-        setBooking(data);
-        // Ensure arrays exist to prevent crashes
-        setItems(data.charges || []); 
-        setPayments(data.payments || []);
+        setBooking(await res.json());
       }
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
+    } catch (err) { 
+      console.error(err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
-  useEffect(() => { fetchData(); }, [bookingId]);
+  useEffect(() => { fetchData(); }, [id]);
 
   // --- CALCULATIONS ---
-  const roomTotal = booking ? parseFloat(booking.total_amount) : 0;
-  const extrasTotal = items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-  const grandTotal = roomTotal + extrasTotal;
+  const items = booking?.charges || [];
+  const payments = booking?.payments || [];
+
+  // 1. Totals (Backend is source of truth for total_amount)
+  const grandTotal = booking ? parseFloat(booking.total_amount) : 0;
+  
+  // 2. Room Rent Calculation (Total - Extras)
+  const totalExtras = items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+  const roomRentDisplay = grandTotal - totalExtras; 
+
+  // 3. Balance
   const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
   const balance = grandTotal - totalPaid;
 
   // --- ACTIONS ---
+
+  // Add Payment
   const handleAddPayment = async (e) => {
     e.preventDefault();
     if (!payAmount || parseFloat(payAmount) <= 0) return;
-
+    
+    setSubmitting(true);
     try {
-        const res = await fetch(`${API_URL}/api/bookings/${bookingId}/add_payment/`, {
+        const res = await fetch(`${API_URL}/api/payments/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ amount: payAmount, mode: payMode })
+            body: JSON.stringify({ 
+                booking: id, // Link to booking
+                amount: parseFloat(payAmount), 
+                method: payMode 
+            })
         });
+        
         if (res.ok) {
             setPayAmount('');
-            fetchData();
+            setPayMode('CASH');
+            fetchData(); // Reload data
+        } else {
+            alert("Failed to record payment");
         }
     } catch (err) { console.error(err); }
+    finally { setSubmitting(false); }
   };
 
+  // Add Extra Charge
   const handleAddCharge = async (e) => {
     e.preventDefault();
     if (!newItem.description || !newItem.amount) return;
 
+    setSubmitting(true);
     try {
-        const res = await fetch(`${API_URL}/api/bookings/${bookingId}/add_charge/`, {
+        const res = await fetch(`${API_URL}/api/charges/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify(newItem)
+            body: JSON.stringify({ 
+                booking: id, // Link to booking
+                description: newItem.description, 
+                amount: parseFloat(newItem.amount) 
+            })
         });
+
         if (res.ok) {
             setNewItem({ description: '', amount: '' });
-            fetchData();
+            fetchData(); // Reload data
+        } else {
+            alert("Failed to add charge");
         }
     } catch (err) { console.error(err); }
+    finally { setSubmitting(false); }
   };
 
+  // Checkout Guest
   const handleCheckout = async () => {
     if (balance > 0) {
-        alert(`❌ Cannot Checkout! Pending Balance: ₹${balance}`);
+        alert(`❌ Cannot Checkout! Pending Balance: ₹${balance.toLocaleString()}`);
         return;
     }
     if (!window.confirm("Confirm Checkout & Close Folio?")) return;
 
+    setSubmitting(true);
     try {
-        await fetch(`${API_URL}/api/bookings/${bookingId}/checkout/`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+        // We update the status of the booking to CHECKED_OUT
+        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: 'CHECKED_OUT' })
         });
-        alert("Guest Checked Out Successfully! 👋");
-        navigate('/front-desk');
+
+        if (res.ok) {
+            alert("Guest Checked Out Successfully! 👋");
+            navigate('/bookings');
+        }
     } catch (err) { console.error(err); }
+    finally { setSubmitting(false); }
   };
 
+  // Print Handler
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
-    documentTitle: `Invoice_${bookingId}`,
+    documentTitle: `Invoice_${booking?.id || 'Draft'}`,
   });
 
-  if (loading || !booking) return <div className="p-20 text-center">Loading Folio...</div>;
+  if (loading || !booking) return <div className="h-screen flex justify-center items-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
 
   return (
     <div className="p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* HEADER ACTIONS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors">
             <ArrowLeft size={20}/> Back
         </button>
         <div className="flex gap-3">
-            <button onClick={() => window.open(`/folio-live/${bookingId}`, '_blank')} className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2">
+            {/* Share Link (Future Feature) */}
+            <button disabled className="bg-white border border-slate-200 text-slate-400 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest cursor-not-allowed flex items-center gap-2">
                 <Send size={16}/> Share Link
             </button>
-            <button onClick={handlePrint} className="bg-slate-900 text-white px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 flex items-center gap-2 shadow-lg">
+            <button onClick={handlePrint} className="bg-slate-900 text-white px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 flex items-center gap-2 shadow-lg transition-all">
                 <Printer size={16}/> Print Invoice
             </button>
         </div>
@@ -131,7 +170,7 @@ const Folio = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* 📄 INVOICE PREVIEW (LEFT) */}
+        {/* 📄 INVOICE PREVIEW (LEFT - Printable Area) */}
         <div className="lg:col-span-2 bg-white p-10 rounded-[30px] shadow-sm border border-slate-200" ref={printRef}>
             
             {/* Invoice Header */}
@@ -141,7 +180,7 @@ const Folio = () => {
                     <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">#{booking.id} • {new Date().toLocaleDateString()}</p>
                 </div>
                 <div className="text-right">
-                    <h2 className="text-xl font-black text-slate-800">{booking.hotel_name || "ATITHI HOTEL"}</h2>
+                    <h2 className="text-xl font-black text-slate-800">ATITHI HOTEL</h2>
                     <p className="text-xs text-slate-500 max-w-[200px] leading-relaxed mt-1">
                         123 Hospitality Lane, Cloud City<br/>
                         GST: 27AABC1234D1Z5
@@ -154,15 +193,14 @@ const Folio = () => {
                 <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Billed To</p>
                     <h3 className="text-lg font-black text-slate-800">{booking.guest_details?.full_name}</h3>
-                    <p className="text-sm text-slate-500">{booking.guest_details?.address}</p>
                     <p className="text-sm text-slate-500">{booking.guest_details?.phone}</p>
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Stay Details</p>
                     <h3 className="text-lg font-black text-slate-800">Room {booking.room_details?.room_number}</h3>
-                    <p className="text-sm text-slate-500">{booking.room_type_name}</p>
-                    <p className="text-sm text-slate-500">
-                        {booking.check_in_date} ➜ {booking.check_out_date}
+                    <p className="text-sm text-slate-500">{booking.room_details?.room_type}</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {booking.check_in_date} <span className="mx-1">➜</span> {booking.check_out_date}
                     </p>
                 </div>
             </div>
@@ -176,10 +214,16 @@ const Folio = () => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
+                    {/* Room Rent Row */}
                     <tr>
-                        <td className="py-4 font-bold text-slate-700">Room Charges ({booking.days_stayed || 1} Nights)</td>
-                        <td className="py-4 font-bold text-slate-700 text-right">₹{roomTotal.toLocaleString()}</td>
+                        <td className="py-4 font-bold text-slate-700">
+                            Room Charges
+                            <span className="text-xs text-slate-400 font-normal ml-2">(Base Rate)</span>
+                        </td>
+                        <td className="py-4 font-bold text-slate-700 text-right">₹{roomRentDisplay.toLocaleString()}</td>
                     </tr>
+                    
+                    {/* Extra Charges Rows */}
                     {items.map((item, index) => (
                         <tr key={index}>
                             <td className="py-4 text-sm text-slate-600">{item.description}</td>
@@ -193,7 +237,7 @@ const Folio = () => {
             <div className="flex justify-end border-t-2 border-slate-100 pt-6">
                 <div className="w-64 space-y-3">
                     <div className="flex justify-between text-sm font-bold text-slate-500">
-                        <span>Subtotal</span>
+                        <span>Total Bill</span>
                         <span>₹{grandTotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold text-green-600">
@@ -213,7 +257,7 @@ const Folio = () => {
             </div>
         </div>
 
-        {/* 🎮 CONTROLS (RIGHT) */}
+        {/* 🎮 CONTROLS (RIGHT - Non-Printable) */}
         <div className="space-y-6">
             
             {/* 1. Add Payment */}
@@ -226,12 +270,13 @@ const Folio = () => {
                     <input 
                         type="number" 
                         placeholder="Amount (₹)" 
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500"
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500 transition-all"
                         value={payAmount}
                         onChange={e => setPayAmount(e.target.value)}
+                        required
                     />
                     <select 
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none"
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-green-500"
                         value={payMode}
                         onChange={e => setPayMode(e.target.value)}
                     >
@@ -240,8 +285,12 @@ const Folio = () => {
                         <option value="CARD">Credit/Debit Card</option>
                         <option value="TRANSFER">Bank Transfer</option>
                     </select>
-                    <button type="submit" className="w-full py-3 bg-green-600 text-white rounded-xl font-black uppercase tracking-widest hover:bg-green-700 shadow-lg shadow-green-100">
-                        Receive Payment
+                    <button 
+                        type="submit" 
+                        disabled={submitting}
+                        className="w-full py-3 bg-green-600 text-white rounded-xl font-black uppercase tracking-widest hover:bg-green-700 shadow-lg shadow-green-100 flex justify-center items-center gap-2"
+                    >
+                        {submitting ? <Loader2 className="animate-spin" size={16}/> : "Receive Payment"}
                     </button>
                 </form>
             </div>
@@ -256,19 +305,25 @@ const Folio = () => {
                     <input 
                         type="text" 
                         placeholder="Item (e.g. Laundry, Taxi)" 
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                         value={newItem.description}
                         onChange={e => setNewItem({...newItem, description: e.target.value})}
+                        required
                     />
                     <input 
                         type="number" 
                         placeholder="Cost (₹)" 
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500"
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-orange-500 transition-all"
                         value={newItem.amount}
                         onChange={e => setNewItem({...newItem, amount: e.target.value})}
+                        required
                     />
-                    <button type="submit" className="w-full py-3 bg-orange-500 text-white rounded-xl font-black uppercase tracking-widest hover:bg-orange-600 shadow-lg shadow-orange-100">
-                        Add to Bill
+                    <button 
+                        type="submit" 
+                        disabled={submitting}
+                        className="w-full py-3 bg-orange-500 text-white rounded-xl font-black uppercase tracking-widest hover:bg-orange-600 shadow-lg shadow-orange-100 flex justify-center items-center gap-2"
+                    >
+                        {submitting ? <Loader2 className="animate-spin" size={16}/> : "Add to Bill"}
                     </button>
                 </form>
             </div>
@@ -276,14 +331,22 @@ const Folio = () => {
             {/* 3. Checkout Button */}
             <button 
                 onClick={handleCheckout}
-                className={`w-full py-4 rounded-xl font-black uppercase tracking-widest shadow-xl transition-all ${
-                    balance <= 0 
+                disabled={balance > 0 || submitting || booking.status === 'CHECKED_OUT'}
+                className={`w-full py-4 rounded-xl font-black uppercase tracking-widest shadow-xl transition-all flex justify-center items-center gap-2 ${
+                    balance <= 0 && booking.status !== 'CHECKED_OUT'
                     ? 'bg-slate-900 text-white hover:bg-black' 
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
-                disabled={balance > 0}
             >
-                {balance > 0 ? `Due: ₹${balance}` : 'Complete Checkout'}
+                {submitting ? (
+                    <Loader2 className="animate-spin" size={20}/> 
+                ) : booking.status === 'CHECKED_OUT' ? (
+                    "Guest Checked Out"
+                ) : balance > 0 ? (
+                    `Due: ₹${balance.toLocaleString()}`
+                ) : (
+                    "Complete Checkout"
+                )}
             </button>
 
         </div>

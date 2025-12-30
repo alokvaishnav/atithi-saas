@@ -1,6 +1,10 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.db.models import Sum
+from datetime import timedelta
 
 # 1. Global Settings (Logo, Tax ID)
 class HotelSettings(models.Model):
@@ -99,6 +103,11 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"Booking {self.id} - {self.guest.full_name}"
+    
+    def save(self, *args, **kwargs):
+        # 1. Calculate Room Rent Logic on Save (Basic calc before DB)
+        # Note: The comprehensive Signal below handles the final total (Rent + Extras)
+        super(Booking, self).save(*args, **kwargs)
 
 # 8. Booking Charges (Extras)
 class BookingCharge(models.Model):
@@ -106,6 +115,9 @@ class BookingCharge(models.Model):
     description = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.description}: {self.amount}"
 
 # 9. Payments
 class BookingPayment(models.Model):
@@ -126,3 +138,39 @@ class HousekeepingTask(models.Model):
     priority = models.CharField(max_length=10, choices=PRIORITY, default='NORMAL')
     status = models.CharField(max_length=10, choices=STATUS, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
+
+# ==========================================
+# SIGNALS FOR AUTOMATIC CALCULATION
+# ==========================================
+
+@receiver(post_save, sender=BookingCharge)
+@receiver(post_delete, sender=BookingCharge)
+def update_booking_total_on_charge_change(sender, instance, **kwargs):
+    """
+    Updates the Booking.total_amount whenever a charge is added or removed.
+    Formula: (Room Price * Nights) + Sum(BookingCharges)
+    """
+    booking = instance.booking
+    
+    # 1. Calculate Nights
+    if booking.check_in_date and booking.check_out_date:
+        delta = booking.check_out_date - booking.check_in_date
+        days = delta.days
+        if days <= 0:
+            days = 1 # Fallback for same-day checkout
+    else:
+        days = 1
+
+    # 2. Calculate Base Room Rent
+    # Ensure we treat decimals correctly
+    room_price = booking.room.price_per_night
+    room_rent = room_price * days
+
+    # 3. Calculate Sum of Extras
+    extras = booking.charges.aggregate(total=Sum('amount'))['total'] or 0
+
+    # 4. Update Booking Total
+    booking.total_amount = room_rent + extras
+    
+    # Save only the total_amount field to avoid recursion loops
+    booking.save(update_fields=['total_amount'])
