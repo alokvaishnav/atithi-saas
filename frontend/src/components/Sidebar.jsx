@@ -14,17 +14,18 @@ const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // USE CONTEXT
+  // 🔐 USE AUTH CONTEXT
+  // Using 'role' from context which we fixed in AuthContext.jsx
   const { hotelName, role, user, logout, updateGlobalProfile } = useAuth(); 
 
-  // MOBILE AUTO-CLOSE
+  // MOBILE AUTO-CLOSE: Closes sidebar when clicking a link on mobile
   useEffect(() => {
     if (onClose && window.innerWidth < 768) {
         onClose();
     }
-  }, [location.pathname]);
+  }, [location.pathname, onClose]);
 
-  // FETCH BRANDING
+  // FETCH BRANDING: Syncs the Hotel Name from Backend Settings
   useEffect(() => {
     const fetchBranding = async () => {
       try {
@@ -37,7 +38,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         
         if (res.ok) {
             const data = await res.json();
-            // Handle both array and object responses from different API versions
             const settings = Array.isArray(data) ? data[0] : data;
             if (settings && settings.hotel_name) {
                 updateGlobalProfile(settings.hotel_name.toUpperCase());
@@ -57,7 +57,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   };
 
-  // RBAC Navigation Logic
+  // 🧭 RBAC Navigation Groups
   const groups = [
     {
       title: "Main",
@@ -161,7 +161,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Navigation Groups */}
         <nav className="flex-1 p-4 space-y-8 overflow-y-auto scrollbar-hide py-8">
           {groups.map((group, index) => (
-            group.roles.includes(role) && (
+            (group.roles.includes(role) || user?.is_superuser) && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
                   {group.title}
@@ -217,7 +217,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
         </nav>
 
-        {/* User Session Footer */}
+        {/* User Session Footer - DYNAMIC IDENTITY FIX */}
         <div className="p-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-md sticky bottom-0">
           <div className="px-4 py-3 mb-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
@@ -225,7 +225,10 @@ const Sidebar = ({ isOpen, onClose }) => {
               </div>
               <div>
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
-                  <p className="text-[11px] font-black text-white tracking-tight">{role}</p>
+                  {/* Displays 'OWNER', 'RECEPTIONIST', etc. based on actual login data */}
+                  <p className="text-[11px] font-black text-white tracking-tight uppercase">
+                    {role || 'Staff'}
+                  </p>
               </div>
           </div>
           <button 

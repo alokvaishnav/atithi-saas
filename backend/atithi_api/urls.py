@@ -12,7 +12,7 @@ from hotel.views import (
     HousekeepingViewSet, 
     StaffViewSet, 
     SettingsViewSet,
-    SystemLogViewSet, # 📜 Audit Trail logic
+    SystemLogViewSet, 
     
     # Special Logic Views
     AnalyticsView, 
@@ -20,7 +20,7 @@ from hotel.views import (
     POSChargeView,
     
     # Reporting & Exports
-    EndOfDayReportView, # 📄 Daily Night Audit Engine
+    EndOfDayReportView, 
     ExportReportView,
     
     # License & Security
@@ -29,8 +29,10 @@ from hotel.views import (
     
     # 👑 Super Admin Views
     SuperAdminDashboardView,
-    # Assuming you have a Tenant viewset for CRUD in SuperAdmin.js
-    # TenantViewSet 
+    
+    # 🔑 Password Reset Views (Import these from your views.py)
+    # PasswordResetRequestView,
+    # PasswordResetConfirmView
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -52,19 +54,21 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # 🔐 Authentication & Identity
+    # Standard Login
     path('api/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # Alias for /api/token/ to fix Frontend 404
+    path('api/token/', TokenObtainPairView.as_view(), name='token_alias'), 
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # 📝 Registration
     path('api/register/', RegisterView.as_view(), name='register'),
 
-    # 🔑 Password Recovery flow (Integrates with ForgotPassword.js)
-    # Note: These usually map to django-templated or custom views in views.py
-    # path('api/password-reset/', PasswordResetRequestView.as_view(), name='password_reset'),
+    # 🔑 Password Recovery flow (Fixed to match Frontend /api/password_reset/ call)
+    # path('api/password_reset/', PasswordResetRequestView.as_view(), name='password_reset_frontend'),
     # path('api/password-reset-confirm/<uidb64>/<token>/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     
     # 👑 Super Admin Platform Control
     path('api/super-admin/stats/', SuperAdminDashboardView.as_view(), name='super_admin_stats'),
-    # If using the 'Power Cycle' or 'Suspend' buttons in SuperAdmin.js:
-    # path('api/super-admin/tenants/<int:pk>/', SuperAdminTenantDetailView.as_view(), name='super_admin_tenant_detail'),
     
     # 📊 Business Intelligence & POS
     path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
@@ -78,6 +82,6 @@ urlpatterns = [
     path('api/license/status/', license_status, name='license_status'),
     path('api/license/activate/', activate_license, name='activate_license'),
 
-    # 🏨 Main Hotel Modules
+    # 🏨 Main Hotel Modules (Mapped under /api/)
     path('api/', include(router.urls)),
 ]

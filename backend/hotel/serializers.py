@@ -6,6 +6,15 @@ from .models import (
 )
 from core.models import User
 
+# 0. User & Identity Serializer (CRITICAL FOR ROLE FIX)
+class UserSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_user_role_display', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_role', 'role_display', 'is_staff']
+        read_only_fields = ['id', 'is_staff']
+
 # 1. Global Branding & Configuration
 class HotelSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -66,23 +75,19 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 # 6. Master Booking Serializer (Enhanced with GST & Totals)
 class BookingSerializer(serializers.ModelSerializer):
-    # Nested Object Detail
     guest_details = GuestSerializer(source='guest', read_only=True)
     room_details = RoomSerializer(source='room', read_only=True)
     charges = ChargeSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
     
-    # Quick String Helpers
     guest_name = serializers.CharField(source='guest.full_name', read_only=True)
     room_number = serializers.CharField(source='room.room_number', read_only=True)
     hotel_name = serializers.SerializerMethodField()
     
-    # Calculated Logic Fields (Properties from Model)
     nights = serializers.ReadOnlyField()
-    gst_amount = serializers.ReadOnlyField() # Calculated at 12% via model @property
+    gst_amount = serializers.ReadOnlyField() 
     balance_due = serializers.ReadOnlyField(source='balance')
     
-    # Status Display Helpers
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
 
@@ -100,23 +105,24 @@ class BookingSerializer(serializers.ModelSerializer):
         except:
             return "Atithi HMS"
 
-# 7. Staff & HR
+# 7. Staff & HR (Ensures user_role is set during creation)
 class StaffSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_user_role_display', read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_role', 'password']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'user_role', 'role_display', 'password']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        # Explicitly set the role if provided, otherwise default is usually set in model
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
         
         request = self.context.get('request')
         if request and request.user:
-            # Sync staff to the owner's hotel name/ID
             user.hotel_name = request.user.hotel_name 
-            # If your User model has 'hotel_owner', set it here
             if hasattr(user, 'hotel_owner'):
                 user.hotel_owner = request.user.hotel_owner or request.user
             user.save()
@@ -134,11 +140,13 @@ class HousekeepingSerializer(serializers.ModelSerializer):
         read_only_fields = ['owner']
 
 class SystemLogSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+
     class Meta:
         model = SystemLog
         fields = '__all__'
 
-# 9. Licensing (Subscription Security)
+# 9. Licensing
 class LicenseSerializer(serializers.ModelSerializer):
     days_left = serializers.IntegerField(read_only=True)
     is_expired = serializers.SerializerMethodField()
@@ -148,4 +156,6 @@ class LicenseSerializer(serializers.ModelSerializer):
         fields = ['key', 'is_active', 'expiry_date', 'days_left', 'is_expired']
 
     def get_is_expired(self, obj):
-        return obj.days_left() <= 0
+        # Handle potential None values for days_left
+        left = obj.days_left()
+        return left <= 0 if left is not None else True
