@@ -4,14 +4,19 @@ import {
   ArrowUp, ArrowDown, Loader2, Trash2, X 
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Inventory = () => {
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // 🛡️ SECURITY: Only Owners/Managers can delete inventory items
+  const canDelete = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
   const [formData, setFormData] = useState({ 
     name: '', 
     category: 'SUPPLIES', 
@@ -20,10 +25,9 @@ const Inventory = () => {
     unit: 'PCS' 
   });
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH DATA ---
   const fetchInventory = async () => {
+    if (!token) return;
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/api/inventory/`, { 
@@ -39,23 +43,20 @@ const Inventory = () => {
     }
   };
 
-  useEffect(() => { fetchInventory(); }, []);
+  useEffect(() => { fetchInventory(); }, [token]);
 
   // --- ACTIONS ---
   
   // Update Stock (+ or -)
   const handleUpdateStock = async (id, change) => {
-    // 1. Find Item
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    // 2. Calculate New Stock
     const newStock = Math.max(0, parseInt(item.current_stock) + change);
 
-    // 3. Optimistic Update (Update UI immediately)
+    // Optimistic Update
     setItems(items.map(i => i.id === id ? { ...i, current_stock: newStock } : i));
 
-    // 4. Send to Server
     try {
       await fetch(`${API_URL}/api/inventory/${id}/`, {
         method: 'PATCH',
@@ -94,13 +95,21 @@ const Inventory = () => {
   // Delete Item
   const handleDelete = async (id) => {
     if(!window.confirm("Delete this inventory item?")) return;
+    
+    // Optimistic
+    const originalItems = [...items];
+    setItems(items.filter(i => i.id !== id));
+
     try {
-        await fetch(`${API_URL}/api/inventory/${id}/`, {
+        const res = await fetch(`${API_URL}/api/inventory/${id}/`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        setItems(items.filter(i => i.id !== id));
-    } catch (err) { console.error(err); }
+        if (!res.ok) throw new Error("Failed to delete");
+    } catch (err) { 
+        console.error(err); 
+        setItems(originalItems); // Revert on error
+    }
   };
 
   // Search Filter
@@ -166,9 +175,16 @@ const Inventory = () => {
                     <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400 mb-2">
                         <Package size={20}/>
                     </div>
-                    <button onClick={() => handleDelete(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
-                        <Trash2 size={16}/>
-                    </button>
+                    {/* 🛡️ Delete Button (Restricted) */}
+                    {canDelete && (
+                        <button 
+                            onClick={() => handleDelete(item.id)} 
+                            className="text-slate-300 hover:text-red-500 transition-colors"
+                            title="Delete Item"
+                        >
+                            <Trash2 size={16}/>
+                        </button>
+                    )}
                 </div>
 
                 <h3 className="text-lg font-black text-slate-800 leading-tight">{item.name}</h3>

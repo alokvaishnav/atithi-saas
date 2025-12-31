@@ -1,43 +1,53 @@
 import { useEffect, useState } from 'react';
 import { 
   User, Mail, Shield, Plus, Trash2, 
-  Loader2, X, KeyRound, CheckCircle 
+  Loader2, X, KeyRound, CheckCircle, Ban 
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth Context
 
 const Staff = () => {
+  const { token, role, user: currentUser } = useAuth(); // 🟢 Use global auth state
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // 🛡️ SECURITY: Only Admins can access this page
+  const canManage = ['OWNER', 'MANAGER'].includes(role) || currentUser?.is_superuser;
+  // Only Owners can delete staff (Managers can add but not delete to prevent lockouts)
+  const isOwner = role === 'OWNER' || currentUser?.is_superuser;
+
   const [formData, setFormData] = useState({
     username: '', password: '', email: '', 
     first_name: '', last_name: '', role: 'RECEPTIONIST'
   });
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH STAFF ---
   const fetchStaff = async () => {
+    if (!token || !canManage) return;
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/api/staff/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) setStaff(await res.json());
+      if (res.ok) {
+          const data = await res.json();
+          setStaff(data);
+      }
     } catch (err) { console.error(err); } 
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchStaff(); }, []);
+  useEffect(() => { fetchStaff(); }, [token]);
 
   // --- CREATE STAFF ---
   const handleCreate = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_URL}/api/staff/`, {
+      // Use the specific endpoint for staff registration
+      const res = await fetch(`${API_URL}/api/register/staff/`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -53,10 +63,15 @@ const Staff = () => {
             username: '', password: '', email: '', 
             first_name: '', last_name: '', role: 'RECEPTIONIST' 
         });
+        alert("Staff Member Added Successfully! 🚀");
         fetchStaff();
       } else {
         const errorData = await res.json();
-        alert(`Error: ${JSON.stringify(errorData)}`);
+        // Format Django errors nicely
+        const errorMsg = Object.entries(errorData)
+            .map(([key, val]) => `${key}: ${val}`)
+            .join('\n');
+        alert(`Failed to create staff:\n${errorMsg}`);
       }
     } catch (err) { 
         console.error(err); 
@@ -68,21 +83,35 @@ const Staff = () => {
 
   // --- DELETE STAFF ---
   const handleDelete = async (id) => {
-    if(!window.confirm("Are you sure you want to delete this staff account? Access will be revoked immediately.")) return;
+    if (!isOwner) return alert("Only Owners can delete staff accounts.");
+    if (!window.confirm("Are you sure you want to delete this staff account? Access will be revoked immediately.")) return;
     
-    // Optimistic Update (Remove from UI immediately)
+    // Optimistic Update
+    const originalStaff = [...staff];
     setStaff(staff.filter(m => m.id !== id));
 
     try {
-        await fetch(`${API_URL}/api/staff/${id}/`, {
+        const res = await fetch(`${API_URL}/api/staff/${id}/`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!res.ok) throw new Error("Failed to delete");
     } catch (err) {
         console.error(err);
-        fetchStaff(); // Revert on error
+        alert("Could not delete user.");
+        setStaff(originalStaff); // Revert on error
     }
   };
+
+  // 🚫 BLOCK UNAUTHORIZED ACCESS
+  if (!loading && !canManage) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest gap-4">
+            <Shield size={64} className="text-red-300"/> 
+            <span>Access Restricted: Admins Only</span>
+        </div>
+      );
+  }
 
   if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
 
@@ -130,13 +159,27 @@ const Staff = () => {
                         <User size={14} className="text-slate-300"/> @{member.username}
                     </div>
                     <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
-                        <Shield size={14} className="text-slate-300"/> {member.is_superuser ? 'Admin Access' : 'Standard Access'}
+                        <Shield size={14} className="text-slate-300"/> 
+                        {['OWNER', 'MANAGER'].includes(member.role) ? 'Admin Access' : 'Standard Access'}
                     </div>
                 </div>
 
-                <button onClick={() => handleDelete(member.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg">
-                    <Trash2 size={16}/>
-                </button>
+                {/* 🔒 PREVENT DELETING SELF OR OWNER */}
+                {member.role !== 'OWNER' && member.id !== currentUser?.id && isOwner && (
+                    <button 
+                        onClick={() => handleDelete(member.id)} 
+                        className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
+                        title="Revoke Access"
+                    >
+                        <Trash2 size={16}/>
+                    </button>
+                )}
+                
+                {member.role === 'OWNER' && (
+                    <div className="absolute top-4 right-4 text-amber-400 p-2" title="Owner (Protected)">
+                        <KeyRound size={16}/>
+                    </div>
+                )}
             </div>
         ))}
       </div>

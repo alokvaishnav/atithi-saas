@@ -2,19 +2,26 @@ import { useEffect, useState } from 'react';
 import { 
   BarChart3, Download, TrendingUp, Calendar, FileText, 
   Loader2, DollarSign, TrendingDown, PieChart, Zap, 
-  History, Activity, ArrowUpRight, Filter
+  History, Activity, ArrowUpRight, Filter, ShieldAlert
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Reports = () => {
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [data, setData] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('MONTH'); 
 
-  const token = localStorage.getItem('access_token');
+  // 🛡️ SECURITY: Strict Access Control
+  // Only Owners, Managers, and Accountants can see financial data
+  const isAdmin = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role) || user?.is_superuser;
 
   const fetchReports = async () => {
+    // Stop if no token or not authorized
+    if (!token || !isAdmin) return;
+
     try {
       setLoading(true);
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -35,7 +42,7 @@ const Reports = () => {
     }
   };
 
-  useEffect(() => { fetchReports(); }, [dateRange]);
+  useEffect(() => { fetchReports(); }, [token, dateRange]); // 🟢 Depends on token & range
 
   // --- EXPORT ENGINES ---
   const downloadDailyPDF = () => {
@@ -45,6 +52,23 @@ const Reports = () => {
   const exportCSV = (type) => {
     window.open(`${API_URL}/api/reports/export/?type=${type}&token=${token}`, '_blank');
   };
+
+  // 🚫 BLOCK UNAUTHORIZED ACCESS
+  if (!loading && !isAdmin) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-slate-50">
+            <div className="text-center p-10 bg-white rounded-[40px] shadow-xl border border-red-50 max-w-md">
+                <div className="bg-red-50 p-4 rounded-3xl inline-flex mb-6 text-red-500 shadow-inner">
+                    <ShieldAlert size={48}/>
+                </div>
+                <h2 className="text-3xl font-black text-slate-800 uppercase italic mb-2">Restricted Access</h2>
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-widest leading-relaxed">
+                    Financial intelligence is classified.<br/>Contact your administrator.
+                </p>
+            </div>
+        </div>
+      );
+  }
 
   if (loading) return (
     <div className="p-20 flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
@@ -178,7 +202,7 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* 4. SYSTEM AUDIT TRAIL (NEW LOG SECTION) */}
+      {/* 4. SYSTEM AUDIT TRAIL (LOG SECTION) */}
       <div className="bg-white p-8 md:p-12 rounded-[50px] border border-slate-200 shadow-sm">
         <div className="flex items-center gap-4 mb-10">
             <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><History size={22}/></div>

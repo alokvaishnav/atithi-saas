@@ -2,41 +2,45 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, CreditCard, Send, CheckCircle, 
-  ArrowLeft, FileText, Download, Plus, Trash2, Loader2, LogOut 
+  ArrowLeft, FileText, Download, Plus, Trash2, Loader2, LogOut, ShieldAlert 
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useReactToPrint } from 'react-to-print';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Folio = () => {
-  const { id } = useParams(); // Standardized to 'id' to match Router
+  const { id } = useParams(); 
   const navigate = useNavigate();
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   
   // Data State
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false); // Modal visibility state
+  const [showPaymentModal, setShowPaymentModal] = useState(false); 
   
+  // 🛡️ SECURITY: Only Admins can Void Transactions
+  const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
   // Form State
   const [payAmount, setPayAmount] = useState('');
   const [payMode, setPayMode] = useState('CASH');
   const [newItem, setNewItem] = useState({ description: '', amount: '' });
 
-  const token = localStorage.getItem('access_token');
   const printRef = useRef();
 
   // --- FETCH DATA ---
   const fetchData = async () => {
+    if (!token) return; // Safety check
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/bookings/${id}/folio/`, { // Correct endpoint for full folio details
+      const res = await fetch(`${API_URL}/api/bookings/${id}/folio/`, { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
       
       if (res.ok) {
         setBooking(await res.json());
       } else {
-          // Handle error (e.g., booking not found)
           console.error("Failed to fetch booking");
       }
     } catch (err) { 
@@ -46,23 +50,14 @@ const Folio = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => { fetchData(); }, [id, token]);
 
   // --- CALCULATIONS ---
-  // Ensure booking exists before accessing properties
   const items = booking?.charges || [];
-  const payments = booking?.payments || [];
-
-  // 1. Totals (Backend is source of truth for total_amount usually, but let's derive for UI if needed)
-  const grandTotal = booking ? parseFloat(booking.total_amount) : 0;
   
-  // 2. Room Rent Calculation (Total - Extras) - This logic assumes total_amount includes everything
-  const totalExtras = items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-  // Simple check to avoid negative numbers if data is sync issue
-  const roomRentDisplay = Math.max(0, grandTotal - totalExtras); 
-
-  // 3. Balance
-  const totalPaid = booking ? parseFloat(booking.paid_amount) : 0; // Using backend provided paid_amount if available
+  // Totals
+  const grandTotal = booking ? parseFloat(booking.total_amount) : 0;
+  const totalPaid = booking ? parseFloat(booking.paid_amount) : 0; 
   const balance = booking ? parseFloat(booking.balance) : 0;
 
   // --- ACTIONS ---
@@ -74,7 +69,7 @@ const Folio = () => {
     
     setSubmitting(true);
     try {
-        const res = await fetch(`${API_URL}/api/bookings/${id}/pay/`, { // Using specific pay endpoint
+        const res = await fetch(`${API_URL}/api/bookings/${id}/pay/`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ 
@@ -88,7 +83,7 @@ const Folio = () => {
             setPayAmount('');
             setPayMode('CASH');
             setShowPaymentModal(false);
-            fetchData(); // Reload data
+            fetchData(); 
         } else {
             alert("Failed to record payment");
         }
@@ -103,8 +98,6 @@ const Folio = () => {
 
     setSubmitting(true);
     try {
-        // Assuming there is an endpoint to add generic charges to a booking
-        // If not, this might need to go through the POS endpoint logic or specific charge endpoint
         const res = await fetch(`${API_URL}/api/bookings/${id}/charges/`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -116,12 +109,28 @@ const Folio = () => {
 
         if (res.ok) {
             setNewItem({ description: '', amount: '' });
-            fetchData(); // Reload data
+            fetchData(); 
         } else {
             alert("Failed to add charge");
         }
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
+  };
+
+  // Void Payment (Admin Only)
+  const handleVoidPayment = async (paymentId) => {
+      if (!isAdmin) return alert("Only Managers can void transactions.");
+      if (!window.confirm("Void this transaction? This action is logged.")) return;
+
+      try {
+          // Assuming an endpoint exists or using generic delete on payments
+          // Ideally: /api/payments/:id/void/
+          const res = await fetch(`${API_URL}/api/payments/${paymentId}/`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) fetchData();
+      } catch(err) { console.error(err); }
   };
 
   // Checkout Guest
@@ -135,13 +144,13 @@ const Folio = () => {
     setSubmitting(true);
     try {
         const res = await fetch(`${API_URL}/api/bookings/${id}/checkout/`, {
-            method: 'POST', // Usually POST for an action
+            method: 'POST', 
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
         });
 
         if (res.ok) {
             alert("Guest Checked Out Successfully! 👋");
-            navigate('/front-desk'); // Redirect to Front Desk
+            navigate('/front-desk'); 
         } else {
             alert("Checkout Failed.");
         }
@@ -166,7 +175,6 @@ const Folio = () => {
             <ArrowLeft size={20}/> Back
         </button>
         <div className="flex gap-3">
-            {/* Share Link (Future Feature) */}
             <button disabled className="bg-white border border-slate-200 text-slate-400 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest cursor-not-allowed flex items-center gap-2">
                 <Send size={16}/> Share Link
             </button>
@@ -247,6 +255,27 @@ const Folio = () => {
                 </tbody>
             </table>
 
+            {/* Payment History (For transparency) */}
+            {booking.payments && booking.payments.length > 0 && (
+                <div className="mb-8 border-t border-slate-100 pt-4">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Payment History</p>
+                    {booking.payments.map((p, i) => (
+                        <div key={i} className="flex justify-between text-xs text-slate-500 mb-1">
+                            <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
+                            <span className="flex items-center gap-2">
+                                - ₹{parseFloat(p.amount).toLocaleString()}
+                                {/* 🛡️ VOID BUTTON (Admin Only) */}
+                                {isAdmin && (
+                                    <button onClick={() => handleVoidPayment(p.id)} className="text-red-300 hover:text-red-500 print:hidden" title="Void Transaction">
+                                        <Trash2 size={12}/>
+                                    </button>
+                                )}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             {/* Totals Section */}
             <div className="flex justify-end border-t-2 border-slate-100 pt-6">
                 <div className="w-64 space-y-3">
@@ -254,7 +283,6 @@ const Folio = () => {
                         <span>Subtotal</span>
                         <span>₹{parseFloat(booking.subtotal || grandTotal).toLocaleString()}</span>
                     </div>
-                    {/* Tax Logic can be added here if separated from backend */}
                     {booking.tax > 0 && (
                         <div className="flex justify-between text-sm font-bold text-slate-500">
                             <span>Tax</span>

@@ -2,20 +2,24 @@ import { useEffect, useState } from 'react';
 import { 
   Plus, Search, Calendar, User, CheckCircle, 
   XCircle, Clock, Filter, Loader2, MoreVertical, 
-  CreditCard, ArrowRight, X 
+  CreditCard, ArrowRight, X, Trash2, ShieldAlert
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Bookings = () => {
+  const { token, role, user } = useAuth(); // 🟢 Get Token & Role
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false); // New: Handle form submission state
+  const [submitting, setSubmitting] = useState(false); 
   const [filter, setFilter] = useState('ALL'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   
-  // New Booking Form Data
+  // 🛡️ SECURITY: Only Owners and Managers can Delete bookings
+  const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
   const [formData, setFormData] = useState({
     guest_name: '',
     guest_phone: '',
@@ -26,12 +30,12 @@ const Bookings = () => {
     children: 0
   });
 
-  const [rooms, setRooms] = useState([]); // For dropdown
+  const [rooms, setRooms] = useState([]);
   const navigate = useNavigate();
-  const token = localStorage.getItem('access_token');
 
   // --- FETCH DATA ---
   const fetchData = async () => {
+    if (!token) return;
     try {
       setLoading(true);
       const [resBookings, resRooms] = await Promise.all([
@@ -49,13 +53,12 @@ const Bookings = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [token]);
 
   // --- CREATE BOOKING ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Basic Validation
     if (new Date(formData.check_out) <= new Date(formData.check_in)) {
         alert("Check-out date must be after Check-in date.");
         return;
@@ -63,7 +66,6 @@ const Bookings = () => {
 
     setSubmitting(true);
 
-    // Prepare payload with correct data types
     const payload = {
         ...formData,
         room_id: parseInt(formData.room_id),
@@ -82,7 +84,6 @@ const Bookings = () => {
         });
 
         if (res.ok) {
-            // alert("Booking Created Successfully! 🎉"); // Removed for smoother UX, can be uncommented
             setShowModal(false);
             setFormData({ guest_name: '', guest_phone: '', room_id: '', check_in: '', check_out: '', adults: 1, children: 0 });
             fetchData();
@@ -98,9 +99,30 @@ const Bookings = () => {
     }
   };
 
+  // --- DELETE BOOKING (Admin Only) ---
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this booking? This cannot be undone.")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+            setBookings(bookings.filter(b => b.id !== id)); // Optimistic update
+        } else {
+            alert("Failed to delete booking.");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Server error during deletion.");
+    }
+  };
+
   // --- FILTERING ---
   const filteredBookings = bookings.filter(b => {
-    const guestName = b.guest_details?.full_name || ""; // Safe access
+    const guestName = b.guest_details?.full_name || ""; 
     const matchesSearch = guestName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           b.id.toString().includes(searchTerm);
     if (filter === 'ALL') return matchesSearch;
@@ -169,7 +191,7 @@ const Bookings = () => {
       {/* BOOKING LIST */}
       <div className="space-y-4">
         {filteredBookings.map(booking => (
-            <div key={booking.id} className="bg-white p-6 rounded-[24px] border border-slate-100 hover:shadow-xl transition-all group flex flex-col md:flex-row justify-between items-center gap-6">
+            <div key={booking.id} className="bg-white p-6 rounded-[24px] border border-slate-100 hover:shadow-xl transition-all group flex flex-col md:flex-row justify-between items-center gap-6 relative">
                 
                 {/* Left: Info */}
                 <div className="flex items-center gap-6 w-full md:w-auto">
@@ -198,12 +220,25 @@ const Bookings = () => {
                 </div>
 
                 {/* Right: Actions */}
-                <button 
-                    onClick={() => navigate(`/folio/${booking.id}`)}
-                    className="w-full md:w-auto px-6 py-3 bg-slate-50 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-colors"
-                >
-                    Manage Folio
-                </button>
+                <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+                    <button 
+                        onClick={() => navigate(`/folio/${booking.id}`)}
+                        className="px-6 py-3 bg-slate-50 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-colors flex-1 md:flex-none"
+                    >
+                        Manage Folio
+                    </button>
+
+                    {/* 🛡️ DELETE BUTTON (Admin Only) */}
+                    {isAdmin && (
+                        <button 
+                            onClick={() => handleDelete(booking.id)}
+                            className="p-3 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                            title="Delete Booking"
+                        >
+                            <Trash2 size={18}/>
+                        </button>
+                    )}
+                </div>
             </div>
         ))}
 

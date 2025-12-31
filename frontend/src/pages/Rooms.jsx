@@ -6,8 +6,10 @@ import {
   Layers, Users, BarChart3
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Rooms = () => {
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -22,6 +24,9 @@ const Rooms = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
 
+  // 🛡️ SECURITY: Only Owners and Managers can Add/Edit/Delete rooms
+  const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
   // Form Data
   const [formData, setFormData] = useState({
     room_number: '',
@@ -30,12 +35,9 @@ const Rooms = () => {
     floor: '1',
     capacity: '2',
     status: 'AVAILABLE',
-    amenities: [] // ['WIFI', 'AC', 'TV']
+    amenities: [] 
   });
 
-  const token = localStorage.getItem('access_token');
-
-  // Available Amenities Configuration
   const AMENITY_OPTIONS = [
     { id: 'WIFI', label: 'Free WiFi', icon: Wifi },
     { id: 'AC', label: 'Air Con', icon: Wind },
@@ -45,6 +47,7 @@ const Rooms = () => {
 
   // --- FETCH ROOMS ---
   const fetchRooms = async () => {
+    if (!token) return;
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/api/rooms/`, {
@@ -61,7 +64,7 @@ const Rooms = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchRooms(); }, []);
+  useEffect(() => { fetchRooms(); }, [token]);
 
   // --- STATS CALCULATION ---
   const stats = {
@@ -86,7 +89,6 @@ const Rooms = () => {
           ...formData,
           price_per_night: parseFloat(formData.price_per_night),
           capacity: parseInt(formData.capacity),
-          // Ensure amenities is an array if backend expects it
           amenities: formData.amenities 
       };
 
@@ -173,7 +175,6 @@ const Rooms = () => {
     }
   };
 
-  // Extract unique floors for filter
   const uniqueFloors = [...new Set(rooms.map(r => r.floor || '1'))].sort();
 
   const filteredRooms = rooms.filter(r => {
@@ -240,12 +241,15 @@ const Rooms = () => {
             />
           </div>
 
-          <button 
-            onClick={() => { resetForm(); setShowModal(true); }} 
-            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-200"
-          >
-            <Plus size={18} /> Add Room
-          </button>
+          {/* 🛡️ ADD BUTTON: Hidden for non-admins */}
+          {isAdmin && (
+            <button 
+                onClick={() => { resetForm(); setShowModal(true); }} 
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-200"
+            >
+                <Plus size={18} /> Add Room
+            </button>
+          )}
         </div>
       </div>
 
@@ -282,18 +286,20 @@ const Rooms = () => {
                     <span className="text-[10px] font-black uppercase tracking-widest">{design.label}</span>
                 </div>
                 
-                {/* Context Menu */}
-                <div className="relative group/menu">
-                    <button className="p-1 text-slate-300 hover:text-slate-600"><MoreVertical size={18}/></button>
-                    <div className="absolute right-0 top-6 bg-white shadow-xl rounded-xl p-1 border border-slate-100 hidden group-hover/menu:block z-20 w-32 animate-in fade-in zoom-in duration-200">
-                        <button onClick={() => openEdit(room)} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-lg flex items-center gap-2">
-                            <Edit3 size={14}/> Edit
-                        </button>
-                        <button onClick={() => handleDelete(room.id)} className="w-full text-left px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-lg flex items-center gap-2">
-                            <Trash2 size={14}/> Delete
-                        </button>
+                {/* 🛡️ CONTEXT MENU: Hidden for non-admins */}
+                {isAdmin && (
+                    <div className="relative group/menu">
+                        <button className="p-1 text-slate-300 hover:text-slate-600"><MoreVertical size={18}/></button>
+                        <div className="absolute right-0 top-6 bg-white shadow-xl rounded-xl p-1 border border-slate-100 hidden group-hover/menu:block z-20 w-32 animate-in fade-in zoom-in duration-200">
+                            <button onClick={() => openEdit(room)} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 rounded-lg flex items-center gap-2">
+                                <Edit3 size={14}/> Edit
+                            </button>
+                            <button onClick={() => handleDelete(room.id)} className="w-full text-left px-3 py-2 text-xs font-bold text-red-500 hover:bg-red-50 rounded-lg flex items-center gap-2">
+                                <Trash2 size={14}/> Delete
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
               </div>
 
               {/* Room Info */}
@@ -324,7 +330,7 @@ const Rooms = () => {
               <div className="mt-auto border-t border-slate-100 pt-4 flex justify-between items-center">
                 <p className="text-lg font-black text-slate-900 tracking-tight">₹{parseFloat(room.price_per_night).toLocaleString()}</p>
                 
-                {/* Quick Actions */}
+                {/* Quick Actions (Allowed for all users who can view the page) */}
                 {room.status === 'DIRTY' && (
                     <button onClick={() => handleStatusChange(room.id, 'AVAILABLE')} title="Mark Clean" className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors">
                         <Brush size={16}/>

@@ -4,14 +4,18 @@ import {
   Trash2, FileText, Loader2, X 
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Expenses = () => {
+  const { token, role, user } = useAuth(); // 🟢 Get Token & Role
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Default to today's date
+  // 🛡️ SECURITY: Only Owners and Managers can Delete expenses (Audit Safety)
+  const canDelete = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
   const today = new Date().toISOString().split('T')[0];
 
   const [formData, setFormData] = useState({ 
@@ -22,10 +26,9 @@ const Expenses = () => {
     notes: '' 
   });
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH EXPENSES ---
   const fetchExpenses = async () => {
+    if (!token) return;
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/api/expenses/`, { 
@@ -36,7 +39,7 @@ const Expenses = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchExpenses(); }, []);
+  useEffect(() => { fetchExpenses(); }, [token]);
 
   // --- CREATE EXPENSE ---
   const handleSubmit = async (e) => {
@@ -53,6 +56,8 @@ const Expenses = () => {
         setShowModal(false);
         setFormData({ title: '', amount: '', category: 'UTILITIES', date: today, notes: '' });
         fetchExpenses();
+      } else {
+        alert("Failed to save expense.");
       }
     } catch (err) { console.error(err); } 
     finally { setSubmitting(false); }
@@ -63,6 +68,7 @@ const Expenses = () => {
     if(!window.confirm("Delete this expense record?")) return;
     
     // Optimistic Update
+    const originalExpenses = [...expenses];
     setExpenses(expenses.filter(e => e.id !== id));
 
     try {
@@ -72,7 +78,7 @@ const Expenses = () => {
         });
     } catch (err) { 
         console.error(err);
-        fetchExpenses(); // Revert on error
+        setExpenses(originalExpenses); // Revert on error
     }
   };
 
@@ -139,9 +145,16 @@ const Expenses = () => {
                                 -₹{parseFloat(expense.amount).toLocaleString()}
                             </td>
                             <td className="p-5 text-right">
-                                <button onClick={() => handleDelete(expense.id)} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
-                                    <Trash2 size={16}/>
-                                </button>
+                                {/* 🛡️ DELETE BUTTON (Restricted) */}
+                                {canDelete && (
+                                    <button 
+                                        onClick={() => handleDelete(expense.id)} 
+                                        className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Delete Record"
+                                    >
+                                        <Trash2 size={16}/>
+                                    </button>
+                                )}
                             </td>
                         </tr>
                     ))}

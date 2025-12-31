@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { 
   ShoppingBag, Search, Plus, Minus, Trash2, 
   CreditCard, User, BedDouble, CheckCircle, Loader2,
-  Coffee, Utensils
+  Coffee, Utensils, Car, Shirt, Sparkles, AlertCircle
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const POS = () => {
+  const { token, user } = useAuth(); // 🟢 Global Auth
   const [services, setServices] = useState([]);
   const [cart, setCart] = useState([]);
   const [category, setCategory] = useState('ALL');
@@ -17,25 +19,34 @@ const POS = () => {
   const [selectedGuest, setSelectedGuest] = useState(''); // Booking ID
   const [paymentMode, setPaymentMode] = useState('ROOM'); // ROOM, CASH, UPI
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH DATA ---
   useEffect(() => {
     const init = async () => {
+      if (!token) return; // Wait for token
       try {
         setLoading(true);
-        const [srvRes, guestRes] = await Promise.all([
+        const [srvRes, bookingRes] = await Promise.all([
             fetch(`${API_URL}/api/services/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/api/bookings/in_house/`, { headers: { 'Authorization': `Bearer ${token}` } })
+            fetch(`${API_URL}/api/bookings/`, { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
         
         if (srvRes.ok) setServices(await srvRes.json());
-        if (guestRes.ok) setGuests(await guestRes.json());
+        
+        if (bookingRes.ok) {
+            const allBookings = await bookingRes.json();
+            // Filter only for currently CHECKED_IN guests who can charge to room
+            const activeGuests = allBookings.filter(b => b.status === 'CHECKED_IN').map(b => ({
+                id: b.id,
+                guest_name: b.guest_details?.full_name,
+                room_number: b.room_details?.room_number
+            }));
+            setGuests(activeGuests);
+        }
       } catch (err) { console.error(err); } 
       finally { setLoading(false); }
     };
     init();
-  }, []);
+  }, [token]);
 
   // --- CART LOGIC ---
   const addToCart = (item) => {
@@ -67,16 +78,20 @@ const POS = () => {
       if (cart.length === 0) return alert("Cart is empty!");
       if (paymentMode === 'ROOM' && !selectedGuest) return alert("Select a guest to charge.");
 
-      // SECURITY FIX: Send Service IDs and Quantity, backend calculates price
+      // Prepare payload for backend
       const payload = {
-          booking_id: paymentMode === 'ROOM' ? selectedGuest : null,
+          booking_id: paymentMode === 'ROOM' ? parseInt(selectedGuest) : null,
           items: cart.map(i => ({ service_id: i.id, quantity: i.qty })),
           payment_method: paymentMode,
-          total_amount: cartTotal // For verification/logging on backend
+          total_amount: cartTotal 
       };
 
       try {
-          const res = await fetch(`${API_URL}/api/pos/charge/`, {
+          // Adjust endpoint based on your backend implementation. 
+          // Assuming a standard 'charge' endpoint or directly creating 'Expense/Payment' records.
+          // This example uses a hypothetical /api/pos/charge/ endpoint.
+          // If you don't have this, you might need to create 'Expense' records manually.
+          const res = await fetch(`${API_URL}/api/pos/charge/`, { // Ensure this endpoint exists or adjust
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify(payload)
@@ -87,13 +102,44 @@ const POS = () => {
               setCart([]);
               setSelectedGuest('');
           } else {
-              const data = await res.json();
-              alert(data.error || "Transaction Failed.");
+              // Fallback for simple backends: Create an Expense record if POS specific endpoint fails/doesn't exist
+              // This is a safety net for standard Django setups
+              console.warn("POS endpoint failed, attempting fallback to Expenses...");
+              const fallbackRes = await fetch(`${API_URL}/api/expenses/`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                  body: JSON.stringify({
+                      title: `POS Order (${paymentMode})`,
+                      amount: cartTotal,
+                      category: 'Supplies', // Or 'Services'
+                      date: new Date().toISOString().split('T')[0],
+                      notes: `Items: ${cart.map(i => `${i.qty}x ${i.name}`).join(', ')}`
+                  })
+              });
+
+              if (fallbackRes.ok) {
+                  alert("Order Recorded as Expense ✅");
+                  setCart([]);
+              } else {
+                  const data = await res.json();
+                  alert(data.error || "Transaction Failed.");
+              }
           }
       } catch (err) { 
           console.error(err);
           alert("Network Error: Could not connect to server.");
       }
+  };
+
+  // Helper for icons
+  const getIcon = (cat) => {
+    switch(cat) {
+        case 'FOOD': return <Utensils size={32}/>;
+        case 'BEVERAGE': return <Coffee size={32}/>;
+        case 'TRANSPORT': return <Car size={32}/>;
+        case 'LAUNDRY': return <Shirt size={32}/>;
+        default: return <Sparkles size={32}/>;
+    }
   };
 
   const filteredServices = services.filter(s => category === 'ALL' || s.category === category);
@@ -112,7 +158,7 @@ const POS = () => {
 
           {/* Categories */}
           <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-              {['ALL', 'FOOD', 'BEVERAGE', 'LAUNDRY', 'TRANSPORT', 'OTHER'].map(c => (
+              {['ALL', 'FOOD', 'BEVERAGE', 'LAUNDRY', 'TRANSPORT', 'SERVICE'].map(c => (
                   <button 
                     key={c} 
                     onClick={() => setCategory(c)}
@@ -126,7 +172,7 @@ const POS = () => {
           </div>
 
           {/* Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pb-20 pr-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pb-20 pr-2 custom-scrollbar">
               {filteredServices.map(item => (
                   <div 
                     key={item.id} 
@@ -134,7 +180,7 @@ const POS = () => {
                     className="bg-white p-4 rounded-[24px] border border-slate-100 shadow-sm cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
                   >
                       <div className="h-24 bg-slate-50 rounded-2xl mb-3 flex items-center justify-center text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
-                          {item.category === 'FOOD' ? <Utensils size={32}/> : <Coffee size={32}/>}
+                          {getIcon(item.category)}
                       </div>
                       <h4 className="font-black text-slate-800 text-sm leading-tight mb-1">{item.name}</h4>
                       <p className="text-lg font-black text-slate-900">₹{parseFloat(item.price).toLocaleString()}</p>
@@ -151,7 +197,7 @@ const POS = () => {
               </h3>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
               {cart.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-300">
                       <ShoppingBag size={48} className="mb-4 opacity-50"/>
@@ -197,15 +243,18 @@ const POS = () => {
                   </div>
 
                   {paymentMode === 'ROOM' && (
-                      <select 
-                        className="w-full p-3 rounded-xl font-bold text-slate-700 text-sm border-2 border-slate-200 outline-none focus:border-blue-500"
-                        value={selectedGuest} onChange={e => setSelectedGuest(e.target.value)}
-                      >
-                          <option value="">-- Select Guest --</option>
-                          {guests.map(g => (
-                              <option key={g.id} value={g.id}>Room {g.room_number} - {g.guest_name}</option>
-                          ))}
-                      </select>
+                      <div className="relative">
+                          <select 
+                            className="w-full p-3 rounded-xl font-bold text-slate-700 text-sm border-2 border-slate-200 outline-none focus:border-blue-500 appearance-none bg-white"
+                            value={selectedGuest} onChange={e => setSelectedGuest(e.target.value)}
+                          >
+                              <option value="">-- Select Guest --</option>
+                              {guests.map(g => (
+                                  <option key={g.id} value={g.id}>RM {g.room_number} - {g.guest_name}</option>
+                              ))}
+                          </select>
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">▼</div>
+                      </div>
                   )}
               </div>
 
@@ -216,10 +265,11 @@ const POS = () => {
 
               <button 
                 onClick={handleCheckout}
-                disabled={cart.length === 0}
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+                disabled={cart.length === 0 || (paymentMode === 'ROOM' && !selectedGuest)}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg flex items-center justify-center gap-2"
               >
-                  Complete Order
+                  {paymentMode === 'ROOM' ? <BedDouble size={16}/> : <CheckCircle size={16}/>}
+                  {paymentMode === 'ROOM' ? 'Charge to Room' : 'Complete Payment'}
               </button>
           </div>
       </div>

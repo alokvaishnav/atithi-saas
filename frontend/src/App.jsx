@@ -69,7 +69,7 @@ const AppSkeleton = () => (
 
 // 🔒 THE PROFESSIONAL GUARD
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { isAuthenticated, role, loading } = useAuth(); 
+  const { isAuthenticated, role, loading, user } = useAuth(); 
 
   if (loading) return <AppSkeleton />;
 
@@ -77,6 +77,10 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Superuser bypasses role checks
+  if (user?.is_superuser) return children;
+
+  // If roles are defined and user doesn't have them
   if (allowedRoles && !allowedRoles.includes(role)) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -86,7 +90,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           </div>
           <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-3 tracking-tighter uppercase italic">Access Restricted</h2>
           <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm md:text-base">
-            The <strong>{role}</strong> role is not authorized to access this department.
+            The <strong>{role || 'User'}</strong> role is not authorized to access this department.
           </p>
           <button 
             onClick={() => window.location.href = '/dashboard'}
@@ -102,102 +106,95 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
-// 🏗️ THE APP LAYOUT
+// 🏗️ THE APP LAYOUT (Authenticated Shell)
 const AppLayout = () => {
     const { role, logout, hotelName, user } = useAuth(); 
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     return (
       <LicenseLock>
-        <div className="flex h-screen bg-slate-50 overflow-hidden">
+        <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+          
+          {/* SIDEBAR */}
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            <header className="bg-white border-b border-slate-200 p-4 md:p-5 md:px-10 flex justify-between items-center z-10 shadow-sm sticky top-0">
-              
-              <div className="flex items-center gap-4">
-                  <button 
-                      onClick={() => setSidebarOpen(true)}
-                      className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors"
-                  >
-                      <Menu size={24} />
-                  </button>
-
-                  <div className="flex items-center gap-3">
-                      <div className="bg-blue-600 p-2 rounded-lg hidden sm:block">
-                        <Hotel size={18} className="text-white" />
-                      </div>
-                      <div>
-                          <h2 className="text-lg md:text-xl font-black text-slate-800 tracking-tighter italic leading-none truncate max-w-[150px] md:max-w-none uppercase">
-                              {hotelName || "ATITHI ENTERPRISE"}
-                          </h2>
-                          <p className="text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1 hidden md:block">Property Management Cloud</p>
-                      </div>
-                  </div>
-              </div>
-
-              <div className="flex items-center space-x-4 md:space-x-8">
-                <div className="text-right hidden md:block">
-                  <p className="text-xs font-black text-slate-800 leading-none mb-1 uppercase tracking-tighter">{user?.username || 'User Account'}</p>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">Access: {role}</span>
+          {/* MAIN CONTENT WRAPPER */}
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            
+            {/* Mobile Header (Visible only on small screens) */}
+            <header className="bg-white border-b border-slate-200 p-4 md:hidden flex justify-between items-center z-10 shadow-sm sticky top-0">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl">
+                        <Menu size={24} />
+                    </button>
+                    <div className="flex items-center gap-2">
+                        <div className="bg-blue-600 p-1.5 rounded-lg">
+                            <Hotel size={14} className="text-white" />
+                        </div>
+                        <span className="font-black text-slate-800 uppercase tracking-widest text-sm truncate max-w-[150px]">
+                            {hotelName || "Atithi"}
+                        </span>
+                    </div>
                 </div>
-                
-                <div className="flex items-center gap-3 md:border-l md:pl-8 border-slate-100">
-                  <button 
-                    onClick={() => { if(window.confirm("Logout?")) logout() }} 
-                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-600 transition-all hover:bg-red-50 rounded-xl"
-                    title="System Logout"
-                  >
-                    <LogOut size={20} />
-                  </button>
-                  
-                  <div className="w-10 h-10 md:w-11 md:h-11 bg-slate-900 rounded-xl flex items-center justify-center text-white font-black shadow-lg shadow-slate-200 transform hover:scale-105 transition-transform cursor-pointer">
-                    <User size={20} />
-                  </div>
+                <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md">
+                    {user?.username?.charAt(0).toUpperCase()}
                 </div>
-              </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {/* Desktop Header (Optional / Integrated into pages usually, but kept for Logout access) */}
+            <div className="hidden md:flex justify-end p-4 absolute top-0 right-0 z-20 pointer-events-none">
+                 {/* This area usually handled inside pages like Dashboard, but we ensure global styles here */}
+            </div>
+
+            {/* SCROLLABLE PAGE AREA */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
               <Routes>
+                {/* 🟢 GENERAL ACCESS (Everyone) */}
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/front-desk" element={<FrontDesk />} />
-                <Route path="/rooms" element={<Rooms />} />
-                <Route path="/guests" element={<Guests />} />
-                <Route path="/guests/edit/:id" element={<EditGuest />} />
-                <Route path="/bookings" element={<Bookings />} />
-                <Route path="/calendar" element={<CalendarView />} />
-                <Route path="/folio/:bookingId" element={<Folio />} />
-                <Route path="/pos" element={<POS />} />
-                <Route path="/print-grc/:bookingId" element={<PrintGRC />} />
                 <Route path="/support" element={<Support />} />
+
+                {/* 🟠 FRONT OFFICE & RESERVATIONS */}
+                <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />
+                <Route path="/rooms" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Rooms /></ProtectedRoute>} />
+                <Route path="/guests" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Guests /></ProtectedRoute>} />
+                <Route path="/guests/edit/:id" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><EditGuest /></ProtectedRoute>} />
                 
-                {/* 👑 SUPER ADMIN (Backend also validates) */}
+                <Route path="/bookings" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Bookings /></ProtectedRoute>} />
+                <Route path="/calendar" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><CalendarView /></ProtectedRoute>} />
+                <Route path="/folio/:bookingId" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Folio /></ProtectedRoute>} />
+                <Route path="/print-grc/:bookingId" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><PrintGRC /></ProtectedRoute>} />
+
+                {/* 🔴 POS & SERVICES (Restricted: No Housekeeping) */}
+                <Route path="/pos" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><POS /></ProtectedRoute>} />
+                <Route path="/services" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
+
+                {/* 👑 SUPER ADMIN (Owner Only) */}
                 <Route path="/super-admin" element={
                   <ProtectedRoute allowedRoles={['OWNER']}>
                     <SuperAdmin />
                   </ProtectedRoute>
                 } />
 
-                {/* 🔐 ROLE PROTECTED ROUTES */}
+                {/* 🔐 STAFF MANAGEMENT */}
                 <Route path="/staff" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                     <Staff />
                   </ProtectedRoute>
                 } />
 
+                {/* ⚙️ SETTINGS */}
+                <Route path="/settings" element={
+                  <ProtectedRoute allowedRoles={['OWNER']}>
+                    <Settings />
+                  </ProtectedRoute>
+                } />
                 <Route path="/pricing" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'MANAGER']}>
                     <Pricing />
                   </ProtectedRoute>
                 } />
 
-                <Route path="/settings" element={
-                  <ProtectedRoute allowedRoles={['OWNER']}>
-                    <Settings />
-                  </ProtectedRoute>
-                } />
-
+                {/* 📊 FINANCE & REPORTS */}
                 <Route path="/accounting" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'ACCOUNTANT', 'MANAGER']}>
                     <Accounting />
@@ -216,24 +213,21 @@ const AppLayout = () => {
                   </ProtectedRoute>
                 } />
                 
+                {/* 📦 INVENTORY */}
                 <Route path="/inventory" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
                     <Inventory />
                   </ProtectedRoute>
                 } />
 
+                {/* 🧹 HOUSEKEEPING */}
                 <Route path="/housekeeping" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
                     <Housekeeping />
                   </ProtectedRoute>
                 } />
 
-                <Route path="/services" element={
-                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}>
-                    <Services />
-                  </ProtectedRoute>
-                } />
-
+                {/* Fallback for authenticated users */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </div>
@@ -243,6 +237,7 @@ const AppLayout = () => {
     );
 };
 
+// 🚦 MAIN ROUTING LOGIC
 const AppContent = () => {
   const { isAuthenticated, loading } = useAuth(); 
 
@@ -250,21 +245,21 @@ const AppContent = () => {
 
   return (
     <Routes>
-        {/* ROOT LOGIC */}
+        {/* ROOT LOGIC: Redirect based on auth status */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
         
         {/* PUBLIC AUTH ROUTES */}
         <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
         <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} /> 
         
-        {/* PASSWORD RECOVERY flow */}
+        {/* PASSWORD RECOVERY */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
-        {/* EXTERNAL GUEST FACING */}
+        {/* EXTERNAL GUEST FACING (No Auth Required) */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
-        {/* CATCH ALL PROTECTED LAYOUT */}
+        {/* CATCH ALL: If logged in, show AppLayout. If not, Login will catch it via ProtectedRoute logic inside */}
         <Route path="/*" element={
           <ProtectedRoute>
             <AppLayout />

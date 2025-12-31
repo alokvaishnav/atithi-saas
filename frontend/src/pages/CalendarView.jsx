@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
 import { 
   CalendarDays, ChevronLeft, ChevronRight, 
-  Loader2, User, CheckCircle 
+  Loader2, User
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const CalendarView = () => {
+  const { token } = useAuth(); // 🟢 Use Global Auth
   const [bookings, setBookings] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH DATA ---
   const fetchData = async () => {
+    if (!token) return; // Safety check
     try {
       setLoading(true);
       const [resB, resR] = await Promise.all([
@@ -38,7 +39,7 @@ const CalendarView = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [token]);
 
   // --- TIMELINE LOGIC ---
   const getDaysArray = () => {
@@ -145,21 +146,21 @@ const CalendarView = () => {
                             const booking = getBookingForRoomAndDate(room.id, d);
                             const isToday = dateStr === new Date().toISOString().split('T')[0];
                             
-                            // Visual Logic: Is this the start, middle, or end of a booking bar?
                             let cellContent = null;
                             
                             if (booking) {
                                 const isStart = booking.check_in_date === dateStr;
-                                const isEnd = booking.check_out_date === dateStr; // Logic usually exclusive, but nice to know boundaries
+                                // Check if the booking ends on the NEXT day (meaning this day is the last full block or partial end)
+                                // Standard hotel logic: Check-out date is the day they leave, so the bar stops BEFORE that day's column usually,
+                                // or fills it partially. Here we treat check-out date as exclusive for the bar rendering loop above.
+                                // However, to visualize the "End", we can check if tomorrow is the check-out date.
+                                const tomorrow = new Date(d);
+                                tomorrow.setDate(d.getDate() + 1);
+                                const isEnd = booking.check_out_date === tomorrow.toISOString().split('T')[0];
                                 
-                                // Determine Color
                                 const barColor = booking.status === 'CHECKED_IN' ? 'bg-blue-600' : 'bg-green-500';
                                 
-                                // Rounding corners logic
-                                // If it's the start date, round left.
-                                // If it extends from previous day, no left round.
-                                // We don't round right because it visually connects to the next cell.
-                                const roundedClass = isStart ? 'rounded-l-lg ml-1' : 'rounded-none -ml-1';
+                                const roundedClass = `${isStart ? 'rounded-l-lg ml-1' : '-ml-1'} ${isEnd ? 'rounded-r-lg mr-1' : '-mr-1'}`;
                                 
                                 cellContent = (
                                     <div 

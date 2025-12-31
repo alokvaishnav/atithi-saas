@@ -6,10 +6,11 @@ import {
   Upload, Clock, Coins, Info
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Settings = () => {
-  // 1. Expanded State
+  const { token, updateGlobalProfile } = useAuth(); // 🟢 Use global token & profile updater
+  
   const [formData, setFormData] = useState({
     // General & Branding
     hotel_name: '', 
@@ -19,7 +20,7 @@ const Settings = () => {
     email: '', 
     website: '', 
     tax_gst_number: '',
-    logo: null, // Stores the File object or URL string
+    logo: null, 
     
     // Operations
     check_in_time: '12:00',
@@ -38,27 +39,35 @@ const Settings = () => {
     whatsapp_auth_token: ''
   });
   
-  const [logoPreview, setLogoPreview] = useState(null); // For showing selected image
+  const [logoPreview, setLogoPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('GENERAL');
   const [showPassword, setShowPassword] = useState(false);
-  
-  const token = localStorage.getItem('access_token');
-  const { updateGlobalProfile } = useAuth();
 
   // --- FETCH SETTINGS ---
   useEffect(() => {
     const fetchSettings = async () => {
+      if (!token) return; // Wait for token
+      
       try {
         const res = await fetch(`${API_URL}/api/settings/`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
             const data = await res.json();
-            if (Array.isArray(data) && data.length > 0) {
-                const settings = data[0];
-                setFormData(settings);
+            
+            // 🛠️ FIX: Handle both Array (old) and Object (new) responses
+            const settings = Array.isArray(data) ? data[0] : data;
+            
+            if (settings) {
+                setFormData(prev => ({
+                    ...prev,
+                    ...settings,
+                    // Ensure password fields don't get overwritten with nulls
+                    smtp_password: settings.smtp_password || '',
+                    whatsapp_auth_token: settings.whatsapp_auth_token || ''
+                }));
                 // If logo exists from backend, set it as preview
                 if (settings.logo) setLogoPreview(settings.logo);
             }
@@ -70,14 +79,14 @@ const Settings = () => {
       }
     };
     fetchSettings();
-  }, []);
+  }, [token]);
 
   // --- HANDLE IMAGE SELECTION ---
   const handleLogoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-        setFormData({ ...formData, logo: file }); // Store file object
-        setLogoPreview(URL.createObjectURL(file)); // Create local preview URL
+        setFormData({ ...formData, logo: file }); 
+        setLogoPreview(URL.createObjectURL(file)); 
     }
   };
 
@@ -87,7 +96,6 @@ const Settings = () => {
     setSaving(true);
     
     try {
-        // ⚠️ Must use FormData for File Uploads
         const dataToSend = new FormData();
         
         Object.keys(formData).forEach(key => {
@@ -101,10 +109,10 @@ const Settings = () => {
             }
         });
 
+        // Use POST to update (Standard for this Django setup)
         const res = await fetch(`${API_URL}/api/settings/`, {
             method: 'POST', 
             headers: { 
-                // 'Content-Type': 'multipart/form-data', // ❌ Don't set this manually with fetch + FormData
                 'Authorization': `Bearer ${token}` 
             },
             body: dataToSend

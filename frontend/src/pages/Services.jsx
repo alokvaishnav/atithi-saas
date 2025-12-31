@@ -4,14 +4,19 @@ import {
   Loader2, X, Car, Shirt, Sparkles, Tag 
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Services = () => {
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState('ALL'); // ALL, FOOD, BEVERAGE...
+  const [filter, setFilter] = useState('ALL'); 
+
+  // 🛡️ SECURITY: Only Owners/Managers can delete items from catalog
+  const canDelete = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
 
   const [formData, setFormData] = useState({ 
     name: '', 
@@ -20,10 +25,9 @@ const Services = () => {
     description: '' 
   });
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH DATA ---
   const fetchServices = async () => {
+    if (!token) return; // Safety check
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/api/services/`, { 
@@ -39,7 +43,7 @@ const Services = () => {
     }
   };
 
-  useEffect(() => { fetchServices(); }, []);
+  useEffect(() => { fetchServices(); }, [token]);
 
   // --- CREATE SERVICE ---
   const handleSubmit = async (e) => {
@@ -56,6 +60,8 @@ const Services = () => {
         setShowModal(false);
         setFormData({ name: '', price: '', category: 'FOOD', description: '' });
         fetchServices();
+      } else {
+          alert("Failed to create item.");
       }
     } catch (err) {
       console.error(err);
@@ -69,16 +75,19 @@ const Services = () => {
     if(!window.confirm("Delete this menu item?")) return;
     
     // Optimistic Update
+    const originalServices = [...services];
     setServices(services.filter(s => s.id !== id));
 
     try {
-      await fetch(`${API_URL}/api/services/${id}/`, {
+      const res = await fetch(`${API_URL}/api/services/${id}/`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if (!res.ok) throw new Error("Failed to delete");
     } catch (err) {
       console.error(err);
-      fetchServices(); // Revert on error
+      setServices(originalServices); // Revert on error
+      alert("Could not delete item.");
     }
   };
 
@@ -113,7 +122,6 @@ const Services = () => {
         </div>
 
         <div className="flex gap-3 w-full md:w-auto">
-            {/* Search Bar */}
             <div className="relative flex-1 md:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
@@ -160,9 +168,16 @@ const Services = () => {
                     <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                         {getIcon(item.category)}
                     </div>
-                    <button onClick={() => handleDelete(item.id)} className="p-2 -mr-2 text-slate-300 hover:text-red-500 transition-colors rounded-full hover:bg-red-50">
-                        <Trash2 size={16}/>
-                    </button>
+                    {/* 🛡️ Delete Button: Restricted to Admins */}
+                    {canDelete && (
+                        <button 
+                            onClick={() => handleDelete(item.id)} 
+                            className="p-2 -mr-2 text-slate-300 hover:text-red-500 transition-colors rounded-full hover:bg-red-50"
+                            title="Delete Item"
+                        >
+                            <Trash2 size={16}/>
+                        </button>
+                    )}
                 </div>
                 
                 <h3 className="font-black text-slate-800 text-lg mb-1 leading-tight">{item.name}</h3>

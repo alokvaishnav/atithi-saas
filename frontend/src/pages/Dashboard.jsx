@@ -3,86 +3,109 @@ import {
   Building, Loader2, LogIn, LogOut, 
   CheckCircle, AlertCircle, 
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, TrendingDown,
-  ArrowUpRight, ShieldCheck, Brush, History, Activity, ListFilter
+  ArrowUpRight, ShieldCheck, Brush, History, Activity, ListFilter,
+  PieChart
 } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
 import { API_URL } from '../config'; 
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth Context
 
 const Dashboard = () => {
-  // --- YOUR ORIGINAL STATES ---
+  // --- CORE STATES ---
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [financials, setFinancials] = useState({ revenue: 0, expenses: 0, profit: 0, liability: 0 });
   const [trendData, setTrendData] = useState([]);
   const [tasks, setTasks] = useState([]);        
+  const [logs, setLogs] = useState([]); 
+  const [analyticsAPI, setAnalyticsAPI] = useState(null);
+  
   const [loading, setLoading] = useState(true);
-
-  // --- NEW UPDATE STATES ---
-  const [logs, setLogs] = useState([]); // For the Audit Trail
   const [refreshing, setRefreshing] = useState(false);
-  const [analyticsAPI, setAnalyticsAPI] = useState(null); // Data from new backend endpoint
 
   const navigate = useNavigate(); 
-  const token = localStorage.getItem('access_token');
-  const userRole = localStorage.getItem('user_role') || 'MANAGER';
-  const hotelName = localStorage.getItem('hotel_name') || 'ATITHI HMS';
+  
+  // 🟢 USE CONTEXT
+  const { token, role, user, hotelName } = useAuth();
 
-  // --- YOUR ORIGINAL ANALYTICS CALCULATION (Preserved) ---
+  // 🛡️ ROLE HELPERS (Define who sees what)
+  const canSeeFinance = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role) || user?.is_superuser;
+  const canSeeLogs = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
+  // --- ANALYTICS CALCULATION (Client Side fallback / Enhancement) ---
   const calculateAnalytics = (currentRooms, currentBookings) => {
-    const totalRev = currentBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
-    const totalPaid = currentBookings.reduce((sum, b) => {
-        const paid = b.payments?.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0) || 0;
-        return sum + paid;
-    }, 0);
-    
-    const estimatedExpenses = totalRev * 0.4; 
-    
-    setFinancials({
-        revenue: totalRev,
-        expenses: estimatedExpenses,
-        profit: totalRev - estimatedExpenses,
-        liability: totalRev - totalPaid 
-    });
-
-    const last7Days = {};
-    const today = new Date();
-    for(let i=6; i>=0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        last7Days[d.toISOString().split('T')[0]] = 0;
-    }
-
-    currentBookings.forEach(b => {
-        const date = b.check_in_date; 
-        if (last7Days[date] !== undefined) {
-            last7Days[date] += parseFloat(b.total_amount || 0);
-        }
-    });
-
-    const trend = Object.keys(last7Days).map(date => ({
-        date,
-        daily_revenue: last7Days[date]
-    }));
-    setTrendData(trend);
-
+    // 1. Operational Tasks (Always Visible)
     const dirtyRooms = currentRooms.filter(r => r.status === 'DIRTY');
     setTasks(dirtyRooms);
+
+    // 2. Financials (Restricted)
+    if (canSeeFinance) {
+        // Simple client-side calc for immediate feedback, real data comes from /analytics/ endpoint
+        const totalRev = currentBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
+        const totalPaid = currentBookings.reduce((sum, b) => {
+            const paid = b.payments?.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0) || 0;
+            return sum + paid;
+        }, 0);
+        
+        // Basic Estimation (Backend is source of truth)
+        const estimatedExpenses = totalRev * 0.4; 
+        
+        setFinancials({
+            revenue: totalRev,
+            expenses: estimatedExpenses,
+            profit: totalRev - estimatedExpenses,
+            liability: totalRev - totalPaid 
+        });
+
+        // Trend Data (Last 7 Days)
+        const last7Days = {};
+        const today = new Date();
+        for(let i=6; i>=0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            last7Days[d.toISOString().split('T')[0]] = 0;
+        }
+
+        currentBookings.forEach(b => {
+            const date = b.check_in_date; 
+            if (last7Days[date] !== undefined) {
+                last7Days[date] += parseFloat(b.total_amount || 0);
+            }
+        });
+
+        const trend = Object.keys(last7Days).map(date => ({
+            date,
+            daily_revenue: last7Days[date]
+        }));
+        setTrendData(trend);
+    }
   };
 
-  // --- FULL FETCH DATA (Integrated New Endpoints) ---
+  // --- SMART DATA FETCHING ---
   const fetchData = useCallback(async (showLoader = false) => {
+    if (!token) return;
+    
     try {
       if (showLoader) setLoading(true);
       else setRefreshing(true);
       
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      // Fetching your original endpoints + new Logs and Analytics API
-      const [resRooms, resBookings, resLogs, resAnalytics] = await Promise.all([
+      // 1. Base Data (Everyone Needs)
+      const requests = [
         fetch(`${API_URL}/api/rooms/`, { headers }),
         fetch(`${API_URL}/api/bookings/`, { headers }),
-        fetch(`${API_URL}/api/logs/`, { headers }),      // NEW
-        fetch(`${API_URL}/api/analytics/`, { headers }) // NEW
+      ];
+
+      // 2. Restricted Data (Conditional)
+      // We use a null placeholder to keep array indices consistent
+      const fetchLogs = canSeeLogs ? fetch(`${API_URL}/api/logs/`, { headers }) : Promise.resolve(null);
+      const fetchAnalytics = canSeeFinance ? fetch(`${API_URL}/api/analytics/`, { headers }) : Promise.resolve(null);
+
+      const [resRooms, resBookings, resLogs, resAnalytics] = await Promise.all([
+          ...requests, 
+          fetchLogs, 
+          fetchAnalytics
       ]);
 
       if (resRooms.ok && resBookings.ok) {
@@ -92,29 +115,40 @@ const Dashboard = () => {
         setRooms(roomsData);
         setBookings(bookingsData);
         
-        // NEW Logic
-        if (resLogs.ok) setLogs(await resLogs.json());
-        if (resAnalytics.ok) setAnalyticsAPI(await resAnalytics.json());
-        
-        // Your Original logic
-        calculateAnalytics(roomsData, bookingsData);
+        // Handle Restricted Data
+        if (resLogs && resLogs.ok) setLogs(await resLogs.json());
+        if (resAnalytics && resAnalytics.ok) {
+            const analyticsData = await resAnalytics.json();
+            setAnalyticsAPI(analyticsData);
+            // If backend provides pre-calculated financials, use them here
+            if(analyticsData.financials) {
+                 setFinancials(analyticsData.financials);
+                 if(analyticsData.trend) setTrendData(analyticsData.trend);
+            } else {
+                 // Fallback to client calc
+                 calculateAnalytics(roomsData, bookingsData);
+            }
+        } else {
+             // Fallback if analytics endpoint fails or not called
+             calculateAnalytics(roomsData, bookingsData);
+        }
       }
 
     } catch (err) { 
-      console.error("Critical System Fetch Error:", err);
+      console.error("Dashboard Sync Error:", err);
     } finally { 
       if (showLoader) setLoading(false); 
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token, canSeeFinance, canSeeLogs]);
 
   useEffect(() => { 
     fetchData(true); 
-    const interval = setInterval(() => fetchData(false), 30000);
+    const interval = setInterval(() => fetchData(false), 30000); // 30s Live Refresh
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // --- YOUR ORIGINAL OPERATIONAL LOGIC ---
+  // --- OPERATIONAL METRICS (Visible to All) ---
   const todayStr = new Date().toISOString().split('T')[0];
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
@@ -135,11 +169,12 @@ const Dashboard = () => {
   
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
   
-  // New Property Health Logic integration
+  // Property Health Logic
+  // Prioritize backend health score if available, else calculate locally
   const healthScore = analyticsAPI?.health_score || (totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0);
 
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
-  const maxRevenue = Math.max(...revenueValues, 1000);
+  const maxRevenue = Math.max(...revenueValues, 1000); // Avoid division by zero
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -147,19 +182,19 @@ const Dashboard = () => {
         <Loader2 className="w-20 h-20 text-blue-600 animate-spin" />
         <Building className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
       </div>
-      <p className="mt-6 font-black text-slate-400 uppercase tracking-[0.3em] text-[10px]">Booting Enterprise PMS Engine...</p>
+      <p className="mt-6 font-black text-slate-400 uppercase tracking-[0.3em] text-[10px]">Loading Dashboard...</p>
     </div>
   );
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* 👋 YOUR ORIGINAL HEADER + NEW BRANDING */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="bg-blue-600 text-white p-1 rounded-md shadow-lg shadow-blue-200"><ShieldCheck size={14}/></span>
-            <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">{hotelName} • v2.9 PRO</p>
+            <p className="text-blue-600 font-black uppercase text-[10px] tracking-widest italic">{hotelName} • v3.0 PRO</p>
             {refreshing && <Loader2 size={12} className="animate-spin text-slate-400 ml-2" />}
           </div>
           <h1 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Intelligence</h1>
@@ -175,16 +210,16 @@ const Dashboard = () => {
             </div>
             <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700 flex-1 md:flex-none">
                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Personnel</p>
-                <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto italic">{userRole}</p>
+                <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto italic">{role}</p>
             </div>
         </div>
       </div>
 
-      {/* 🚨 YOUR ORIGINAL CRITICAL ALERTS ROW */}
+      {/* 🚨 TASKS ROW (Visible to All) */}
       {tasks.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-10">
             <div 
-                onClick={() => navigate('/rooms')}
+                onClick={() => navigate('/housekeeping')}
                 className="bg-purple-50 border-2 border-purple-100 p-4 md:p-6 rounded-[32px] flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
             >
                 <div className="flex items-center gap-4">
@@ -199,45 +234,47 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* 📊 YOUR ORIGINAL FINANCIAL INTELLIGENCE */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
-        <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
-          <div className="flex justify-between items-start mb-6">
-            <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
-            <ArrowUpRight className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
-          <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.revenue.toLocaleString()}</h3>
-        </div>
+      {/* 📊 FINANCIAL INTELLIGENCE (🔒 RESTRICTED) */}
+      {canSeeFinance && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
+                <ArrowUpRight className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.revenue.toLocaleString()}</h3>
+            </div>
 
-        <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
-          <div className="flex justify-between items-start mb-6">
-            <div className="w-12 h-12 md:w-14 md:h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
-            <AlertCircle className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Est. Expenses</p>
-          <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.expenses.toLocaleString()}</h3>
-        </div>
+            <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
+                <AlertCircle className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Est. Expenses</p>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.expenses.toLocaleString()}</h3>
+            </div>
 
-        <div className="bg-slate-900 p-6 md:p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
-          <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
-          <div className="relative z-10">
-            <div className="w-12 h-12 md:w-14 md:h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
-            <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit Flow</p>
-            <h3 className="text-2xl md:text-3xl font-black text-white italic tracking-tighter">₹{financials.profit.toLocaleString()}</h3>
-          </div>
-        </div>
+            <div className="bg-slate-900 p-6 md:p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
+              <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
+              <div className="relative z-10">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
+                <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit Flow</p>
+                <h3 className="text-2xl md:text-3xl font-black text-white italic tracking-tighter">₹{financials.profit.toLocaleString()}</h3>
+              </div>
+            </div>
 
-        <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-orange-500 transition-all duration-500">
-          <div className="flex justify-between items-start mb-6">
-            <div className="w-12 h-12 md:w-14 md:h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
+            <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-orange-500 transition-all duration-500">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-12 h-12 md:w-14 md:h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
+              </div>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Collections</p>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.liability.toLocaleString()}</h3>
+            </div>
           </div>
-          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Collections</p>
-          <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.liability.toLocaleString()}</h3>
-        </div>
-      </div>
+      )}
 
-      {/* 📈 YOUR ORIGINAL OPERATIONAL KPI GRID */}
+      {/* 📈 OPERATIONAL KPI GRID (Visible to All) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
         {[
           { label: "DIRTY VACANT", val: dirtyVacant, icon: Sparkles, color: "text-orange-500", bg: "border-orange-200", desc: "Needs Cleaning" },
@@ -256,7 +293,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* 🏢 YOUR ORIGINAL INVENTORY DISTRIBUTION ENGINE */}
+      {/* 🏢 INVENTORY HEALTH (Visible to All) */}
       <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-200 shadow-sm mb-10 group">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -270,40 +307,40 @@ const Dashboard = () => {
         </div>
         
         <div className="flex h-16 w-full rounded-[24px] overflow-hidden shadow-inner bg-slate-50 p-2 border-4 border-slate-50">
-          <div style={{ width: `${(cleanVacant / totalRoomsCount) * 100}%` }} className="bg-teal-500 h-full transition-all duration-1000 border-r-4 border-white group-hover:brightness-110"></div>
-          <div style={{ width: `${(occupiedRooms / totalRoomsCount) * 100}%` }} className="bg-blue-600 h-full transition-all duration-1000 border-r-4 border-white group-hover:brightness-110"></div>
-          <div style={{ width: `${(dirtyVacant / totalRoomsCount) * 100}%` }} className="bg-orange-400 h-full transition-all duration-1000 border-r-4 border-white group-hover:brightness-110"></div>
-          <div style={{ width: `${(maintenance / totalRoomsCount) * 100}%` }} className="bg-red-600 h-full transition-all duration-1000 group-hover:brightness-110"></div>
+          <div style={{ width: `${(cleanVacant / (totalRoomsCount || 1)) * 100}%` }} className="bg-teal-500 h-full transition-all duration-1000 border-r-4 border-white"></div>
+          <div style={{ width: `${(occupiedRooms / (totalRoomsCount || 1)) * 100}%` }} className="bg-blue-600 h-full transition-all duration-1000 border-r-4 border-white"></div>
+          <div style={{ width: `${(dirtyVacant / (totalRoomsCount || 1)) * 100}%` }} className="bg-orange-400 h-full transition-all duration-1000 border-r-4 border-white"></div>
+          <div style={{ width: `${(maintenance / (totalRoomsCount || 1)) * 100}%` }} className="bg-red-600 h-full transition-all duration-1000"></div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mt-10">
           <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <div className="w-3 h-3 rounded-full bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]"></div> 
+            <div className="w-3 h-3 rounded-full bg-teal-500"></div> 
             <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Ready</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{cleanVacant} Units</p></div>
           </div>
           <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <div className="w-3 h-3 rounded-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div> 
+            <div className="w-3 h-3 rounded-full bg-blue-600"></div> 
             <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Occupied</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{occupiedRooms} Units</p></div>
           </div>
           <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <div className="w-3 h-3 rounded-full bg-orange-400 shadow-[0_0_10px_rgba(251,146,60,0.5)]"></div> 
+            <div className="w-3 h-3 rounded-full bg-orange-400"></div> 
             <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">Dirty</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{dirtyVacant} Units</p></div>
           </div>
           <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <div className="w-3 h-3 rounded-full bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]"></div> 
+            <div className="w-3 h-3 rounded-full bg-red-600"></div> 
             <div><p className="text-[10px] font-black text-slate-800 uppercase leading-none">O.O.O</p><p className="text-[9px] text-slate-400 font-bold uppercase mt-1">{maintenance} Units</p></div>
           </div>
         </div>
       </div>
 
-      {/* 📋 YOUR ORIGINAL MANIFESTS + NEW SYSTEM LOGS INTEGRATION */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* 📋 MANIFESTS & LOGS */}
+      <div className={`grid grid-cols-1 ${canSeeLogs ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-8`}>
         
-        {/* Arrivals Card (Your Original) */}
+        {/* Arrivals */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
           <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-blue-50 transition-colors">
             <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest italic">
-              <LogIn size={20} className="text-blue-600"/> Arrivals Today
+              <LogIn size={20} className="text-blue-600"/> Arrivals
             </h3>
             <span className="text-[9px] font-black px-3 py-1 bg-blue-100 text-blue-700 rounded-full tracking-widest uppercase italic">{expectedArrivals.length} Units</span>
           </div>
@@ -311,7 +348,7 @@ const Dashboard = () => {
             <table className="w-full text-sm text-left">
               <tbody className="divide-y divide-slate-50">
                 {expectedArrivals.length > 0 ? expectedArrivals.map(b => (
-                  <tr key={b.id} className="hover:bg-slate-50 transition-colors group/row">
+                  <tr key={b.id} className="hover:bg-slate-50 transition-colors group/row cursor-pointer" onClick={() => navigate(`/folio/${b.id}`)}>
                     <td className="p-6">
                         <p className="font-black text-slate-800 text-base">{b.guest_details?.full_name}</p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Ref: #BK-{b.id}</p>
@@ -328,7 +365,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Departures Card (Your Original) */}
+        {/* Departures */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden group">
           <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50 flex justify-between items-center group-hover:bg-red-50 transition-colors">
             <h3 className="font-black text-slate-800 flex items-center gap-3 uppercase text-xs tracking-widest italic">
@@ -342,15 +379,22 @@ const Dashboard = () => {
                 {expectedDepartures.length > 0 ? expectedDepartures.map(b => {
                     const paid = b.payments?.reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
                     const due = parseFloat(b.total_amount) - paid;
+                    const showDue = canSeeFinance; 
                     return (
-                        <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                        <tr key={b.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/folio/${b.id}`)}>
                             <td className="p-6">
                                 <p className="font-black text-slate-800 text-base uppercase italic">{b.guest_details?.full_name}</p>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Unit: {b.room_details?.room_number}</p>
                             </td>
                             <td className="p-6 text-right">
-                                <p className="text-red-600 font-black text-lg tracking-tighter">₹{due.toLocaleString()}</p>
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Outstanding</p>
+                                {showDue ? (
+                                    <>
+                                        <p className="text-red-600 font-black text-lg tracking-tighter">₹{due.toLocaleString()}</p>
+                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Outstanding</p>
+                                    </>
+                                ) : (
+                                    <span className="text-[9px] font-black text-slate-300 uppercase">Checkout Pending</span>
+                                )}
                             </td>
                         </tr>
                     );
@@ -362,42 +406,44 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* 📜 NEW: SYSTEM AUDIT TRAIL (The New Update) */}
-        <div className="bg-white p-8 rounded-[48px] border border-slate-200 shadow-sm flex flex-col h-full max-h-[458px]">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-3">
-                    <History size={18} className="text-blue-600"/>
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Audit Trail</h3>
+        {/* 📜 SYSTEM AUDIT TRAIL (🔒 RESTRICTED) */}
+        {canSeeLogs && (
+            <div className="bg-white p-8 rounded-[48px] border border-slate-200 shadow-sm flex flex-col h-full max-h-[458px]">
+                <div className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-3">
+                        <History size={18} className="text-blue-600"/>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Audit Trail</h3>
+                    </div>
+                    <ListFilter size={14} className="text-slate-300" />
                 </div>
-                <ListFilter size={14} className="text-slate-300" />
-            </div>
-            <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                {logs.length > 0 ? logs.map((log, i) => (
-                    <div key={i} className="flex gap-4 items-start relative pb-6 border-l border-slate-100 ml-2">
-                        <div className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-white ${log.action === 'CREATE' ? 'bg-blue-500' : 'bg-red-500'}`}></div>
-                        <div className="pl-4">
-                            <p className="text-[11px] font-bold text-slate-800 leading-tight mb-1">{log.details}</p>
-                            <div className="flex items-center gap-2">
-                                <span className="text-[8px] font-black text-white bg-slate-900 px-1.5 py-0.5 rounded-md uppercase">{log.action}</span>
-                                <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                    {logs.length > 0 ? logs.map((log, i) => (
+                        <div key={i} className="flex gap-4 items-start relative pb-6 border-l border-slate-100 ml-2">
+                            <div className={`absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-white ${log.action === 'CREATE' ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                            <div className="pl-4">
+                                <p className="text-[11px] font-bold text-slate-800 leading-tight mb-1">{log.details}</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[8px] font-black text-white bg-slate-900 px-1.5 py-0.5 rounded-md uppercase">{log.action}</span>
+                                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-tighter">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2 opacity-50">
-                        <Activity size={32}/>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-center italic">Observing system<br/>events...</p>
-                    </div>
-                )}
+                    )) : (
+                        <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2 opacity-50">
+                            <Activity size={32}/>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-center italic">No recent events</p>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        )}
       </div>
 
-      {/* 🚀 YOUR ORIGINAL ANALYTICS TREND BAR (Preserved) */}
-      {trendData.length > 0 && (
-          <div className="mt-10 bg-slate-900 p-6 md:p-10 rounded-[48px] text-white overflow-hidden relative shadow-2xl">
+      {/* 🚀 ANALYTICS TREND BAR (🔒 RESTRICTED) */}
+      {canSeeFinance && trendData.length > 0 && (
+          <div className="mt-10 bg-slate-900 p-6 md:p-10 rounded-[48px] text-white overflow-hidden relative shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-1000">
               <div className="flex justify-between items-center mb-10 relative z-10">
-                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Transactional Intelligence</h3>
+                  <h3 className="font-black uppercase text-xs tracking-[0.4em] italic text-blue-400">7-Day Revenue Intelligence</h3>
                   <TrendingUp className="text-blue-400" size={20}/>
               </div>
               

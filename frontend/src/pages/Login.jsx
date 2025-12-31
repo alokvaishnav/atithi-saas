@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Loader2, Lock, User, ShieldCheck, AlertCircle } from 'lucide-react';
 import { API_URL } from '../config';
@@ -12,6 +12,21 @@ const Login = () => {
   const navigate = useNavigate();
   
   const { login } = useAuth(); 
+
+  // 🧹 CLEANUP: Clear any stale session data when landing on Login
+  // This prevents the "Ghost Identity" bug where old roles persist.
+  useEffect(() => {
+    const keysToRemove = [
+        'access_token', 
+        'refresh_token', 
+        'user_role', 
+        'username', 
+        'hotel_name', 
+        'user_id', 
+        'is_superuser'
+    ];
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -31,8 +46,11 @@ const Login = () => {
       }
 
       const data = await response.json();
-      // The login function from context should handle storing token and user state
+      
+      // The login function from AuthContext will now handle role parsing correctly
       await login(data);
+      
+      // Navigate to Dashboard
       navigate('/'); 
 
     } catch (err) {

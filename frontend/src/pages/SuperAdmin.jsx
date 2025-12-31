@@ -4,11 +4,15 @@ import {
   Search, Power, Trash2, Plus, Loader2, 
   Database, Cpu, AlertTriangle, Eye, CheckCircle,
   TrendingUp, CreditCard, RefreshCw, Filter, X, Key,
-  ShieldCheck, History, DollarSign, Globe, Settings2
+  ShieldCheck, History, DollarSign, Globe, Settings2,
+  Zap 
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const SuperAdmin = () => {
+  const { token, user } = useAuth(); // 🟢 Global Auth
+  
   const [tenants, setTenants] = useState([]);
   const [stats, setStats] = useState({ total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
   const [logs, setLogs] = useState([]); // System Audit Trail
@@ -24,10 +28,20 @@ const SuperAdmin = () => {
   
   const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'PRO' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const token = localStorage.getItem('access_token');
+
+  // 🛡️ SECURITY: Double Check
+  if (!user?.is_superuser && !loading) {
+      return (
+        <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-4">
+            <ShieldCheck size={64}/>
+            <h1 className="text-2xl font-black uppercase tracking-widest">System Restricted</h1>
+        </div>
+      );
+  }
 
   // --- FETCH TENANTS & GLOBAL STATS ---
   const fetchStats = useCallback(async (isInitial = false) => {
+    if (!token) return;
     try {
       if (isInitial) setLoading(true);
       else setRefreshing(true);
@@ -40,7 +54,8 @@ const SuperAdmin = () => {
         const data = await res.json();
         setTenants(data.hotels || []);
         setStats(data.stats || stats);
-        // Assuming logs are part of stats or separate endpoint
+        
+        // Fetch Logs if needed
         const logRes = await fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (logRes.ok) setLogs(await logRes.json());
       }
@@ -74,7 +89,7 @@ const SuperAdmin = () => {
 
   const generateLicenseKey = (hotelId) => {
       const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-      alert(`New License Generated for ${hotelId}:\nATITHI-${random}`);
+      alert(`New License Generated for ID ${hotelId}:\nATITHI-${random}`);
   };
 
   const handleCreate = async (e) => {
@@ -88,7 +103,7 @@ const SuperAdmin = () => {
                 hotel_name: formData.name,
                 username: formData.domain,
                 email: formData.admin_email,
-                password: 'DefaultPassword123!',
+                password: 'DefaultPassword123!', // In real app, generate random or send invite link
                 user_role: 'OWNER'
             })
         });
@@ -97,6 +112,7 @@ const SuperAdmin = () => {
             setShowCreateModal(false);
             setFormData({ name: '', domain: '', admin_email: '', plan: 'PRO' });
             fetchStats(false);
+            alert("Tenant Deployed Successfully 🚀");
         } else {
             alert("Deployment failed. Instance name likely exists.");
         }
@@ -110,7 +126,7 @@ const SuperAdmin = () => {
   // --- FILTER LOGIC ---
   const filteredTenants = tenants.filter(t => {
     const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          t.owner.toLowerCase().includes(searchTerm.toLowerCase());
+                          t.owner?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || t.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -161,8 +177,7 @@ const SuperAdmin = () => {
         </div>
       </div>
 
-      {/* 2. INFRASTRUCTURE HEALTH GRID (Your Original Metrics) */}
-      
+      {/* 2. INFRASTRUCTURE HEALTH GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
         <MetricCard title="Platform Nodes" val={stats.total_hotels} icon={Building} color="text-blue-400" bg="bg-blue-400/10" border="border-blue-400/20" />
         <MetricCard title="Active Licenses" val={stats.active_licenses} icon={ShieldCheck} color="text-emerald-400" bg="bg-emerald-400/10" border="border-emerald-400/20" />
@@ -173,7 +188,7 @@ const SuperAdmin = () => {
       {/* 3. HOTEL REGISTRY & AUDIT TRAIL */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         
-        {/* Left: Tenant Databases (Your Original List) */}
+        {/* Left: Tenant Databases */}
         <div className="xl:col-span-2 bg-slate-900 rounded-[40px] border border-slate-800 overflow-hidden shadow-2xl">
             <div className="p-8 border-b border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-3">
@@ -238,7 +253,7 @@ const SuperAdmin = () => {
             </div>
         </div>
 
-        {/* Right: Global System Logs (New Logic) */}
+        {/* Right: Global System Logs */}
         <div className="bg-slate-900 rounded-[40px] border border-slate-800 p-8 flex flex-col h-full">
             <div className="flex items-center gap-3 mb-8">
                 <History className="text-blue-500" size={20}/>
@@ -263,7 +278,7 @@ const SuperAdmin = () => {
         </div>
       </div>
 
-      {/* 4. ONBOARD MODAL (Preserved & Optimized) */}
+      {/* 4. ONBOARD MODAL */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
             <form onSubmit={handleCreate} className="bg-slate-900 p-10 rounded-[40px] w-full max-w-lg border border-slate-700 space-y-6 shadow-2xl relative">
@@ -316,7 +331,7 @@ const SuperAdmin = () => {
         </div>
       )}
 
-      {/* 5. INSPECTION MODAL (Preserved Original) */}
+      {/* 5. INSPECTION MODAL */}
       {selectedTenant && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
             <div className="bg-slate-900 p-12 rounded-[50px] w-full max-w-xl border border-slate-700 shadow-2xl relative overflow-hidden">
@@ -338,18 +353,18 @@ const SuperAdmin = () => {
                 </div>
 
                 <div className="flex gap-4 relative z-10">
-                     <button className="flex-1 py-5 bg-slate-800 text-white font-black rounded-2xl hover:bg-slate-700 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+                      <button className="flex-1 py-5 bg-slate-800 text-white font-black rounded-2xl hover:bg-slate-700 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                         <RefreshCw size={18}/> Cold Resync
-                     </button>
-                     <button className="flex-1 py-5 bg-red-600 text-white font-black rounded-2xl hover:bg-red-500 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
+                      </button>
+                      <button className="flex-1 py-5 bg-red-600 text-white font-black rounded-2xl hover:bg-red-500 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
                         <Trash2 size={18}/> Termination
-                     </button>
+                      </button>
                 </div>
             </div>
         </div>
       )}
 
-      {/* 6. PRICING CONFIG MODAL (New Logic) */}
+      {/* 6. PRICING CONFIG MODAL */}
       {showPricingModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
             <div className="bg-slate-900 p-10 rounded-[40px] w-full max-w-2xl border border-slate-700 shadow-2xl relative overflow-hidden">
@@ -403,3 +418,4 @@ const PricingControl = ({ title, current, icon: Icon }) => (
 );
 
 export default SuperAdmin;
+

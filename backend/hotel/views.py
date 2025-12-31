@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, views, generics
+from rest_framework import viewsets, status, views, generics, permissions
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.decorators import action, api_view, permission_classes
@@ -22,6 +22,26 @@ from core.models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+# --- 🛡️ SECURITY: CUSTOM PERMISSION CLASSES ---
+# These classes ensure users only see data relevant to their role.
+
+class IsOwnerOrManager(permissions.BasePermission):
+    """Allows access only to Owners and Managers."""
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser: 
+            return True
+        return request.user.role in ['OWNER', 'MANAGER']
+
+class IsFinanceAccess(permissions.BasePermission):
+    """Allows Owners, Managers, and Accountants."""
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser: 
+            return True
+        return request.user.role in ['OWNER', 'MANAGER', 'ACCOUNTANT']
 
 # --- 🛠️ BASE SAAS LOGIC (DATA ISOLATION) ---
 class BaseSaaSViewSet(viewsets.ModelViewSet):
@@ -38,7 +58,7 @@ class BaseSaaSViewSet(viewsets.ModelViewSet):
         owner = getattr(user, 'hotel_owner', None) or user
         instance = serializer.save(owner=owner)
         
-        # 📜 Global Audit Logging for every creation
+        # 📜 Global Audit Logging
         SystemLog.objects.create(
             owner=owner,
             user=user,
@@ -61,6 +81,10 @@ class RoomViewSet(BaseSaaSViewSet):
 
     @action(detail=True, methods=['post'], url_path='toggle-maintenance')
     def toggle_maintenance(self, request, pk=None):
+        # 🔒 Security: Only Owners/Managers can disable a room
+        if request.user.role not in ['OWNER', 'MANAGER'] and not request.user.is_superuser:
+            return Response({'error': 'Permission denied'}, status=403)
+            
         room = self.get_object()
         room.status = 'MAINTENANCE' if room.status != 'MAINTENANCE' else 'AVAILABLE'
         room.save()
@@ -154,14 +178,17 @@ class POSChargeView(views.APIView):
                 BookingCharge.objects.create(booking=booking, description=f"POS: {service.name}", amount=service.price)
         return Response({'status': 'POS items billed to room folio.'})
 
-# --- 💰 FINANCE, HR & SETTINGS ---
+# --- 💰 FINANCE, HR & SETTINGS (RESTRICTED ACCESS) ---
 
 class ExpenseViewSet(BaseSaaSViewSet):
+    # 🔒 RESTRICTED: Only Owners, Managers, Accountants
+    permission_classes = [IsAuthenticated, IsFinanceAccess]
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
 
 class StaffViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+    # 🔒 RESTRICTED: Only Owners and Managers can manage staff
+    permission_classes = [IsAuthenticated, IsOwnerOrManager]
     serializer_class = StaffSerializer
 
     def get_queryset(self):
@@ -169,6 +196,8 @@ class StaffViewSet(viewsets.ModelViewSet):
         return User.objects.filter(Q(hotel_owner=owner) | Q(id=owner.id))
 
 class SettingsViewSet(BaseSaaSViewSet):
+    # 🔒 RESTRICTED: Only Owners can change hotel settings
+    permission_classes = [IsAuthenticated, IsOwnerOrManager]
     queryset = HotelSettings.objects.all()
     serializer_class = HotelSettingsSerializer
 
@@ -181,7 +210,8 @@ class SettingsViewSet(BaseSaaSViewSet):
 # --- 📄 REPORTING ENGINE (PDF & CSV) ---
 
 class EndOfDayReportView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    # 🔒 RESTRICTED: Financial Data
+    permission_classes = [IsAuthenticated, IsFinanceAccess]
 
     def get(self, request):
         user = request.user
@@ -222,7 +252,7 @@ class EndOfDayReportView(views.APIView):
         return HttpResponse(buffer, content_type='application/pdf')
 
 class ExportReportView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinanceAccess]
 
     def get(self, request):
         report_type = request.query_params.get('type', 'bookings')
@@ -238,7 +268,8 @@ class ExportReportView(views.APIView):
         return response
 
 class AnalyticsView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    # 🔒 RESTRICTED: Business Intelligence
+    permission_classes = [IsAuthenticated, IsOwnerOrManager]
     def get(self, request):
         owner = getattr(request.user, 'hotel_owner', None) or request.user
         bookings = Booking.objects.filter(owner=owner)
@@ -255,9 +286,9 @@ class AnalyticsView(views.APIView):
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
-        # 🟢 THIS INJECTS THE USER DATA INTO THE LOGIN RESPONSE
+        # 🟢 INJECT USER DATA (Sent as 'role' by default from DB)
         data['username'] = self.user.username
-        data['role'] = self.user.role  # Mapping the 'role' field we found in DB
+        data['role'] = self.user.role 
         data['is_superuser'] = self.user.is_superuser
         data['id'] = self.user.id
         try:
@@ -279,7 +310,7 @@ class RegisterView(views.APIView):
                 username=data['username'], 
                 email=data['email'], 
                 password=data['password'], 
-                user_role='OWNER'
+                role='OWNER' # FIX: Matches User model field name 'role'
             )
             HotelSettings.objects.create(owner=user, hotel_name=data.get('hotel_name', 'Atithi Hotel'))
             return Response({'status': 'Hotel Profile Created'}, status=201)
@@ -293,7 +324,8 @@ class SystemLogViewSet(BaseSaaSViewSet):
 class SuperAdminDashboardView(views.APIView):
     permission_classes = [IsAdminUser]
     def get(self, request):
-        hotels_count = User.objects.filter(user_role='OWNER').count()
+        # FIX: Matches User model field name 'role'
+        hotels_count = User.objects.filter(role='OWNER').count()
         return Response({"stats": {"total_hotels": hotels_count}})
 
 @api_view(['GET'])

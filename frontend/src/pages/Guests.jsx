@@ -3,28 +3,32 @@ import {
   User, Mail, Phone, Star, Search, 
   MapPin, Loader2, MoreHorizontal, Plus,
   Download, Ban, Briefcase, CreditCard, X, Save,
-  ShieldCheck
+  ShieldCheck, Trash2
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Guests = () => {
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // 🛡️ SECURITY: Only Admins can Delete or Blacklist
+  const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedGuest, setSelectedGuest] = useState(null); // For detail/edit view
+  const [selectedGuest, setSelectedGuest] = useState(null); 
   
   const [newGuestData, setNewGuestData] = useState({
       full_name: '', email: '', phone: '', 
       id_proof_number: '', address: '', type: 'REGULAR'
   });
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH GUESTS ---
   const fetchGuests = async () => {
+    if (!token) return;
     try {
       setLoading(true);
       const res = await fetch(`${API_URL}/api/guests/`, {
@@ -35,20 +39,53 @@ const Guests = () => {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchGuests(); }, []);
+  useEffect(() => { fetchGuests(); }, [token]);
 
   // --- ACTIONS ---
   const toggleVIP = async (id, currentStatus) => {
-    // Optimistic update for UI speed
     setGuests(guests.map(g => g.id === id ? { ...g, is_vip: !currentStatus } : g));
-    
     try {
         await fetch(`${API_URL}/api/guests/${id}/`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ is_vip: !currentStatus })
         });
-    } catch(err) { console.error(err); fetchGuests(); }
+    } catch(err) { fetchGuests(); }
+  };
+
+  // 🛡️ Admin Only Action
+  const toggleBlacklist = async (id, currentStatus) => {
+    if (!isAdmin) return alert("Only Managers can blacklist guests.");
+    
+    setGuests(guests.map(g => g.id === id ? { ...g, is_blacklisted: !currentStatus } : g));
+    try {
+        await fetch(`${API_URL}/api/guests/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ is_blacklisted: !currentStatus })
+        });
+    } catch(err) { fetchGuests(); }
+  };
+
+  // 🛡️ Admin Only Action
+  const handleDelete = async (id, e) => {
+      e.stopPropagation(); // Prevent opening the details modal
+      if (!isAdmin) return;
+      if (!window.confirm("Permanently delete this guest profile? History will be lost.")) return;
+
+      const originalGuests = [...guests];
+      setGuests(guests.filter(g => g.id !== id));
+
+      try {
+          const res = await fetch(`${API_URL}/api/guests/${id}/`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error("Failed");
+      } catch (err) {
+          setGuests(originalGuests);
+          alert("Could not delete guest. They may have active bookings.");
+      }
   };
 
   const handleCreate = async (e) => {
@@ -77,7 +114,6 @@ const Guests = () => {
 
   const vipCount = guests.filter(g => g.is_vip).length;
   const corporateCount = guests.filter(g => g.type === 'CORPORATE').length;
-  // Calculate Total Revenue (Lifetime Value) from all guests
   const totalLTV = guests.reduce((sum, g) => sum + (parseFloat(g.total_spent) || 0), 0);
 
   if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
@@ -153,7 +189,7 @@ const Guests = () => {
                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Contact</th>
                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
                     <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400">History</th>
-                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Details</th>
+                    <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
                 </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -190,10 +226,20 @@ const Guests = () => {
                             <p className="text-sm font-black text-slate-800">₹{(parseFloat(guest.total_spent) || 0).toLocaleString()}</p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{guest.total_stays || 0} Stays</p>
                         </td>
-                        <td className="p-6 text-right">
-                            <button className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all">
+                        <td className="p-6 text-right flex justify-end gap-2">
+                            <button className="p-2 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="View Details">
                                 <MoreHorizontal size={20}/>
                             </button>
+                            {/* 🛡️ DELETE (Admins Only) */}
+                            {isAdmin && (
+                                <button 
+                                    onClick={(e) => handleDelete(guest.id, e)} 
+                                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Delete Profile"
+                                >
+                                    <Trash2 size={20}/>
+                                </button>
+                            )}
                         </td>
                     </tr>
                 ))}
@@ -284,8 +330,14 @@ const Guests = () => {
                     <button onClick={() => toggleVIP(selectedGuest.id, selectedGuest.is_vip)} className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 transition-all ${selectedGuest.is_vip ? 'border-yellow-400 bg-yellow-50 text-yellow-600' : 'border-slate-100 text-slate-400 hover:border-yellow-400'}`}>
                         {selectedGuest.is_vip ? 'Remove VIP' : 'Make VIP'}
                     </button>
-                    <button className="flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 border-slate-100 text-slate-400 hover:border-red-400 hover:text-red-500 transition-all">
-                        Blacklist
+                    {/* 🛡️ BLACKLIST (Admins Only) */}
+                    <button 
+                        onClick={() => toggleBlacklist(selectedGuest.id, selectedGuest.is_blacklisted)} 
+                        className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-widest border-2 transition-all ${selectedGuest.is_blacklisted ? 'border-red-500 bg-red-50 text-red-600' : 'border-slate-100 text-slate-400 hover:border-red-400 hover:text-red-500'}`}
+                        disabled={!isAdmin}
+                        title={!isAdmin ? "Manager Access Required" : ""}
+                    >
+                        {selectedGuest.is_blacklisted ? 'Unban' : 'Blacklist'}
                     </button>
                 </div>
 

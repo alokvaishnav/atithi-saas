@@ -14,6 +14,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
+  // Location is imported to ensure router context exists, though not explicitly used here
   const location = useLocation();
 
   // 1️⃣ Centralized Logout
@@ -64,18 +65,19 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [logout]);
 
-  // 3️⃣ Login Function: Correctly identifies Owner vs Receptionist
+  // 3️⃣ Login Function: FIX APPLIED HERE
   const login = (data) => {
     // A. Save Tokens
     localStorage.setItem('access_token', data.access);
     localStorage.setItem('refresh_token', data.refresh);
     
     // B. Logic for Role Identity
-    // If user is a superuser, we often treat them as 'OWNER' for UI purposes
-    const detectedRole = data.is_superuser ? 'OWNER' : (data.user_role || 'STAFF');
+    // FIX 1: Backend sends 'role', NOT 'user_role'. We added a fallback just in case.
+    const detectedRole = data.is_superuser ? 'OWNER' : (data.role || 'STAFF');
     
     // C. Save User Profile Data
-    localStorage.setItem('username', detectedRole);
+    // FIX 2: Save the actual username, NOT the role!
+    localStorage.setItem('username', data.username); 
     localStorage.setItem('user_role', detectedRole);
     localStorage.setItem('user_id', data.id || '');
     localStorage.setItem('is_superuser', data.is_superuser || false);
@@ -100,6 +102,7 @@ export const AuthProvider = ({ children }) => {
   // 4️⃣ RBAC Helper: Enhanced with Superuser bypass
   const hasRole = (allowedRoles) => {
       if (!role) return false;
+      // Owners and Superusers bypass role checks
       if (user?.is_superuser || role === 'OWNER') return true; 
       return allowedRoles.includes(role);
   };

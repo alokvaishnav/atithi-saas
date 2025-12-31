@@ -4,8 +4,10 @@ import {
   Loader2, Filter, AlertCircle, X, Wrench, Search 
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const Housekeeping = () => {
+  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [tasks, setTasks] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -14,6 +16,10 @@ const Housekeeping = () => {
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState('ALL'); // ALL, PENDING, COMPLETED, HIGH
   
+  // 🛡️ SECURITY: Only Managers/Owners assign tasks. 
+  // Housekeeping staff just view and complete them.
+  const canAssign = ['OWNER', 'MANAGER', 'RECEPTIONIST'].includes(role) || user?.is_superuser;
+
   // New Task Form
   const [newTask, setNewTask] = useState({ 
     room: '', 
@@ -22,21 +28,28 @@ const Housekeeping = () => {
     task_type: 'CLEANING' // CLEANING, REPAIR, INSPECTION
   });
 
-  const token = localStorage.getItem('access_token');
-
   // --- FETCH DATA ---
   const fetchData = async () => {
+    if (!token) return;
     try {
       setLoading(true);
-      const [resT, resR, resS] = await Promise.all([
-        fetch(`${API_URL}/api/housekeeping/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/rooms/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${API_URL}/api/staff/`, { headers: { 'Authorization': `Bearer ${token}` } })
-      ]);
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
+      const requests = [
+        fetch(`${API_URL}/api/housekeeping/`, { headers }),
+        fetch(`${API_URL}/api/rooms/`, { headers })
+      ];
 
-      if (resT.ok) setTasks(await resT.json());
-      if (resR.ok) setRooms(await resR.json());
-      if (resS.ok) setStaff(await resS.json());
+      // Only Managers need the staff list to assign tasks
+      if (canAssign) {
+          requests.push(fetch(`${API_URL}/api/staff/`, { headers }));
+      }
+
+      const responses = await Promise.all(requests);
+      
+      if (responses[0].ok) setTasks(await responses[0].json());
+      if (responses[1].ok) setRooms(await responses[1].json());
+      if (canAssign && responses[2] && responses[2].ok) setStaff(await responses[2].json());
       
     } catch (err) {
       console.error("Fetch Error:", err);
@@ -45,7 +58,7 @@ const Housekeeping = () => {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [token]);
 
   // --- ACTIONS ---
   const handleComplete = async (id) => {
@@ -117,12 +130,16 @@ const Housekeeping = () => {
                     <button onClick={() => setFilter('ALL')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'ALL' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}>All Pending</button>
                     <button onClick={() => setFilter('HIGH')} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${filter === 'HIGH' ? 'bg-red-500 text-white' : 'text-slate-400 hover:bg-slate-50'}`}>High Priority</button>
                 </div>
-                <button 
-                    onClick={() => setShowModal(true)} 
-                    className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 flex items-center gap-2 transition-all shadow-lg"
-                >
-                    <Plus size={16}/> Assign Task
-                </button>
+                
+                {/* 🛡️ Assign Button: Hidden for basic housekeeping staff */}
+                {canAssign && (
+                    <button 
+                        onClick={() => setShowModal(true)} 
+                        className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 flex items-center gap-2 transition-all shadow-lg"
+                    >
+                        <Plus size={16}/> Assign Task
+                    </button>
+                )}
             </div>
         </div>
 

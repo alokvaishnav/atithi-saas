@@ -81,13 +81,15 @@ const Register = () => {
             navigate('/login');
         } else {
             const err = await res.json();
-            // Handle specific API error messages
-            const msg = err.username ? err.username[0] : (err.email ? err.email[0] : "Registration failed.");
+            // Handle specific API error messages + Generic backend errors
+            const msg = err.username ? err.username[0] : 
+                       (err.email ? err.email[0] : 
+                       (err.error || "Registration failed. Please check your details."));
             setError(msg);
         }
     } catch (err) { 
         console.error(err);
-        setError("Network error. Please try again.");
+        setError("Network error. Please check your connection.");
     } finally { 
         setLoading(false); 
     }

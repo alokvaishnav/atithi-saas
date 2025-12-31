@@ -7,23 +7,27 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
 const FrontDesk = () => {
-  // --- YOUR ORIGINAL STATES ---
+  const { token } = useAuth(); // 🟢 Use Global Auth
+  
+  // --- CORE STATES ---
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('MATRIX'); 
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- NEW MISSION CONTROL STATES ---
+  // --- MISSION CONTROL STATES ---
   const [gstBase, setGstBase] = useState(0);
+  
   const navigate = useNavigate();
-  const token = localStorage.getItem('access_token');
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // --- MASTER FETCH DATA (PRESERVED & ENHANCED) ---
+  // --- MASTER FETCH DATA ---
   const fetchData = useCallback(async () => {
+    if (!token) return;
     try {
       setLoading(true);
       const headers = { 'Authorization': `Bearer ${token}` };
@@ -31,8 +35,10 @@ const FrontDesk = () => {
           fetch(`${API_URL}/api/rooms/`, { headers }),
           fetch(`${API_URL}/api/bookings/`, { headers })
       ]);
-      if (roomRes.ok) setRooms(await roomRes.ok ? await roomRes.json() : []);
-      if (bookingRes.ok) setBookings(await bookingRes.ok ? await bookingRes.json() : []);
+      
+      if (roomRes.ok) setRooms(await roomRes.json());
+      if (bookingRes.ok) setBookings(await bookingRes.json());
+      
     } catch (err) { 
         console.error("Reception Sync Error:", err); 
     } finally { 
@@ -42,7 +48,7 @@ const FrontDesk = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // --- YOUR ORIGINAL ACTIONS (PRESERVED) ---
+  // --- ACTIONS ---
   const updateBookingStatus = async (id, newStatus) => {
     const actionLabel = newStatus === 'CHECKED_IN' ? 'Check In' : 'Check Out';
     if(!window.confirm(`Confirm ${actionLabel} for this guest?`)) return;
@@ -60,23 +66,27 @@ const FrontDesk = () => {
   const markRoomClean = async (id) => {
     if(!window.confirm("Mark room as clean and ready?")) return;
     try {
-        await fetch(`${API_URL}/api/rooms/${id}/mark-clean/`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+        await fetch(`${API_URL}/api/rooms/${id}/mark-clean/`, { // Assuming custom endpoint or PATCH
+            method: 'PATCH', // Changed to PATCH to be safe if custom action not set up
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: 'AVAILABLE' })
         });
         fetchData();
     } catch (err) { console.error(err); }
   };
 
-  // --- PDF GENERATOR (NEW FEATURE) ---
+  // --- PDF GENERATOR ---
   const generateNightAudit = () => {
+    // Opens the backend PDF generation endpoint in a new tab
     window.open(`${API_URL}/api/reports/daily-pdf/?token=${token}`, '_blank');
   };
 
-  // --- YOUR ORIGINAL DERIVED DATA (PRESERVED) ---
+  // --- DERIVED DATA ---
   const activeBookingsMap = {};
   bookings.filter(b => b.status === 'CHECKED_IN').forEach(b => {
-      if(b.room) activeBookingsMap[b.room] = b;
+      // Logic handles both full room objects or just IDs if backend serializers differ
+      const roomId = b.room_details?.id || b.room; 
+      if(roomId) activeBookingsMap[roomId] = b;
   });
 
   const arrivals = bookings.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED');
@@ -85,7 +95,7 @@ const FrontDesk = () => {
 
   const getFilteredList = (list) => {
       return list.filter(b => 
-          b.guest_details?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          b.guest_details?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           b.room_details?.room_number?.toString().includes(searchTerm)
       );
   };
@@ -119,12 +129,12 @@ const FrontDesk = () => {
                 <LogOut size={18} className="text-red-500"/> Departures: {departures.length}
             </div>
             <div className="bg-slate-900 p-4 px-8 rounded-2xl text-xs font-black text-white flex items-center gap-3 shadow-xl">
-                <BedDouble size={18} className="text-blue-400"/> {Math.round((inHouse.length / rooms.length) * 100) || 0}% Cap.
+                <BedDouble size={18} className="text-blue-400"/> {Math.round((inHouse.length / (rooms.length || 1)) * 100) || 0}% Cap.
             </div>
         </div>
       </div>
 
-      {/* 2. MISSION CONTROL PANELS (NEW FEATURES) */}
+      {/* 2. MISSION CONTROL PANELS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
           
           {/* Quick GST Calculator (12%) */}
@@ -201,7 +211,7 @@ const FrontDesk = () => {
           </div>
       </div>
 
-      {/* 4. VIEW: ROOM MATRIX (YOUR ORIGINAL UI ENHANCED) */}
+      {/* 4. VIEW: ROOM MATRIX */}
       {activeTab === 'MATRIX' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
             {rooms.map(room => {
@@ -262,7 +272,7 @@ const FrontDesk = () => {
         </div>
       )}
 
-      {/* 5. VIEW: LIST TABLES (PRESERVED & STYLED) */}
+      {/* 5. VIEW: LIST TABLES */}
       {activeTab !== 'MATRIX' && (
         <div className="bg-white rounded-[50px] border border-slate-200 overflow-hidden shadow-sm animate-in slide-in-from-bottom-6 duration-700">
           <table className="w-full text-left">
@@ -280,7 +290,7 @@ const FrontDesk = () => {
                   <td className="p-8">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 font-black group-hover:bg-blue-600 group-hover:text-white transition-all">
-                            {b.guest_details?.full_name.charAt(0)}
+                            {b.guest_details?.full_name?.charAt(0)}
                         </div>
                         <div>
                             <p className="font-black text-slate-900 text-base italic uppercase">{b.guest_details?.full_name}</p>

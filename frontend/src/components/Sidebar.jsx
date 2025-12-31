@@ -15,10 +15,9 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
-  // Using 'role' from context which we fixed in AuthContext.jsx
-  const { hotelName, role, user, logout, updateGlobalProfile } = useAuth(); 
+  const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
-  // MOBILE AUTO-CLOSE: Closes sidebar when clicking a link on mobile
+  // MOBILE AUTO-CLOSE
   useEffect(() => {
     if (onClose && window.innerWidth < 768) {
         onClose();
@@ -28,17 +27,20 @@ const Sidebar = ({ isOpen, onClose }) => {
   // FETCH BRANDING: Syncs the Hotel Name from Backend Settings
   useEffect(() => {
     const fetchBranding = async () => {
-      try {
-        const token = localStorage.getItem('access_token');
-        if (!token) return;
+      // 🛡️ SECURITY FIX: Only fetch settings if the user is allowed to see them.
+      if (!token) return;
+      if (role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
 
+      try {
         const res = await fetch(`${API_URL}/api/settings/`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (res.ok) {
             const data = await res.json();
+            // Handle both object and array responses
             const settings = Array.isArray(data) ? data[0] : data;
+            
             if (settings && settings.hotel_name) {
                 updateGlobalProfile(settings.hotel_name.toUpperCase());
             }
@@ -47,8 +49,12 @@ const Sidebar = ({ isOpen, onClose }) => {
         console.log("Using cached/default branding");
       }
     };
-    fetchBranding();
-  }, [updateGlobalProfile]); 
+    
+    // Only fetch if we don't have a name yet or if role changed (login)
+    if (!hotelName || hotelName === 'ATITHI HMS') {
+        fetchBranding();
+    }
+  }, [updateGlobalProfile, role, user, token, hotelName]); 
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
@@ -61,7 +67,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const groups = [
     {
       title: "Main",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT'],
+      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'], // Everyone
       items: [
         { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/' },
       ]
@@ -80,6 +86,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
+        // 🔒 Hide POS/Inventory from Housekeeping staff
         ...(role !== 'HOUSEKEEPING' ? [
             { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
             { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
@@ -100,17 +107,21 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
-        { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' },
+        // 🔒 Hide Staff Directory from Accountants (Only Owner/Manager)
+        ...(['OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
+            { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
+        ] : []),
         { icon: <BarChart3 size={18} />, label: 'Analytics', path: '/analytics' },
         { icon: <FileText size={18} />, label: 'Audit Reports', path: '/reports' },
       ]
     },
     {
       title: "Configuration",
-      roles: ['OWNER'], 
+      roles: ['OWNER', 'MANAGER'], 
       items: [
         { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
-        { icon: <CreditCard size={18} />, label: 'Subscription Plan', path: '/pricing' },
+        // Subscription usually hidden in MVP
+        // { icon: <CreditCard size={18} />, label: 'Subscription Plan', path: '/pricing' }, 
       ]
     },
     {
@@ -161,7 +172,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Navigation Groups */}
         <nav className="flex-1 p-4 space-y-8 overflow-y-auto scrollbar-hide py-8">
           {groups.map((group, index) => (
-            (group.roles.includes(role) || user?.is_superuser) && (
+            (group.roles.includes(role) || user?.is_superuser) && group.items.length > 0 && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
                   {group.title}
@@ -193,31 +204,31 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           {/* SUPER ADMIN SECTION */}
           {user && user.is_superuser && (
-             <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-               <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
-                 System Control
-               </div>
-               <button
-                 onClick={() => navigate('/super-admin')}
-                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
-                   location.pathname === '/super-admin' 
-                     ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
-                     : 'text-purple-300 hover:bg-purple-500/10'
-                 }`}
-               >
-                 <div className="flex items-center space-x-3">
-                   <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
-                     <Server size={18} />
-                   </span>
-                   <span className="uppercase tracking-widest">Global Stats</span>
-                 </div>
-                 <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-               </button>
-             </div>
+              <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+                <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
+                  System Control
+                </div>
+                <button
+                  onClick={() => navigate('/super-admin')}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
+                    location.pathname === '/super-admin' 
+                      ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
+                      : 'text-purple-300 hover:bg-purple-500/10'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
+                      <Server size={18} />
+                    </span>
+                    <span className="uppercase tracking-widest">Global Stats</span>
+                  </div>
+                  <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                </button>
+              </div>
           )}
         </nav>
 
-        {/* User Session Footer - DYNAMIC IDENTITY FIX */}
+        {/* User Session Footer */}
         <div className="p-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-md sticky bottom-0">
           <div className="px-4 py-3 mb-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
@@ -225,7 +236,6 @@ const Sidebar = ({ isOpen, onClose }) => {
               </div>
               <div>
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
-                  {/* Displays 'OWNER', 'RECEPTIONIST', etc. based on actual login data */}
                   <p className="text-[11px] font-black text-white tracking-tight uppercase">
                     {role || 'Staff'}
                   </p>
