@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Loader2, Lock, User, ShieldCheck, AlertCircle } from 'lucide-react';
-import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
 const Login = () => {
@@ -9,8 +8,8 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null); 
-  const navigate = useNavigate();
   
+  const navigate = useNavigate();
   const { login } = useAuth(); 
 
   // 🧹 CLEANUP: Clear any stale session data when landing on Login
@@ -19,6 +18,7 @@ const Login = () => {
     const keysToRemove = [
         'access_token', 
         'refresh_token', 
+        'user_data', // We now use this unified key
         'user_role', 
         'username', 
         'hotel_name', 
@@ -34,28 +34,22 @@ const Login = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/token/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+      // 🟢 FIX: We delegate the API call to AuthContext.
+      // This ensures the role is parsed and saved correctly before we redirect.
+      const result = await login(username, password);
 
-      if (!response.ok) {
-        if (response.status === 401) throw new Error('Invalid Username or Password.');
-        throw new Error('Login Failed. Please check your credentials.');
+      if (result.success) {
+         // Login successful, AuthContext has updated the state.
+         // Redirect to Dashboard (or the protected route they tried to access)
+         navigate('/dashboard'); 
+      } else {
+         // Login failed (Invalid credentials or server error)
+         setError(result.msg || 'Login Failed. Please check your credentials.');
       }
 
-      const data = await response.json();
-      
-      // The login function from AuthContext will now handle role parsing correctly
-      await login(data);
-      
-      // Navigate to Dashboard
-      navigate('/'); 
-
     } catch (err) {
-      console.error('Login Error:', err);
-      setError(err.message || 'Network Error. Could not connect to server.');
+      console.error('Login Critical Error:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -4,11 +4,11 @@ from .models import (
     Expense, Booking, BookingCharge, BookingPayment, 
     HousekeepingTask, SystemLog, License
 )
-from core.models import User
+from core.models import CustomUser as User  # Use CustomUser as User
 
 # 0. User & Identity Serializer - SYNCED WITH DATABASE 'role' FIELD
 class UserSerializer(serializers.ModelSerializer):
-    # Fixed source to use 'get_role_display' instead of 'get_user_role_display'
+    # Fixed source to use 'get_role_display'
     role_display = serializers.CharField(source='get_role_display', read_only=True)
 
     class Meta:
@@ -117,14 +117,18 @@ class StaffSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        # We need to ensure we're creating the user correctly linked to an owner context if needed,
+        # but User.objects.create_user handles the basics.
         user = User.objects.create_user(**validated_data)
         user.set_password(password)
         
         request = self.context.get('request')
         if request and request.user:
-            # Sync with owner profile
-            if hasattr(request.user, 'hotel_owner'):
-                user.hotel_owner = request.user.hotel_owner or request.user
+            # Sync with owner profile logic if your User model has hotel_owner linkage
+            # For this MVP, we assume the logged-in user creating staff IS the owner or manager.
+            # If your User model has a specific 'hotel_owner' field (ForeignKey to User), set it here.
+            if hasattr(user, 'hotel_owner') and hasattr(request.user, 'hotel_owner'):
+                 user.hotel_owner = request.user.hotel_owner or request.user
             user.save()
         return user
 
@@ -157,7 +161,11 @@ class LicenseSerializer(serializers.ModelSerializer):
 
     def get_is_expired(self, obj):
         try:
-            left = obj.days_left()
-            return left <= 0 if left is not None else True
+            # Assuming the License model has a method or property for days_left
+            # If strictly using the field calculated in queryset, accessing obj.days_left is fine if annotated
+            # Otherwise, calculate manually here:
+            from django.utils import timezone
+            if not obj.expiry_date: return False
+            return obj.expiry_date < timezone.now().date()
         except:
             return True

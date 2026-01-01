@@ -1,8 +1,12 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
+
+# 🟢 IMPORT ALL VIEWS FROM HOTEL APP
 from hotel.views import (
-    # ViewSets
+    # ViewSets (CRUD)
     RoomViewSet, 
     GuestViewSet, 
     BookingViewSet, 
@@ -33,6 +37,7 @@ from hotel.views import (
     # 🔐 Custom Auth View (CRITICAL FOR ROLE FIX)
     CustomTokenObtainPairView
 )
+
 from rest_framework_simplejwt.views import TokenRefreshView
 
 # 1. Setup Router for Standard CRUD Operations
@@ -50,6 +55,7 @@ router.register(r'logs', SystemLogViewSet, basename='logs')
 
 # 2. Main URL Patterns
 urlpatterns = [
+    # --- ADMIN & AUTH ---
     path('admin/', admin.site.urls),
     
     # 🔐 Authentication & Identity
@@ -61,24 +67,28 @@ urlpatterns = [
     # 📝 Registration
     path('api/register/', RegisterView.as_view(), name='register'),
 
-    # 🔑 Password Recovery Alias (To prevent 404s on Frontend)
+    # 🔑 Password Recovery Alias (To prevent 404s on Frontend if accessed)
     path('api/password_reset/', TokenRefreshView.as_view(), name='password_reset_placeholder'),
     
-    # 👑 Super Admin Platform Control
+    # --- SUPER ADMIN ---
     path('api/super-admin/stats/', SuperAdminDashboardView.as_view(), name='super_admin_stats'),
     
-    # 📊 Business Intelligence & POS
+    # --- ANALYTICS & OPERATIONS ---
     path('api/analytics/', AnalyticsView.as_view(), name='analytics'),
     path('api/pos/charge/', POSChargeView.as_view(), name='pos_charge'),
     
-    # 📄 Reporting Engine (PDF & CSV)
+    # --- REPORTS ---
     path('api/reports/daily-pdf/', EndOfDayReportView.as_view(), name='daily_pdf'),
     path('api/reports/export/', ExportReportView.as_view(), name='export_report'),
 
-    # 🛡️ License System (SaaS Lock)
+    # --- LICENSE SYSTEM ---
     path('api/license/status/', license_status, name='license_status'),
     path('api/license/activate/', activate_license, name='activate_license'),
 
-    # 🏨 Main Hotel Modules (Mapped under /api/)
+    # --- CORE API ROUTES (From Router) ---
     path('api/', include(router.urls)),
 ]
+
+# 3. Serve Static Files in Development/Debug Mode (AWS needs this if not using S3)
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

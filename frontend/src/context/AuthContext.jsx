@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom'; 
+import { API_URL } from '../config';
 
 // Create the Context
 const AuthContext = createContext();
@@ -14,12 +15,11 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
-  // Location is imported to ensure router context exists, though not explicitly used here
   const location = useLocation();
 
   // 1️⃣ Centralized Logout
   const logout = useCallback(() => {
-    localStorage.clear();
+    localStorage.clear(); // Wipe everything
     setUser(null);
     setRole(null);
     setToken(null);
@@ -32,26 +32,21 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initAuth = () => {
         try {
+            // We use a single JSON object for safer storage
             const storedToken = localStorage.getItem('access_token');
-            const storedUser = localStorage.getItem('username');
-            const storedRole = localStorage.getItem('user_role');
-            const storedHotel = localStorage.getItem('hotel_name');
-            const storedUserId = localStorage.getItem('user_id');
-            const isSuperUser = localStorage.getItem('is_superuser') === 'true';
+            const storedUserData = localStorage.getItem('user_data');
 
-            if (storedToken && storedUser) {
+            if (storedToken && storedUserData) {
+                const parsedUser = JSON.parse(storedUserData);
+                
                 setToken(storedToken);
-                setRole(storedRole);
-                setHotelName(storedHotel || 'Atithi HMS');
+                setUser(parsedUser);
                 
-                // Reconstruct User Object with Role Info
-                setUser({
-                    username: storedUser,
-                    id: storedUserId,
-                    is_superuser: isSuperUser,
-                    role: storedRole
-                });
+                // 🟢 CRITICAL FIX: Ensure Role is Read Correctly
+                const activeRole = parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF');
+                setRole(activeRole);
                 
+                setHotelName(parsedUser.hotel_name || 'Atithi HMS');
                 setIsAuthenticated(true);
             }
         } catch (error) {
@@ -65,38 +60,52 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, [logout]);
 
-  // 3️⃣ Login Function: FIX APPLIED HERE
-  const login = (data) => {
-    // A. Save Tokens
-    localStorage.setItem('access_token', data.access);
-    localStorage.setItem('refresh_token', data.refresh);
-    
-    // B. Logic for Role Identity
-    // FIX 1: Backend sends 'role', NOT 'user_role'. We added a fallback just in case.
-    const detectedRole = data.is_superuser ? 'OWNER' : (data.role || 'STAFF');
-    
-    // C. Save User Profile Data
-    // FIX 2: Save the actual username, NOT the role!
-    localStorage.setItem('username', data.username); 
-    localStorage.setItem('user_role', detectedRole);
-    localStorage.setItem('user_id', data.id || '');
-    localStorage.setItem('is_superuser', data.is_superuser || false);
-    
-    // D. Save Config Data
-    const hName = data.hotel_name || 'Atithi HMS';
-    localStorage.setItem('hotel_name', hName);
+  // 3️⃣ Login Function: Handles API Call & State Update
+  const login = async (username, password) => {
+    try {
+        const res = await fetch(`${API_URL}/api/login/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
 
-    // E. Update React State
-    setToken(data.access);
-    setRole(detectedRole);
-    setHotelName(hName);
-    setUser({
-        username: data.username,
-        id: data.id,
-        is_superuser: data.is_superuser,
-        role: detectedRole
-    });
-    setIsAuthenticated(true);
+        const data = await res.json();
+
+        if (res.ok) {
+            // A. Save Tokens
+            localStorage.setItem('access_token', data.access);
+            localStorage.setItem('refresh_token', data.refresh);
+            
+            // B. Logic for Role Identity
+            const detectedRole = data.is_superuser ? 'OWNER' : (data.role || 'STAFF');
+            
+            // C. Construct & Save User Profile Data
+            const userData = {
+                username: data.username,
+                id: data.id,
+                is_superuser: data.is_superuser,
+                role: detectedRole,
+                hotel_name: data.hotel_name || 'Atithi HMS'
+            };
+
+            // Save as one blob to prevent sync issues
+            localStorage.setItem('user_data', JSON.stringify(userData));
+
+            // D. Update React State
+            setToken(data.access);
+            setRole(detectedRole);
+            setHotelName(userData.hotel_name);
+            setUser(userData);
+            setIsAuthenticated(true);
+            
+            return { success: true };
+        } else {
+            return { success: false, msg: data.detail || "Login failed" };
+        }
+    } catch (err) {
+        console.error("Login Error:", err);
+        return { success: false, msg: "Server connection failed" };
+    }
   };
 
   // 4️⃣ RBAC Helper: Enhanced with Superuser bypass
@@ -109,8 +118,15 @@ export const AuthProvider = ({ children }) => {
 
   // 5️⃣ Live Settings Updater
   const updateGlobalProfile = (name) => {
-      localStorage.setItem('hotel_name', name);
+      // Update state
       setHotelName(name);
+      
+      // Update local storage to persist change
+      if (user) {
+          const updatedUser = { ...user, hotel_name: name };
+          setUser(updatedUser);
+          localStorage.setItem('user_data', JSON.stringify(updatedUser));
+      }
   };
 
   return (
