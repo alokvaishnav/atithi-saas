@@ -3,15 +3,13 @@ import {
   Plus, Search, BedDouble, Trash2, Edit3, 
   CheckCircle, Loader2, MoreVertical, X, Wrench, 
   AlertCircle, User, Brush, Wifi, Tv, Wind, Coffee,
-  Layers, Users, BarChart3
+  Layers, Users, BarChart3, Trash
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Rooms = () => {
-  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
+  const { token, role, user } = useAuth(); 
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);

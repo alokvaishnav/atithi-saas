@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react';
 import { 
   ShoppingBag, Search, Plus, Minus, Trash2, 
   CreditCard, User, BedDouble, CheckCircle, Loader2,
-  Coffee, Utensils, Car, Shirt, Sparkles, AlertCircle
+  Coffee, Utensils, Car, Shirt, Sparkles, AlertCircle,
+  Trash
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const POS = () => {
-  const { token, user } = useAuth(); // 🟢 Global Auth
+  const { token, user } = useAuth(); 
   const [services, setServices] = useState([]);
   const [cart, setCart] = useState([]);
   const [category, setCategory] = useState('ALL');

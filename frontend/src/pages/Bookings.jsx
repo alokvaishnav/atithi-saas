@@ -2,16 +2,15 @@ import { useEffect, useState } from 'react';
 import { 
   Plus, Search, Calendar, User, CheckCircle, 
   XCircle, Clock, Filter, Loader2, MoreVertical, 
-  CreditCard, ArrowRight, X, Trash2, ShieldAlert
+  CreditCard, ArrowRight, X, Trash2, ShieldAlert,
+  Trash // Merged this one here
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Bookings = () => {
-  const { token, role, user } = useAuth(); // 🟢 Get Token & Role
+  const { token, role, user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false); 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, MapPin, Save, ArrowLeft, Loader2, 
-  Calendar, Globe, CreditCard, Star, FileText, Trash2, AlertTriangle 
+  Calendar, Globe, CreditCard, Star, FileText, Trash2 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -102,7 +102,7 @@ const EditGuest = () => {
   );
 
   return (
-    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans animate-in fade-in duration-500">
       <div className="max-w-3xl mx-auto">
         
         {/* TOP NAV */}
@@ -123,7 +123,7 @@ const EditGuest = () => {
             
             {/* VIP BANNER (Conditional) */}
             {formData.is_vip && (
-                <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[10px] font-black px-6 py-2 rounded-bl-2xl uppercase tracking-widest flex items-center gap-2">
+                <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[10px] font-black px-6 py-2 rounded-bl-2xl uppercase tracking-widest flex items-center gap-2 shadow-sm">
                     <Star size={12} fill="currentColor"/> VIP Member
                 </div>
             )}
@@ -141,16 +141,16 @@ const EditGuest = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Full Name</label>
-                            <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-200 transition-all"
-                                value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} />
+                            <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-200 transition-all text-slate-800 placeholder:text-slate-300"
+                                value={formData.full_name || ''} onChange={e => setFormData({...formData, full_name: e.target.value})} />
                         </div>
                         
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Email Address</label>
                             <div className="relative">
                                 <Mail className="absolute left-4 top-3.5 text-slate-400" size={16}/>
-                                <input type="email" className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                                <input type="email" className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder:text-slate-300"
+                                    value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
                             </div>
                         </div>
 
@@ -158,8 +158,8 @@ const EditGuest = () => {
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Phone Number</label>
                             <div className="relative">
                                 <Phone className="absolute left-4 top-3.5 text-slate-400" size={16}/>
-                                <input required className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                <input required className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder:text-slate-300"
+                                    value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} />
                             </div>
                         </div>
 
@@ -168,7 +168,7 @@ const EditGuest = () => {
                             <div className="relative">
                                 <Calendar className="absolute left-4 top-3.5 text-slate-400" size={16}/>
                                 <input type="date" className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-600"
-                                    value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} />
+                                    value={formData.dob || ''} onChange={e => setFormData({...formData, dob: e.target.value})} />
                             </div>
                         </div>
 
@@ -176,9 +176,9 @@ const EditGuest = () => {
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Nationality</label>
                             <div className="relative">
                                 <Globe className="absolute left-4 top-3.5 text-slate-400" size={16}/>
-                                <input className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                <input className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder:text-slate-300"
                                     placeholder="e.g. Indian"
-                                    value={formData.nationality} onChange={e => setFormData({...formData, nationality: e.target.value})} />
+                                    value={formData.nationality || ''} onChange={e => setFormData({...formData, nationality: e.target.value})} />
                             </div>
                         </div>
                     </div>
@@ -195,7 +195,7 @@ const EditGuest = () => {
                          <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">ID Type</label>
                             <select className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500 text-slate-700"
-                                value={formData.id_proof_type} onChange={e => setFormData({...formData, id_proof_type: e.target.value})}>
+                                value={formData.id_proof_type || 'AADHAR'} onChange={e => setFormData({...formData, id_proof_type: e.target.value})}>
                                 <option value="AADHAR">Aadhar Card</option>
                                 <option value="PASSPORT">Passport</option>
                                 <option value="DRIVING_LICENSE">Driving License</option>
@@ -206,16 +206,16 @@ const EditGuest = () => {
 
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">ID Number</label>
-                            <input className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500"
-                                value={formData.id_proof_number} onChange={e => setFormData({...formData, id_proof_number: e.target.value})} />
+                            <input className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 placeholder:text-slate-300"
+                                value={formData.id_proof_number || ''} onChange={e => setFormData({...formData, id_proof_number: e.target.value})} />
                         </div>
 
                         <div className="md:col-span-2">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Permanent Address</label>
                             <div className="relative">
                                 <MapPin className="absolute left-4 top-3.5 text-slate-400" size={16}/>
-                                <input className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500"
-                                    value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                                <input className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 placeholder:text-slate-300"
+                                    value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} />
                             </div>
                         </div>
                     </div>
@@ -230,7 +230,7 @@ const EditGuest = () => {
                     </h3>
                     
                     <div className="space-y-4">
-                        <div className="flex items-center gap-4 p-4 bg-yellow-50 rounded-2xl border border-yellow-100 cursor-pointer"
+                        <div className="flex items-center gap-4 p-4 bg-yellow-50 rounded-2xl border border-yellow-100 cursor-pointer hover:bg-yellow-100 transition-colors"
                              onClick={() => setFormData({...formData, is_vip: !formData.is_vip})}>
                             <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${formData.is_vip ? 'bg-yellow-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
                                 <Star size={14} fill={formData.is_vip ? "currentColor" : "none"}/>
@@ -243,9 +243,9 @@ const EditGuest = () => {
 
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Preferences / Notes</label>
-                            <textarea rows="3" className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-orange-500 resize-none"
+                            <textarea rows="3" className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-800 placeholder:text-slate-300"
                                 placeholder="E.g. Allergies, Room preferences, Special requests..."
-                                value={formData.preferences} onChange={e => setFormData({...formData, preferences: e.target.value})} />
+                                value={formData.preferences || ''} onChange={e => setFormData({...formData, preferences: e.target.value})} />
                         </div>
                     </div>
                 </div>

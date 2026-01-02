@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { 
   Lock, Loader2, ShieldAlert, KeyRound, 
-  CheckCircle, AlertTriangle, RefreshCw, Mail 
+  AlertTriangle, RefreshCw, Mail
 } from 'lucide-react';
 import { API_URL } from '../config';
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
 
 const LicenseLock = ({ children }) => {
   const [status, setStatus] = useState('LOADING'); // LOADING | ACTIVE | WARNING | EXPIRED
@@ -19,12 +17,12 @@ const LicenseLock = ({ children }) => {
   // 1. Verify License on Mount
   useEffect(() => {
     checkLicense();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkLicense = async () => {
     try {
-        // In a real app, this endpoint returns { status: 'ACTIVE', days_left: 30 }
-        // For development safety, we default to ACTIVE if API fails
+        // Fetch license status from backend
         const res = await fetch(`${API_URL}/api/license/status/`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -41,11 +39,13 @@ const LicenseLock = ({ children }) => {
                 setStatus('ACTIVE');
             }
         } else {
-            // Fallback for demo purposes (Remove this line in strict production)
+            // Fallback: If server checks fail, don't lock the user out immediately (Fail-Open)
+            // You can change this to 'EXPIRED' if you want strict enforcement
+            console.warn("License check failed, defaulting to active.");
             setStatus('ACTIVE'); 
         }
     } catch (err) {
-        console.error("License Check Failed:", err);
+        console.error("License Check Error:", err);
         setStatus('ACTIVE'); // Fail open for connectivity issues
     }
   };
@@ -69,7 +69,8 @@ const LicenseLock = ({ children }) => {
         if (res.ok) {
             const data = await res.json();
             alert(`Activation Successful! Valid until: ${data.expiry_date}`);
-            checkLicense(); // Refresh status
+            checkLicense(); // Refresh status immediately
+            setInputKey('');
         } else {
             setError("Invalid License Key. Please check and try again.");
         }
@@ -114,14 +115,14 @@ const LicenseLock = ({ children }) => {
                         type="text" 
                         required
                         placeholder="XXXX-XXXX-XXXX-XXXX" 
-                        className="w-full pl-12 p-3 bg-slate-900 text-white rounded-xl font-mono font-bold border border-slate-700 focus:border-blue-500 outline-none uppercase tracking-widest"
+                        className="w-full pl-12 p-3 bg-slate-900 text-white rounded-xl font-mono font-bold border border-slate-700 focus:border-blue-500 outline-none uppercase tracking-widest placeholder:text-slate-600"
                         value={inputKey}
                         onChange={e => setInputKey(e.target.value)}
                     />
                 </div>
                 
                 {error && (
-                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold bg-red-400/10 p-3 rounded-xl border border-red-400/20">
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold bg-red-400/10 p-3 rounded-xl border border-red-400/20 animate-in fade-in slide-in-from-top-2">
                         <ShieldAlert size={14}/> {error}
                     </div>
                 )}
@@ -129,7 +130,7 @@ const LicenseLock = ({ children }) => {
                 <button 
                     type="submit" 
                     disabled={activating || !inputKey}
-                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-500 transition-all flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-500 transition-all flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
                 >
                     {activating ? <Loader2 className="animate-spin" size={16}/> : "Reactivate System"}
                 </button>
@@ -161,7 +162,10 @@ const LicenseLock = ({ children }) => {
                         License Expiring Soon: {daysLeft} Days Remaining
                     </span>
                 </div>
-                <button className="text-xs font-bold bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition-colors uppercase">
+                <button 
+                    onClick={() => window.location.href = '/settings'}
+                    className="text-xs font-bold bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition-colors uppercase"
+                >
                     Renew Now
                 </button>
             </div>

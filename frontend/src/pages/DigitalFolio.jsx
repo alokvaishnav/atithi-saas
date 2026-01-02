@@ -3,11 +3,9 @@ import { useParams } from 'react-router-dom';
 import { 
   Loader2, ShieldCheck, Download, Share2, 
   MapPin, Phone, CheckCircle, AlertCircle, 
-  QrCode, Copy 
+  QrCode, Copy, Plus, Trash
 } from 'lucide-react';
 import { API_URL } from '../config';
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
 
 const DigitalFolio = () => {
   const { id } = useParams();

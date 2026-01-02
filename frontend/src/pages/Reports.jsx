@@ -2,15 +2,14 @@ import { useEffect, useState } from 'react';
 import { 
   BarChart3, Download, TrendingUp, Calendar, FileText, 
   Loader2, DollarSign, TrendingDown, PieChart, Zap, 
-  History, Activity, ArrowUpRight, Filter, ShieldAlert
+  History, Activity, ArrowUpRight, Filter, ShieldAlert,
+  Plus, Trash, CheckCircle
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Reports = () => {
-  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
+  const { token, role, user } = useAuth(); 
   const [data, setData] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);

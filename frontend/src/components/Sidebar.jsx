@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
-  BookOpen, ChevronRight, Settings, Package, CreditCard, X, 
+  BookOpen, ChevronRight, Settings, Package, X, 
   Server, BarChart3
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -17,7 +17,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 🔐 USE AUTH CONTEXT
   const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
-  // MOBILE AUTO-CLOSE
+  // MOBILE AUTO-CLOSE: Close sidebar when route changes on small screens
   useEffect(() => {
     if (onClose && window.innerWidth < 768) {
         onClose();
@@ -38,7 +38,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         
         if (res.ok) {
             const data = await res.json();
-            // Handle both object and array responses
+            // Handle both object and array responses (DRF sometimes returns list)
             const settings = Array.isArray(data) ? data[0] : data;
             
             if (settings && settings.hotel_name) {
@@ -69,7 +69,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       title: "Main",
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'], // Everyone
       items: [
-        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/' },
+        { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
       ]
     },
     {
@@ -107,11 +107,11 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
+        { icon: <Wallet size={18} />, label: 'Accounting', path: '/accounting' },
         // 🔒 Hide Staff Directory from Accountants (Only Owner/Manager)
         ...(['OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
             { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
         ] : []),
-        { icon: <BarChart3 size={18} />, label: 'Analytics', path: '/analytics' },
         { icon: <FileText size={18} />, label: 'Audit Reports', path: '/reports' },
       ]
     },
@@ -120,7 +120,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER'], 
       items: [
         { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
-        // Subscription usually hidden in MVP
+        // Subscription hidden in MVP
         // { icon: <CreditCard size={18} />, label: 'Subscription Plan', path: '/pricing' }, 
       ]
     },
@@ -153,14 +153,14 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* Brand Header */}
         <div className="p-8 border-b border-white/5 flex items-center justify-between bg-slate-950">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20 text-white">
               {hotelName ? hotelName.charAt(0).toUpperCase() : 'A'}
             </div>
-            <div>
-              <h1 className="text-sm font-black text-white italic tracking-tighter leading-none uppercase truncate max-w-[120px]">
+            <div className="overflow-hidden">
+              <h1 className="text-sm font-black text-white italic tracking-tighter leading-none uppercase truncate max-w-[140px]">
                 {hotelName || "ATITHI HMS"}
               </h1>
-              <p className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">Enterprise Cloud</p>
+              <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">Enterprise Cloud</p>
             </div>
           </div>
           
@@ -170,7 +170,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         </div>
 
         {/* Navigation Groups */}
-        <nav className="flex-1 p-4 space-y-8 overflow-y-auto scrollbar-hide py-8">
+        <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           {groups.map((group, index) => (
             (group.roles.includes(role) || user?.is_superuser) && group.items.length > 0 && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
@@ -182,7 +182,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                     <button
                       key={item.path}
                       onClick={() => navigate(item.path)}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
                         location.pathname === item.path 
                           ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/20 font-bold' 
                           : 'text-slate-400 hover:bg-white/5 hover:text-white'
@@ -210,7 +210,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 </div>
                 <button
                   onClick={() => navigate('/super-admin')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group ${
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
                     location.pathname === '/super-admin' 
                       ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
                       : 'text-purple-300 hover:bg-purple-500/10'
@@ -234,16 +234,16 @@ const Sidebar = ({ isOpen, onClose }) => {
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
                 <ShieldCheck size={16} className="text-blue-400"/>
               </div>
-              <div>
+              <div className="overflow-hidden">
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
-                  <p className="text-[11px] font-black text-white tracking-tight uppercase">
-                    {role || 'Staff'}
+                  <p className="text-[11px] font-black text-white tracking-tight uppercase truncate">
+                    {user?.username || role || 'Staff'}
                   </p>
               </div>
           </div>
           <button 
             onClick={handleLogout} 
-            className="w-full flex items-center space-x-3 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest border border-transparent hover:border-red-500/20 group"
+            className="w-full flex items-center space-x-3 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest border border-transparent hover:border-red-500/20 group outline-none"
           >
             <LogOut size={18} className="group-hover:scale-110 transition-transform" />
             <span>Exit System</span>

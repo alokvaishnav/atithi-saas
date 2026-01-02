@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { 
   User, Mail, Shield, Plus, Trash2, 
-  Loader2, X, KeyRound, CheckCircle, Ban 
+  Loader2, X, KeyRound, CheckCircle, Ban,
+  Trash 
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Staff = () => {
-  const { token, role, user: currentUser } = useAuth(); // 🟢 Use global auth state
+  const { token, role, user: currentUser } = useAuth(); 
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);

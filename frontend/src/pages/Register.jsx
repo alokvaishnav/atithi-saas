@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, Building, User, Lock, Mail, ArrowRight, 
-  Eye, EyeOff, CheckCircle, AlertCircle, ShieldCheck 
+  Eye, EyeOff, CheckCircle, AlertCircle, ShieldCheck,
+  Plus, Trash 
 } from 'lucide-react';
 import { API_URL } from '../config';
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
 
 const Register = () => {
   const [formData, setFormData] = useState({

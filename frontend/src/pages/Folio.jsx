@@ -2,18 +2,17 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, CreditCard, Send, CheckCircle, 
-  ArrowLeft, FileText, Download, Plus, Trash2, Loader2, LogOut, ShieldAlert 
+  ArrowLeft, FileText, Download, Plus, Trash2, Loader2, LogOut, ShieldAlert,
+  Trash 
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useReactToPrint } from 'react-to-print';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Folio = () => {
   const { id } = useParams(); 
   const navigate = useNavigate();
-  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
+  const { token, role, user } = useAuth(); 
   
   // Data State
   const [booking, setBooking] = useState(null);
@@ -125,8 +124,6 @@ const Folio = () => {
       if (!window.confirm("Void this transaction? This action is logged.")) return;
 
       try {
-          // Assuming an endpoint exists or using generic delete on payments
-          // Ideally: /api/payments/:id/void/
           const res = await fetch(`${API_URL}/api/payments/${paymentId}/`, {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${token}` }

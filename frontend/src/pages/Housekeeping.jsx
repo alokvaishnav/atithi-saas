@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { 
   Brush, CheckCircle, Clock, User, Plus, 
-  Loader2, Filter, AlertCircle, X, Wrench, Search 
+  Loader2, Filter, AlertCircle, X, Wrench, Search,
+  Trash 
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Housekeeping = () => {
-  const { token, role, user } = useAuth(); // 🟢 Use Global Auth
+  const { token, role, user } = useAuth(); 
   const [tasks, setTasks] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [staff, setStaff] = useState([]);

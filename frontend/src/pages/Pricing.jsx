@@ -6,7 +6,7 @@ import {
 
 const Pricing = () => {
   const [billingCycle, setBillingCycle] = useState('MONTHLY'); // MONTHLY | YEARLY
-  const currentPlan = "PRO"; // This would effectively come from your Auth Context
+  const currentPlan = "PRO"; // ℹ️ In a real app, fetch this from your backend/context
 
   const plans = [
     {
@@ -49,10 +49,10 @@ const Pricing = () => {
   ];
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans animate-in fade-in duration-500">
       
       {/* --- HERO SECTION --- */}
-      <div className="text-center max-w-2xl mx-auto mb-16">
+      <div className="text-center max-w-2xl mx-auto mb-16 pt-8">
         <h2 className="text-4xl font-black text-slate-800 tracking-tighter uppercase italic mb-4">Subscription Plans</h2>
         <p className="text-slate-500 font-medium mb-8">
             Manage your hotel operations with the power you need. Transparent pricing, no hidden fees.
@@ -80,13 +80,13 @@ const Pricing = () => {
       </div>
 
       {/* --- PRICING CARDS --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-20">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-20 px-2">
         {plans.map(plan => {
             const price = billingCycle === 'MONTHLY' ? plan.monthly : plan.yearly;
             const cycleLabel = billingCycle === 'MONTHLY' ? '/mo' : '/yr';
             
             return (
-                <div key={plan.name} className={`relative p-8 rounded-[40px] border-2 flex flex-col ${plan.color}`}>
+                <div key={plan.name} className={`relative p-8 rounded-[40px] border-2 flex flex-col transition-transform hover:scale-[1.02] duration-300 ${plan.color}`}>
                     {plan.recommended && (
                         <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-1">
                             <Star size={12} fill="currentColor"/> Most Popular
@@ -104,7 +104,7 @@ const Pricing = () => {
                     <ul className="space-y-4 mb-8 flex-1">
                         {plan.features.map(f => (
                             <li key={f} className="flex items-start gap-3 text-sm font-bold opacity-90">
-                                <div className={`w-5 h-5 rounded-full flex items-center justify-center mt-0.5 ${
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center mt-0.5 shrink-0 ${
                                     plan.name === 'PRO' || plan.name === 'ENTERPRISE' ? 'bg-white/20 text-white' : 'bg-green-100 text-green-600'
                                 }`}>
                                     <Check size={12}/>
@@ -114,7 +114,7 @@ const Pricing = () => {
                         ))}
                     </ul>
 
-                    <button className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg ${plan.btnColor}`}>
+                    <button className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 ${plan.btnColor}`}>
                         {currentPlan === plan.name ? 'Current Plan' : 'Upgrade Now'}
                     </button>
                 </div>
@@ -123,7 +123,7 @@ const Pricing = () => {
       </div>
 
       {/* --- TRUST BADGES --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-20">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-20 px-2">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
               <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center"><Lock size={24}/></div>
               <div>
@@ -148,34 +148,36 @@ const Pricing = () => {
       </div>
 
       {/* --- FEATURE COMPARISON --- */}
-      <div className="max-w-5xl mx-auto mb-20">
+      <div className="max-w-5xl mx-auto mb-20 px-2">
           <h3 className="text-2xl font-black text-slate-800 uppercase italic text-center mb-8">Compare Features</h3>
           <div className="bg-white rounded-[30px] border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                          <th className="p-6 text-xs font-black text-slate-500 uppercase tracking-widest">Feature</th>
-                          <th className="p-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Starter</th>
-                          <th className="p-6 text-xs font-black text-blue-600 uppercase tracking-widest text-center">Pro</th>
-                          <th className="p-6 text-xs font-black text-purple-600 uppercase tracking-widest text-center">Enterprise</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                      {features.map((feat, i) => (
-                          <tr key={i} className="hover:bg-slate-50/50">
-                              <td className="p-4 pl-6 font-bold text-slate-700 text-sm">{feat.name}</td>
-                              <td className="p-4 text-center">{feat.starter ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
-                              <td className="p-4 text-center bg-blue-50/30">{feat.pro ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
-                              <td className="p-4 text-center">{feat.ent ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
+              <div className="overflow-x-auto">
+                  <table className="w-full text-left min-w-[600px]">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                              <th className="p-6 text-xs font-black text-slate-500 uppercase tracking-widest">Feature</th>
+                              <th className="p-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Starter</th>
+                              <th className="p-6 text-xs font-black text-blue-600 uppercase tracking-widest text-center">Pro</th>
+                              <th className="p-6 text-xs font-black text-purple-600 uppercase tracking-widest text-center">Enterprise</th>
                           </tr>
-                      ))}
-                  </tbody>
-              </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {features.map((feat, i) => (
+                              <tr key={i} className="hover:bg-slate-50/50">
+                                  <td className="p-4 pl-6 font-bold text-slate-700 text-sm">{feat.name}</td>
+                                  <td className="p-4 text-center">{feat.starter ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
+                                  <td className="p-4 text-center bg-blue-50/30">{feat.pro ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
+                                  <td className="p-4 text-center">{feat.ent ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
           </div>
       </div>
 
       {/* --- FAQ SECTION --- */}
-      <div className="max-w-4xl mx-auto mb-20">
+      <div className="max-w-4xl mx-auto mb-20 px-2">
           <h3 className="text-2xl font-black text-slate-800 uppercase italic text-center mb-8 flex items-center justify-center gap-2">
               <HelpCircle size={28} className="text-slate-400"/> Frequently Asked Questions
           </h3>
@@ -200,7 +202,7 @@ const Pricing = () => {
       </div>
 
       {/* --- ENTERPRISE BANNER --- */}
-      <div className="max-w-5xl mx-auto bg-slate-900 text-white p-10 rounded-[40px] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl shadow-slate-900/20">
+      <div className="max-w-5xl mx-auto bg-slate-900 text-white p-10 rounded-[40px] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl shadow-slate-900/20 mb-8 mx-4">
             <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
                 <Crown size={200}/>
             </div>
@@ -213,10 +215,10 @@ const Pricing = () => {
             </div>
 
             <div className="flex gap-4 relative z-10">
-                <a href="tel:+919876543210" className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 transition-all">
+                <a href="tel:+919876543210" className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 transition-all shadow-lg">
                     <Phone size={16}/> Call Sales
                 </a>
-                <a href="mailto:sales@atithi.com" className="bg-slate-800 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 flex items-center gap-2 transition-all">
+                <a href="mailto:sales@atithi.com" className="bg-slate-800 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 flex items-center gap-2 transition-all border border-slate-700">
                     <Mail size={16}/> Email Us
                 </a>
             </div>

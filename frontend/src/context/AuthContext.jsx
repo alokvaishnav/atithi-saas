@@ -43,6 +43,7 @@ export const AuthProvider = ({ children }) => {
                 setUser(parsedUser);
                 
                 // 🟢 CRITICAL FIX: Ensure Role is Read Correctly
+                // Prioritize Superuser status, then specific role, fallback to STAFF
                 const activeRole = parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF');
                 setRole(activeRole);
                 
@@ -51,6 +52,7 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("Auth Restoration Error:", error);
+            // If data is corrupted, clear it to prevent loops
             logout(); 
         } finally {
             setLoading(false);
@@ -109,6 +111,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // 4️⃣ RBAC Helper: Enhanced with Superuser bypass
+  // usage: hasRole(['OWNER', 'MANAGER'])
   const hasRole = (allowedRoles) => {
       if (!role) return false;
       // Owners and Superusers bypass role checks
@@ -117,6 +120,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // 5️⃣ Live Settings Updater
+  // Updates the context and localStorage when user changes settings
   const updateGlobalProfile = (name) => {
       // Update state
       setHotelName(name);

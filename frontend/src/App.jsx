@@ -1,5 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ShieldAlert, LogOut, Loader2, Menu, User, Hotel } from 'lucide-react'; 
+import { 
+  ShieldAlert, LogOut, Loader2, Menu, User, Hotel, 
+  Plus, Trash, CheckCircle 
+} from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
 

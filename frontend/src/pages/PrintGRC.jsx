@@ -23,10 +23,10 @@ const PrintGRC = () => {
         }
     };
     fetchBooking();
-  }, [bookingId]);
+  }, [bookingId, token]);
 
   const handlePrint = useReactToPrint({
-    content: () => printRef.current,
+    contentRef: printRef, // Updated for newer react-to-print versions
     documentTitle: `GRC_${bookingId}_${booking?.guest_details?.full_name || 'Guest'}`,
   });
 
@@ -54,12 +54,12 @@ const PrintGRC = () => {
       </div>
 
       {/* PRINTABLE AREA (A4 Width approx) */}
-      <div className="bg-white p-[10mm] max-w-[210mm] mx-auto shadow-2xl border border-slate-200" ref={printRef}>
+      <div className="bg-white p-[10mm] max-w-[210mm] mx-auto shadow-2xl border border-slate-200 print:shadow-none print:border-none" ref={printRef}>
         
         {/* 1. HEADER */}
         <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-6">
             <div className="flex gap-4">
-                <div className="w-16 h-16 bg-slate-900 text-white flex items-center justify-center rounded-lg">
+                <div className="w-16 h-16 bg-slate-900 text-white flex items-center justify-center rounded-lg print:border print:border-slate-900">
                     <Building2 size={32}/>
                 </div>
                 <div>
@@ -77,7 +77,7 @@ const PrintGRC = () => {
         </div>
 
         {/* 2. REGISTRATION DETAILS */}
-        <div className="grid grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 border border-slate-200 rounded-lg">
+        <div className="grid grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 border border-slate-200 rounded-lg print:bg-white print:border-slate-300">
             <div>
                 <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">GRC Number</span>
                 <span className="text-sm font-bold text-slate-900">#{booking.id}</span>
@@ -124,8 +124,8 @@ const PrintGRC = () => {
 
                 <div className="col-span-2">
                     <span className="block text-[9px] font-bold uppercase text-slate-400 mb-1">Permanent Address</span>
-                    <div className="border-b border-slate-300 pb-1 text-sm font-medium h-12">
-                        {booking.guest_details?.address}
+                    <div className="border-b border-slate-300 pb-1 text-sm font-medium h-auto min-h-[1.5rem]">
+                        {booking.guest_details?.address || "__________________________________________________"}
                     </div>
                 </div>
 
@@ -138,7 +138,7 @@ const PrintGRC = () => {
 
                 <div>
                     <span className="block text-[9px] font-bold uppercase text-slate-400 mb-1">Email Address</span>
-                    <div className="border-b border-slate-300 pb-1 text-sm font-medium">
+                    <div className="border-b border-slate-300 pb-1 text-sm font-medium truncate">
                         {booking.guest_details?.email}
                     </div>
                 </div>
@@ -232,7 +232,7 @@ const PrintGRC = () => {
         </div>
 
         {/* 8. OFFICE USE ONLY */}
-        <div className="mt-8 bg-slate-100 border border-slate-300 p-2 rounded flex justify-between items-center px-4">
+        <div className="mt-8 bg-slate-100 border border-slate-300 p-2 rounded flex justify-between items-center px-4 print:bg-white print:border-slate-400">
             <span className="text-[9px] font-black uppercase text-slate-400">For Office Use Only</span>
             <div className="flex gap-8">
                 <div className="flex items-center gap-2">

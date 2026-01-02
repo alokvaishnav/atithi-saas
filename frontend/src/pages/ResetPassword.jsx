@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Lock, Loader2, Eye, EyeOff, CheckCircle, 
-  AlertCircle, ShieldCheck, ArrowRight 
+  AlertCircle, ShieldCheck, ArrowRight,
+  Plus, Trash
 } from 'lucide-react';
 import { API_URL } from '../config';
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
 
 const ResetPassword = () => {
   const { uid, token } = useParams();

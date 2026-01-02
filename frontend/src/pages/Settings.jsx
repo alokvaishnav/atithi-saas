@@ -3,15 +3,13 @@ import {
   Save, Building, MapPin, Globe, Phone, 
   Loader2, Image as ImageIcon, Mail, FileText,
   Server, Lock, MessageCircle, Eye, EyeOff, CheckCircle,
-  Upload, Clock, Coins, Info
+  Upload, Clock, Coins, Info, Plus, Trash
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Settings = () => {
-  const { token, updateGlobalProfile } = useAuth(); // 🟢 Use global token & profile updater
+  const { token, updateGlobalProfile } = useAuth(); 
   
   const [formData, setFormData] = useState({
     // General & Branding

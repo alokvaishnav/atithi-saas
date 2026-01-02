@@ -2,11 +2,19 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-local-dev-key'
-DEBUG = True # We keep this True for local dev
-ALLOWED_HOSTS = ['*']
 
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = 'django-insecure-local-dev-key-CHANGE-IN-PROD'
+
+# SECURITY WARNING: don't run with debug turned on in production!
+# Set to False when deploying to AWS/DigitalOcean public IP
+DEBUG = True
+
+ALLOWED_HOSTS = ['*']  # Allow all hosts for dev/AWS EC2 (Restrict in prod)
+
+# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -14,15 +22,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    # Third Party Apps
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'core',
-    'hotel',
+    
+    # Local Apps
+    'core',        # Auth & Users
+    'atithi_api',  # Main Logic (Renamed to match apps.py config)
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', # Critical for Frontend connection
+    'corsheaders.middleware.CorsMiddleware', # Must be at the top for React to work
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -52,6 +64,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'atithi_api.wsgi.application'
 
+# Database
+# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -59,8 +73,43 @@ DATABASES = {
     }
 }
 
+# Custom User Model
 AUTH_USER_MODEL = 'core.CustomUser'
 
+# Password validation
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+# Internationalization
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'Asia/Kolkata' # Set to your local timezone for correct reports
+USE_I18N = True
+USE_TZ = True
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# Media Files (User Uploads like Hotel Logos)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# REST Framework Config
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -68,16 +117,20 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Optional: Add pagination globally
+    # 'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # 'PAGE_SIZE': 10
 }
 
+# JWT Settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),  # Long life for dev convenience
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS Settings (Allow your React App)
-CORS_ALLOW_ALL_ORIGINS = True 
-
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# CORS Settings (Allow React Frontend)
+CORS_ALLOW_ALL_ORIGINS = True  # For dev. In prod, list specific domains.
+CORS_ALLOW_CREDENTIALS = True

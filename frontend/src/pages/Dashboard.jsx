@@ -4,13 +4,11 @@ import {
   CheckCircle, AlertCircle, 
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, TrendingDown,
   ArrowUpRight, ShieldCheck, Brush, History, Activity, ListFilter,
-  PieChart
+  PieChart, Plus, Trash
 } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
 import { API_URL } from '../config'; 
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const Dashboard = () => {
   // --- CORE STATES ---

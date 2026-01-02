@@ -8,12 +8,10 @@ import {
   Zap 
 } from 'lucide-react';
 import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const SuperAdmin = () => {
-  const { token, user } = useAuth(); // 🟢 Global Auth
+  const { token, user } = useAuth(); 
   
   const [tenants, setTenants] = useState([]);
   const [stats, setStats] = useState({ total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
@@ -420,4 +418,3 @@ const PricingControl = ({ title, current, icon: Icon }) => (
 );
 
 export default SuperAdmin;
-

@@ -2,10 +2,8 @@ import { useState } from 'react';
 import { 
   Mail, Phone, HelpCircle, FileText, MessageSquare, 
   Send, Server, Database, Wifi, CheckCircle, 
-  Loader2 
+  Loader2, Plus, Trash
 } from 'lucide-react';
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
 
 const Support = () => {
   const [ticket, setTicket] = useState({ subject: '', category: 'BUG', message: '' });

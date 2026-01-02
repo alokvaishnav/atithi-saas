@@ -3,16 +3,15 @@ import {
   CheckCircle, LogIn, LogOut, User, 
   Briefcase, Grid, AlertTriangle, Calendar,
   Search, Loader2, BedDouble, Clock, ShieldAlert,
-  ConciergeBell, FileText, Calculator, ChevronRight, Zap
+  ConciergeBell, FileText, Calculator, ChevronRight, Zap,
+  Plus, Trash
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
-import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; 
 
 const FrontDesk = () => {
-  const { token } = useAuth(); // 🟢 Use Global Auth
+  const { token } = useAuth(); 
   
   // --- CORE STATES ---
   const [rooms, setRooms] = useState([]);
@@ -68,8 +67,8 @@ const FrontDesk = () => {
   const markRoomClean = async (id) => {
     if(!window.confirm("Mark room as clean and ready?")) return;
     try {
-        await fetch(`${API_URL}/api/rooms/${id}/mark-clean/`, { // Assuming custom endpoint or PATCH
-            method: 'PATCH', // Changed to PATCH to be safe if custom action not set up
+        await fetch(`${API_URL}/api/rooms/${id}/mark-clean/`, { 
+            method: 'PATCH', 
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ status: 'AVAILABLE' })
         });

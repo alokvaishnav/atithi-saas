@@ -2,7 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 🌟 CUSTOM SCROLLBAR */
+/* 🌟 GLOBAL RESETS (Crucial for Full Screen Layout) */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* 🌟 GLOBAL STYLES */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif; /* Matches index.html */
+  background-color: #f8fafc; /* Slate-50 */
+  color: #0f172a; /* Slate-900 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 🌟 CUSTOM SCROLLBAR (Chrome, Safari, Opera) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -11,34 +28,29 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #cbd5e1; /* slate-300 */
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #94a3b8; /* slate-400 */
 }
 
-/* 🌟 GLOBAL STYLES */
-body {
-  background-color: #f8fafc; /* Slate-50 */
-  color: #0f172a; /* Slate-900 */
-}
-
-/* Hide scrollbar for clean UI but keep functionality */
+/* 🌟 UTILITY: HIDE SCROLLBAR */
+/* Used in POS and Rooms for cleaner horizontal scrolling */
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
 }
 .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
 }
 
-/* Animation Utilities */
+/* 🌟 UTILITY: ANIMATIONS */
 .fade-in {
-  animation: fadeIn 0.5s ease-in-out;
+  animation: fadeIn 0.3s ease-in-out;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
 }

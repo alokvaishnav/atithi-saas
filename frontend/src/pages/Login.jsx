@@ -36,6 +36,7 @@ const Login = () => {
     try {
       // 🟢 FIX: We delegate the API call to AuthContext.
       // This ensures the role is parsed and saved correctly before we redirect.
+      // 
       const result = await login(username, password);
 
       if (result.success) {

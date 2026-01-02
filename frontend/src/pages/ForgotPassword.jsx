@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Mail, Loader2, ArrowLeft, KeyRound, 
-  CheckCircle, AlertCircle, Timer, HelpCircle, Phone 
+  CheckCircle, AlertCircle, Timer, HelpCircle, Phone,
+  Plus, Trash 
 } from 'lucide-react';
 import { API_URL } from '../config';
-
-import { Plus, Trash, CheckCircle } from 'lucide-react';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
