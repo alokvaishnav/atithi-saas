@@ -80,3 +80,10 @@ class HousekeepingTask(models.Model):
     task_type = models.CharField(max_length=100) # Cleaning, Repair
     status = models.CharField(max_length=50, default='PENDING') # PENDING, COMPLETED
     due_date = models.DateField()
+
+class ActivityLog(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    action = models.CharField(max_length=255) # e.g., "Checked in Guest"
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self): return self.action
