@@ -39,3 +39,20 @@ class BookingSerializer(serializers.ModelSerializer):
         nights = max(1, (validated_data['check_out_date'] - validated_data['check_in_date']).days)
         total = room.price_per_night * nights
         return Booking.objects.create(guest=guest, room=room, total_amount=total, **validated_data)
+
+class InventorySerializer(serializers.ModelSerializer):
+    class Meta: model = InventoryItem; fields = '__all__'
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    class Meta: model = Expense; fields = '__all__'
+
+class MenuItemSerializer(serializers.ModelSerializer):
+    class Meta: model = MenuItem; fields = '__all__'
+
+class OrderSerializer(serializers.ModelSerializer):
+    class Meta: model = Order; fields = '__all__'
+
+class HousekeepingTaskSerializer(serializers.ModelSerializer):
+    room_number = serializers.CharField(source='room.room_number', read_only=True)
+    staff_name = serializers.CharField(source='assigned_to.username', read_only=True)
+    class Meta: model = HousekeepingTask; fields = '__all__'

@@ -7,6 +7,12 @@ router.register(r'rooms', RoomViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'guests', GuestViewSet)
 
+router.register(r'inventory', InventoryViewSet)
+router.register(r'expenses', ExpenseViewSet)
+router.register(r'menu-items', MenuItemViewSet)
+router.register(r'orders', OrderViewSet)
+router.register(r'housekeeping', HousekeepingViewSet)
+
 urlpatterns = [
     path('', include(router.urls)),
     path('login/', CustomLoginView.as_view(), name='login'),
