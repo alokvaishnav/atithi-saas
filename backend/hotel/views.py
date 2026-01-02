@@ -3,12 +3,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Room, Booking, HotelSettings, Guest
-from .serializers import RoomSerializer, BookingSerializer, GuestSerializer
-from core.models import CustomUser
 
-from .models import InventoryItem, Expense, MenuItem, Order, HousekeepingTask
-from .serializers import InventorySerializer, ExpenseSerializer, MenuItemSerializer, OrderSerializer, HousekeepingTaskSerializer
+# UPDATE THESE TWO LINES:
+from .models import Room, Booking, HotelSettings, Guest, InventoryItem, Expense, MenuItem, Order, HousekeepingTask
+from .serializers import RoomSerializer, BookingSerializer, GuestSerializer, InventorySerializer, ExpenseSerializer, MenuItemSerializer, OrderSerializer, HousekeepingTaskSerializer
+
+from core.models import CustomUser
 
 class CustomTokenSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import HotelSettings, Room, Guest, Booking
+from .models import HotelSettings, Room, Guest, Booking, InventoryItem, Expense, MenuItem, Order, HousekeepingTask
 from core.models import CustomUser
 
 class HotelSettingsSerializer(serializers.ModelSerializer):
