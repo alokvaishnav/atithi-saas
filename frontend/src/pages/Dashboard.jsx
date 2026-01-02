@@ -33,16 +33,20 @@ const Dashboard = () => {
   const canSeeLogs = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
 
   // --- ANALYTICS CALCULATION (Client Side fallback / Enhancement) ---
-  const calculateAnalytics = (currentRooms, currentBookings) => {
+  const calculateAnalytics = useCallback((currentRooms, currentBookings) => {
+    // Safety check: Ensure inputs are arrays
+    const safeRooms = Array.isArray(currentRooms) ? currentRooms : [];
+    const safeBookings = Array.isArray(currentBookings) ? currentBookings : [];
+
     // 1. Operational Tasks (Always Visible)
-    const dirtyRooms = currentRooms.filter(r => r.status === 'DIRTY');
+    const dirtyRooms = safeRooms.filter(r => r.status === 'DIRTY');
     setTasks(dirtyRooms);
 
     // 2. Financials (Restricted)
     if (canSeeFinance) {
-        // Simple client-side calc for immediate feedback, real data comes from /analytics/ endpoint
-        const totalRev = currentBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
-        const totalPaid = currentBookings.reduce((sum, b) => {
+        // Simple client-side calc for immediate feedback
+        const totalRev = safeBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
+        const totalPaid = safeBookings.reduce((sum, b) => {
             const paid = b.payments?.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0) || 0;
             return sum + paid;
         }, 0);
@@ -51,10 +55,10 @@ const Dashboard = () => {
         const estimatedExpenses = totalRev * 0.4; 
         
         setFinancials({
-            revenue: totalRev,
-            expenses: estimatedExpenses,
-            profit: totalRev - estimatedExpenses,
-            liability: totalRev - totalPaid 
+            revenue: totalRev || 0,
+            expenses: estimatedExpenses || 0,
+            profit: (totalRev - estimatedExpenses) || 0,
+            liability: (totalRev - totalPaid) || 0 
         });
 
         // Trend Data (Last 7 Days)
@@ -66,7 +70,7 @@ const Dashboard = () => {
             last7Days[d.toISOString().split('T')[0]] = 0;
         }
 
-        currentBookings.forEach(b => {
+        safeBookings.forEach(b => {
             const date = b.check_in_date; 
             if (last7Days[date] !== undefined) {
                 last7Days[date] += parseFloat(b.total_amount || 0);
@@ -75,11 +79,11 @@ const Dashboard = () => {
 
         const trend = Object.keys(last7Days).map(date => ({
             date,
-            daily_revenue: last7Days[date]
+            daily_revenue: last7Days[date] || 0
         }));
         setTrendData(trend);
     }
-  };
+  }, [canSeeFinance]);
 
   // --- SMART DATA FETCHING ---
   const fetchData = useCallback(async (showLoader = false) => {
@@ -98,7 +102,6 @@ const Dashboard = () => {
       ];
 
       // 2. Restricted Data (Conditional)
-      // We use a null placeholder to keep array indices consistent
       const fetchLogs = canSeeLogs ? fetch(`${API_URL}/api/logs/`, { headers }) : Promise.resolve(null);
       const fetchAnalytics = canSeeFinance ? fetch(`${API_URL}/api/analytics/`, { headers }) : Promise.resolve(null);
 
@@ -108,33 +111,27 @@ const Dashboard = () => {
           fetchAnalytics
       ]);
 
-      if (resRooms.ok && resBookings.ok) {
+      if (resRooms?.ok && resBookings?.ok) {
         const roomsData = await resRooms.json();
         const bookingsData = await resBookings.json();
         
-        // Safety check: Ensure arrays
-        const safeRooms = Array.isArray(roomsData) ? roomsData : [];
-        const safeBookings = Array.isArray(bookingsData) ? bookingsData : [];
-
-        setRooms(safeRooms);
-        setBookings(safeBookings);
+        setRooms(Array.isArray(roomsData) ? roomsData : []);
+        setBookings(Array.isArray(bookingsData) ? bookingsData : []);
         
         // Handle Restricted Data
         if (resLogs && resLogs.ok) setLogs(await resLogs.json());
+        
         if (resAnalytics && resAnalytics.ok) {
             const analyticsData = await resAnalytics.json();
             setAnalyticsAPI(analyticsData);
-            // If backend provides pre-calculated financials, use them here
             if(analyticsData.financials) {
                  setFinancials(analyticsData.financials);
                  if(analyticsData.trend) setTrendData(analyticsData.trend);
             } else {
-                 // Fallback to client calc
-                 calculateAnalytics(safeRooms, safeBookings);
+                 calculateAnalytics(roomsData, bookingsData);
             }
         } else {
-             // Fallback if analytics endpoint fails or not called
-             calculateAnalytics(safeRooms, safeBookings);
+             calculateAnalytics(roomsData, bookingsData);
         }
       }
 
@@ -144,7 +141,7 @@ const Dashboard = () => {
       if (showLoader) setLoading(false); 
       setRefreshing(false);
     }
-  }, [token, canSeeFinance, canSeeLogs]);
+  }, [token, canSeeFinance, canSeeLogs, calculateAnalytics]);
 
   useEffect(() => { 
     fetchData(true); 
@@ -172,13 +169,10 @@ const Dashboard = () => {
   const maintenance = safeRooms.filter(r => r.status === 'MAINTENANCE').length;
   
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
-  
-  // Property Health Logic
-  // Prioritize backend health score if available, else calculate locally
   const healthScore = analyticsAPI?.health_score || (totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0);
 
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
-  const maxRevenue = Math.max(...revenueValues, 1000); // Avoid division by zero
+  const maxRevenue = Math.max(...revenueValues, 1000); 
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -247,7 +241,7 @@ const Dashboard = () => {
                 <ArrowUpRight className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
-              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.revenue.toLocaleString()}</h3>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(financials.revenue || 0).toLocaleString()}</h3>
             </div>
 
             <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-red-500 transition-all duration-500">
@@ -256,15 +250,15 @@ const Dashboard = () => {
                 <AlertCircle className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Est. Expenses</p>
-              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.expenses.toLocaleString()}</h3>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(financials.expenses || 0).toLocaleString()}</h3>
             </div>
 
             <div className="bg-slate-900 p-6 md:p-8 rounded-[40px] shadow-2xl relative overflow-hidden group border border-slate-800">
               <Wallet className="absolute -right-4 -bottom-4 w-32 h-32 text-white opacity-5 group-hover:scale-110 transition-transform duration-700" />
               <div className="relative z-10">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
+                <div className="w-12 h-12 bg-white/10 text-emerald-400 rounded-2xl flex items-center justify-center shadow-inner mb-6"><CheckCircle size={28}/></div>
                 <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">Net Profit Flow</p>
-                <h3 className="text-2xl md:text-3xl font-black text-white italic tracking-tighter">₹{financials.profit.toLocaleString()}</h3>
+                <h3 className="text-2xl md:text-3xl font-black text-white italic tracking-tighter">₹{(financials.profit || 0).toLocaleString()}</h3>
               </div>
             </div>
 
@@ -273,7 +267,7 @@ const Dashboard = () => {
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-orange-50 text-orange-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-orange-600 group-hover:text-white transition-colors"><BarChart3 size={28}/></div>
               </div>
               <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Pending Collections</p>
-              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{financials.liability.toLocaleString()}</h3>
+              <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(financials.liability || 0).toLocaleString()}</h3>
             </div>
           </div>
       )}
@@ -381,8 +375,8 @@ const Dashboard = () => {
             <table className="w-full text-sm text-left">
               <tbody className="divide-y divide-slate-50">
                 {expectedDepartures.length > 0 ? expectedDepartures.map(b => {
-                    const paid = b.payments?.reduce((sum, p) => sum + parseFloat(p.amount), 0) || 0;
-                    const due = parseFloat(b.total_amount) - paid;
+                    const paid = b.payments?.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) || 0;
+                    const due = parseFloat(b.total_amount || 0) - paid;
                     const showDue = canSeeFinance; 
                     return (
                         <tr key={b.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/folio/${b.id}`)}>
