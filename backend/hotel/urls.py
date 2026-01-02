@@ -1,6 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RoomViewSet, BookingViewSet, GuestViewSet, CustomLoginView, RegisterView
+from .views import (
+    RoomViewSet, BookingViewSet, GuestViewSet, CustomLoginView, RegisterView,
+    InventoryViewSet, ExpenseViewSet, MenuItemViewSet, OrderViewSet, HousekeepingViewSet
+)
 
 router = DefaultRouter()
 router.register(r'rooms', RoomViewSet)
