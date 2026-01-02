@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config';
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const DigitalFolio = () => {
   const { id } = useParams();
   const [booking, setBooking] = useState(null);

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config';
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const Register = () => {
   const [formData, setFormData] = useState({
     hotel_name: '', 

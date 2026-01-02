@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config';
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const ResetPassword = () => {
   const { uid, token } = useParams();
   const navigate = useNavigate();

@@ -10,6 +10,8 @@ import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const Dashboard = () => {
   // --- CORE STATES ---
   const [rooms, setRooms] = useState([]);

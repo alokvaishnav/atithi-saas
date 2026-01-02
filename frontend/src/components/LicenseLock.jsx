@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { API_URL } from '../config';
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const LicenseLock = ({ children }) => {
   const [status, setStatus] = useState('LOADING'); // LOADING | ACTIVE | WARNING | EXPIRED
   const [daysLeft, setDaysLeft] = useState(0);

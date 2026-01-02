@@ -8,6 +8,8 @@ import {
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const Settings = () => {
   const { token, updateGlobalProfile } = useAuth(); // 🟢 Use global token & profile updater
   

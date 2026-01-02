@@ -8,6 +8,8 @@ import { API_URL } from '../config';
 import { useReactToPrint } from 'react-to-print';
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const Folio = () => {
   const { id } = useParams(); 
   const navigate = useNavigate();

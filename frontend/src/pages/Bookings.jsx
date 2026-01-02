@@ -8,6 +8,8 @@ import { API_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const Bookings = () => {
   const { token, role, user } = useAuth(); // 🟢 Get Token & Role
   const [bookings, setBookings] = useState([]);

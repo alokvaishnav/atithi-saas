@@ -7,6 +7,8 @@ import {
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const POS = () => {
   const { token, user } = useAuth(); // 🟢 Global Auth
   const [services, setServices] = useState([]);

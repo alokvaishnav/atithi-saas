@@ -6,6 +6,8 @@ import {
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const Housekeeping = () => {
   const { token, role, user } = useAuth(); // 🟢 Use Global Auth
   const [tasks, setTasks] = useState([]);

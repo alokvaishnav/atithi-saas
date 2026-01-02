@@ -9,6 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Context
 
+import { Plus, Trash, CheckCircle } from 'lucide-react';
+
 const FrontDesk = () => {
   const { token } = useAuth(); // 🟢 Use Global Auth
   
