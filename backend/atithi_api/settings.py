@@ -29,8 +29,8 @@ INSTALLED_APPS = [
     'corsheaders',
     
     # Local Apps
-    'core',        # Auth & Users
-    'atithi_api',  # Main Logic (Renamed to match apps.py config)
+    'core',   # Auth & Users
+    'hotel',  # Main Logic App
 ]
 
 MIDDLEWARE = [
