@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from datetime import datetime, timedelta
+
 # UPDATE THESE TWO LINES:
 from .models import Room, Booking, HotelSettings, Guest, InventoryItem, Expense, MenuItem, Order, HousekeepingTask
 from .serializers import RoomSerializer, BookingSerializer, GuestSerializer, InventorySerializer, ExpenseSerializer, MenuItemSerializer, OrderSerializer, HousekeepingTaskSerializer
@@ -72,3 +74,23 @@ class OrderViewSet(BaseSaaSViewSet):
 class HousekeepingViewSet(BaseSaaSViewSet):
     queryset = HousekeepingTask.objects.all()
     serializer_class = HousekeepingTaskSerializer
+
+# --- LICENSE SYSTEM ---
+class LicenseStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def get(self, request):
+        # Dummy Logic: Always return Active for 1 year
+        return Response({
+            'status': 'ACTIVE',
+            'days_left': 365,
+            'is_expired': False,
+            'expiry_date': (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+        })
+
+class LicenseActivateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    def post(self, request):
+        return Response({
+            'status': 'ACTIVE',
+            'expiry_date': (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d')
+        })
