@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-local-dev-key-CHANGE-IN-PROD'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Set to False when deploying to AWS/DigitalOcean public IP
+# Set to False when deploying to AWS/DigitalOcean public IP if you have a domain
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']  # Allow all hosts for dev/AWS EC2 (Restrict in prod)
@@ -117,9 +117,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    # Optional: Add pagination globally
-    # 'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    # 'PAGE_SIZE': 10
 }
 
 # JWT Settings

@@ -419,9 +419,6 @@ class POSChargeView(APIView):
             status='COMPLETED'
         )
         
-        # For direct POS payments, we might want to log this as a 'General' revenue or link it to a dummy booking
-        # But for MVP, creating the Order record is sufficient.
-        
         return Response({'status': 'Payment Processed'})
 
 

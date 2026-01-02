@@ -4,7 +4,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 
-# Import Views from the local app
+# Import Views from the 'hotel' app
 from hotel.views import (
     # ViewSets
     RoomViewSet, BookingViewSet, GuestViewSet, 
