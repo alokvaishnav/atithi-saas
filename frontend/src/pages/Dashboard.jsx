@@ -112,8 +112,12 @@ const Dashboard = () => {
         const roomsData = await resRooms.json();
         const bookingsData = await resBookings.json();
         
-        setRooms(roomsData);
-        setBookings(bookingsData);
+        // Safety check: Ensure arrays
+        const safeRooms = Array.isArray(roomsData) ? roomsData : [];
+        const safeBookings = Array.isArray(bookingsData) ? bookingsData : [];
+
+        setRooms(safeRooms);
+        setBookings(safeBookings);
         
         // Handle Restricted Data
         if (resLogs && resLogs.ok) setLogs(await resLogs.json());
@@ -126,11 +130,11 @@ const Dashboard = () => {
                  if(analyticsData.trend) setTrendData(analyticsData.trend);
             } else {
                  // Fallback to client calc
-                 calculateAnalytics(roomsData, bookingsData);
+                 calculateAnalytics(safeRooms, safeBookings);
             }
         } else {
              // Fallback if analytics endpoint fails or not called
-             calculateAnalytics(roomsData, bookingsData);
+             calculateAnalytics(safeRooms, safeBookings);
         }
       }
 
@@ -187,7 +191,7 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans animate-in fade-in duration-500">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
@@ -236,7 +240,7 @@ const Dashboard = () => {
 
       {/* 📊 FINANCIAL INTELLIGENCE (🔒 RESTRICTED) */}
       {canSeeFinance && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
             <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-200 shadow-sm group hover:border-blue-500 transition-all duration-500">
               <div className="flex justify-between items-start mb-6">
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors"><TrendingUp size={28}/></div>
