@@ -7,6 +7,9 @@ from .models import Room, Booking, HotelSettings, Guest
 from .serializers import RoomSerializer, BookingSerializer, GuestSerializer
 from core.models import CustomUser
 
+from .models import InventoryItem, Expense, MenuItem, Order, HousekeepingTask
+from .serializers import InventorySerializer, ExpenseSerializer, MenuItemSerializer, OrderSerializer, HousekeepingTaskSerializer
+
 class CustomTokenSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
@@ -49,3 +52,23 @@ class BookingViewSet(BaseSaaSViewSet):
 class GuestViewSet(BaseSaaSViewSet):
     queryset = Guest.objects.all()
     serializer_class = GuestSerializer
+
+class InventoryViewSet(BaseSaaSViewSet):
+    queryset = InventoryItem.objects.all()
+    serializer_class = InventorySerializer
+
+class ExpenseViewSet(BaseSaaSViewSet):
+    queryset = Expense.objects.all()
+    serializer_class = ExpenseSerializer
+
+class MenuItemViewSet(BaseSaaSViewSet):
+    queryset = MenuItem.objects.all()
+    serializer_class = MenuItemSerializer
+
+class OrderViewSet(BaseSaaSViewSet):
+    queryset = Order.objects.all()
+    serializer_class = OrderSerializer
+
+class HousekeepingViewSet(BaseSaaSViewSet):
+    queryset = HousekeepingTask.objects.all()
+    serializer_class = HousekeepingTaskSerializer

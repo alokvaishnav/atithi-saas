@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // 🔌 Connect to your Local Docker Backend
-const API_URL = 'http://16.171.144.127:8000/api';
+const API_URL = 'http://16.171.144.127/api';
 
 const api = axios.create({
     baseURL: API_URL,
