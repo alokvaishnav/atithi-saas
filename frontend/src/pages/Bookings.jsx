@@ -3,7 +3,7 @@ import {
   Plus, Search, Calendar, User, CheckCircle, 
   XCircle, Clock, Filter, Loader2, MoreVertical, 
   CreditCard, ArrowRight, X, Trash2, ShieldAlert,
-  Trash // Merged this one here
+  LogOut, Eye, BedDouble // Added for new actions
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useNavigate } from 'react-router-dom';
@@ -11,11 +11,18 @@ import { useAuth } from '../context/AuthContext';
 
 const Bookings = () => {
   const { token, role, user } = useAuth();
+  const navigate = useNavigate();
+  
   const [bookings, setBookings] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false); 
+  
+  // Filters
   const [filter, setFilter] = useState('ALL'); 
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Modal State
   const [showModal, setShowModal] = useState(false);
   
   // 🛡️ SECURITY: Only Owners and Managers can Delete bookings
@@ -31,9 +38,6 @@ const Bookings = () => {
     children: 0
   });
 
-  const [rooms, setRooms] = useState([]);
-  const navigate = useNavigate();
-
   // --- FETCH DATA ---
   const fetchData = async () => {
     if (!token) return;
@@ -44,7 +48,11 @@ const Bookings = () => {
         fetch(`${API_URL}/api/rooms/`, { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
-      if (resBookings.ok) setBookings(await resBookings.json());
+      if (resBookings.ok) {
+          const data = await resBookings.json();
+          // Sort by newest first
+          setBookings(data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+      }
       if (resRooms.ok) setRooms(await resRooms.json());
 
     } catch (err) {
@@ -56,20 +64,73 @@ const Bookings = () => {
 
   useEffect(() => { fetchData(); }, [token]);
 
+  // --- ACTIONS (AUTOMATION TRIGGERS) ---
+
+  const handleCheckIn = async (id) => {
+    if(!window.confirm("Confirm Guest Check-In? This will trigger the Welcome Message.")) return;
+    try {
+        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: 'CHECKED_IN' })
+        });
+        if(res.ok) {
+            alert("Guest Checked In! ✅\nWhatsApp notification sent.");
+            fetchData();
+        }
+    } catch(err) { console.error(err); }
+  };
+
+  const handleCheckOut = async (id) => {
+    if(!window.confirm("Confirm Check-Out? This will mark the room as DIRTY.")) return;
+    try {
+        const res = await fetch(`${API_URL}/api/bookings/${id}/checkout/`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if(res.ok) fetchData();
+    } catch(err) { console.error(err); }
+  };
+
+  const handleCancel = async (id) => {
+    if(!window.confirm("Are you sure you want to CANCEL this booking?")) return;
+    try {
+        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ status: 'CANCELLED' })
+        });
+        if(res.ok) fetchData();
+    } catch(err) { console.error(err); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this booking history? This cannot be undone.")) return;
+    try {
+        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+            setBookings(bookings.filter(b => b.id !== id));
+        } else {
+            alert("Failed to delete booking.");
+        }
+    } catch (err) { console.error(err); }
+  };
+
   // --- CREATE BOOKING ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (new Date(formData.check_out) <= new Date(formData.check_in)) {
         alert("Check-out date must be after Check-in date.");
         return;
     }
-
     setSubmitting(true);
 
     const payload = {
         ...formData,
-        room_id: parseInt(formData.room_id),
+        room_id: formData.room_id ? parseInt(formData.room_id) : null,
         adults: parseInt(formData.adults),
         children: parseInt(formData.children)
     };
@@ -100,27 +161,6 @@ const Bookings = () => {
     }
   };
 
-  // --- DELETE BOOKING (Admin Only) ---
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this booking? This cannot be undone.")) return;
-
-    try {
-        const res = await fetch(`${API_URL}/api/bookings/${id}/`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (res.ok) {
-            setBookings(bookings.filter(b => b.id !== id)); // Optimistic update
-        } else {
-            alert("Failed to delete booking.");
-        }
-    } catch (err) {
-        console.error(err);
-        alert("Server error during deletion.");
-    }
-  };
-
   // --- FILTERING ---
   const filteredBookings = bookings.filter(b => {
     const guestName = b.guest_details?.full_name || ""; 
@@ -135,7 +175,7 @@ const Bookings = () => {
           case 'CONFIRMED': return 'text-blue-600 bg-blue-50 border-blue-200';
           case 'CHECKED_IN': return 'text-green-600 bg-green-50 border-green-200';
           case 'CHECKED_OUT': return 'text-slate-500 bg-slate-100 border-slate-200';
-          case 'CANCELLED': return 'text-red-600 bg-red-50 border-red-200';
+          case 'CANCELLED': return 'text-red-600 bg-red-50 border-red-200 line-through';
           default: return 'text-slate-600 bg-white border-slate-200';
       }
   };
@@ -143,7 +183,7 @@ const Bookings = () => {
   if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
@@ -173,12 +213,12 @@ const Bookings = () => {
       </div>
 
       {/* TABS */}
-      <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
+      <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
         {['ALL', 'CONFIRMED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border-2 ${
+            className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border-2 whitespace-nowrap ${
               filter === f 
               ? 'bg-blue-600 border-blue-600 text-white shadow-lg' 
               : 'bg-white border-slate-200 text-slate-400 hover:border-blue-300'
@@ -215,27 +255,40 @@ const Bookings = () => {
                     <div className="text-right">
                         <p className="text-lg font-black text-slate-800">₹{parseFloat(booking.total_amount || 0).toLocaleString()}</p>
                         <p className={`text-[10px] font-bold uppercase tracking-widest ${booking.payment_status === 'PAID' ? 'text-green-500' : 'text-red-400'}`}>
-                            {booking.payment_status}
+                            {booking.payment_status || 'PENDING'}
                         </p>
                     </div>
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
-                    <button 
-                        onClick={() => navigate(`/folio/${booking.id}`)}
-                        className="px-6 py-3 bg-slate-50 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-colors flex-1 md:flex-none"
-                    >
-                        Manage Folio
+                <div className="flex items-center gap-2 w-full md:w-auto mt-4 md:mt-0 justify-end">
+                    
+                    {/* View Folio (Always visible) */}
+                    <button onClick={() => navigate(`/folio/${booking.id}`)} title="View Folio" className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors">
+                        <Eye size={18}/>
                     </button>
 
-                    {/* 🛡️ DELETE BUTTON (Admin Only) */}
-                    {isAdmin && (
-                        <button 
-                            onClick={() => handleDelete(booking.id)}
-                            className="p-3 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                            title="Delete Booking"
-                        >
+                    {/* Automation Buttons */}
+                    {booking.status === 'CONFIRMED' && (
+                        <>
+                            <button onClick={() => handleCheckIn(booking.id)} title="Check In (Triggers WhatsApp)" className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors">
+                                <CheckCircle size={18}/>
+                            </button>
+                            <button onClick={() => handleCancel(booking.id)} title="Cancel Booking" className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors">
+                                <XCircle size={18}/>
+                            </button>
+                        </>
+                    )}
+                    
+                    {booking.status === 'CHECKED_IN' && (
+                        <button onClick={() => handleCheckOut(booking.id)} title="Check Out" className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors">
+                            <LogOut size={18}/>
+                        </button>
+                    )}
+
+                    {/* Admin Delete (Only for Cancelled/Checked Out) */}
+                    {isAdmin && ['CANCELLED', 'CHECKED_OUT'].includes(booking.status) && (
+                        <button onClick={() => handleDelete(booking.id)} className="p-3 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Delete History">
                             <Trash2 size={18}/>
                         </button>
                     )}
@@ -275,10 +328,10 @@ const Bookings = () => {
                     </div>
 
                     <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Room</label>
-                        <select required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Room (Optional)</label>
+                        <select className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
                             value={formData.room_id} onChange={e => setFormData({...formData, room_id: e.target.value})}>
-                            <option value="">-- Choose Available Room --</option>
+                            <option value="">-- Assign Later --</option>
                             {rooms.filter(r => r.status === 'AVAILABLE').map(r => (
                                 <option key={r.id} value={r.id}>RM {r.room_number} ({r.room_type}) - ₹{r.price_per_night}</option>
                             ))}
@@ -289,12 +342,12 @@ const Bookings = () => {
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Check In</label>
                             <input required type="date" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
-                                value={formData.check_in} onChange={e => setFormData({...formData, check_in: e.target.value})} />
+                                value={formData.check_in} onChange={e => setFormData({...formData, check_in_date: e.target.value, check_in: e.target.value})} />
                         </div>
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Check Out</label>
                             <input required type="date" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
-                                value={formData.check_out} onChange={e => setFormData({...formData, check_out: e.target.value})} />
+                                value={formData.check_out} onChange={e => setFormData({...formData, check_out_date: e.target.value, check_out: e.target.value})} />
                         </div>
                     </div>
 

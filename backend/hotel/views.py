@@ -453,8 +453,8 @@ class LicenseActivateView(APIView):
 # --- 8. REPORTS & PDF GENERATION ---
 
 class DailyReportPDFView(APIView):
-    # This remains IsAuthenticated, but we handle token manually in GET
-    permission_classes = [permissions.IsAuthenticated]
+    # 🚨 FIX: AllowAny so we can manually check token inside get()
+    permission_classes = [permissions.AllowAny]
     
     def get(self, request):
         # --- NEW LOGIC TO ALLOW URL TOKEN FOR DOWNLOADS ---

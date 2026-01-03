@@ -27,7 +27,9 @@ const Settings = () => {
     check_out_time: '11:00',
     currency_symbol: '₹',
 
-    // Email (SMTP)
+    // Automation (Email)
+    auto_send_confirmation: false,
+    auto_send_invoice: false,
     smtp_server: '',
     smtp_port: '587',
     smtp_username: '',
@@ -48,7 +50,7 @@ const Settings = () => {
   // --- FETCH SETTINGS ---
   useEffect(() => {
     const fetchSettings = async () => {
-      if (!token) return; // Wait for token
+      if (!token) return; 
       
       try {
         const res = await fetch(`${API_URL}/api/settings/`, {
@@ -57,18 +59,17 @@ const Settings = () => {
         if (res.ok) {
             const data = await res.json();
             
-            // 🛠️ FIX: Handle both Array (old) and Object (new) responses
+            // Handle Array vs Object response
             const settings = Array.isArray(data) ? data[0] : data;
             
             if (settings) {
                 setFormData(prev => ({
                     ...prev,
                     ...settings,
-                    // Ensure password fields don't get overwritten with nulls
+                    // Ensure protected fields don't get overwritten with nulls
                     smtp_password: settings.smtp_password || '',
                     whatsapp_auth_token: settings.whatsapp_auth_token || ''
                 }));
-                // If logo exists from backend, set it as preview
                 if (settings.logo) setLogoPreview(settings.logo);
             }
         }
@@ -80,6 +81,15 @@ const Settings = () => {
     };
     fetchSettings();
   }, [token]);
+
+  // --- HANDLE INPUT CHANGES ---
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
 
   // --- HANDLE IMAGE SELECTION ---
   const handleLogoChange = (e) => {
@@ -148,8 +158,8 @@ const Settings = () => {
                 <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">General, Branding & Notifications</p>
             </div>
             <button 
-                form="settings-form" 
-                type="submit" 
+                onClick={handleSave} 
+                type="button" // Use type="button" to prevent default form submission unless inside form
                 disabled={saving}
                 className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 shadow-lg shadow-blue-200 flex items-center gap-2 transition-all disabled:opacity-70"
             >
@@ -216,8 +226,8 @@ const Settings = () => {
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Hotel Name</label>
                                     <div className="relative group">
                                         <Building className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                        <input required className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                            value={formData.hotel_name} onChange={e => setFormData({...formData, hotel_name: e.target.value})} />
+                                        <input required name="hotel_name" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                            value={formData.hotel_name} onChange={handleChange} />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -225,14 +235,14 @@ const Settings = () => {
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Currency Symbol</label>
                                         <div className="relative group">
                                             <Coins className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                            <input className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                                value={formData.currency_symbol} onChange={e => setFormData({...formData, currency_symbol: e.target.value})} />
+                                            <input name="currency_symbol" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                                value={formData.currency_symbol} onChange={handleChange} />
                                         </div>
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">GST / Tax ID</label>
-                                        <input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                            value={formData.tax_gst_number} onChange={e => setFormData({...formData, tax_gst_number: e.target.value})} />
+                                        <input name="tax_gst_number" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                            value={formData.tax_gst_number} onChange={handleChange} />
                                     </div>
                                 </div>
                             </div>
@@ -242,9 +252,9 @@ const Settings = () => {
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Description / Tagline</label>
                              <div className="relative group">
                                 <Info className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                <textarea rows="2" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all resize-none" 
+                                <textarea name="description" rows="2" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all resize-none" 
                                     placeholder="e.g. Luxury Stay in the Heart of the City"
-                                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                                    value={formData.description} onChange={handleChange} />
                             </div>
                         </div>
                     </div>
@@ -257,13 +267,13 @@ const Settings = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Standard Check-In Time</label>
-                                <input type="time" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent" 
-                                    value={formData.check_in_time} onChange={e => setFormData({...formData, check_in_time: e.target.value})} />
+                                <input name="check_in_time" type="time" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent" 
+                                    value={formData.check_in_time} onChange={handleChange} />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Standard Check-Out Time</label>
-                                <input type="time" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent" 
-                                    value={formData.check_out_time} onChange={e => setFormData({...formData, check_out_time: e.target.value})} />
+                                <input name="check_out_time" type="time" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent" 
+                                    value={formData.check_out_time} onChange={handleChange} />
                             </div>
                         </div>
                     </div>
@@ -276,28 +286,28 @@ const Settings = () => {
                         <div className="space-y-6">
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Full Address</label>
-                                <input className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                    value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                                <input name="address" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                    value={formData.address} onChange={handleChange} />
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="relative group">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Phone</label>
                                     <Phone className="absolute left-4 top-[2.4rem] text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                    <input className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                        value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                    <input name="phone" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                        value={formData.phone} onChange={handleChange} />
                                 </div>
                                 <div className="relative group">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Email</label>
                                     <Mail className="absolute left-4 top-[2.4rem] text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                    <input type="email" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                        value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                                    <input name="email" type="email" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                        value={formData.email} onChange={handleChange} />
                                 </div>
                                 <div className="relative group">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Website</label>
                                     <Globe className="absolute left-4 top-[2.4rem] text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                    <input className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                        value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} />
+                                    <input name="website" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                        value={formData.website} onChange={handleChange} />
                                 </div>
                             </div>
                         </div>
@@ -316,19 +326,31 @@ const Settings = () => {
                             Configure this to send booking confirmations and invoices automatically. For Gmail, use an <strong>App Password</strong>.
                         </p>
 
+                        {/* Automation Toggles */}
+                        <div className="flex gap-6 mb-8">
+                            <div className="flex items-center gap-3">
+                                <input type="checkbox" name="auto_send_confirmation" checked={formData.auto_send_confirmation} onChange={handleChange} className="w-5 h-5 rounded-md border-2 border-slate-300 checked:bg-blue-600"/>
+                                <label className="text-xs font-bold text-slate-700 uppercase">Auto-Send Booking Confirmation</label>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <input type="checkbox" name="auto_send_invoice" checked={formData.auto_send_invoice} onChange={handleChange} className="w-5 h-5 rounded-md border-2 border-slate-300 checked:bg-blue-600"/>
+                                <label className="text-xs font-bold text-slate-700 uppercase">Auto-Send Invoice on Checkout</label>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">SMTP Host</label>
                                 <div className="relative group">
                                     <Server className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                    <input placeholder="smtp.gmail.com" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                        value={formData.smtp_server} onChange={e => setFormData({...formData, smtp_server: e.target.value})} />
+                                    <input name="smtp_server" placeholder="smtp.gmail.com" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                        value={formData.smtp_server} onChange={handleChange} />
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">SMTP Port</label>
-                                <input placeholder="587" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                    value={formData.smtp_port} onChange={e => setFormData({...formData, smtp_port: e.target.value})} />
+                                <input name="smtp_port" placeholder="587" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                    value={formData.smtp_port} onChange={handleChange} />
                             </div>
                         </div>
 
@@ -337,8 +359,8 @@ const Settings = () => {
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Username / Email</label>
                                 <div className="relative group">
                                     <Mail className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                                    <input placeholder="hotel@gmail.com" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                        value={formData.smtp_username} onChange={e => setFormData({...formData, smtp_username: e.target.value})} />
+                                    <input name="smtp_username" placeholder="hotel@gmail.com" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                        value={formData.smtp_username} onChange={handleChange} />
                                 </div>
                             </div>
                             <div>
@@ -347,10 +369,11 @@ const Settings = () => {
                                     <Lock className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
                                     <input 
                                         type={showPassword ? "text" : "password"}
+                                        name="smtp_password"
                                         placeholder="App Password" 
                                         className="w-full pl-12 pr-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
                                         value={formData.smtp_password} 
-                                        onChange={e => setFormData({...formData, smtp_password: e.target.value})} 
+                                        onChange={handleChange} 
                                     />
                                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600">
                                         {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
@@ -373,16 +396,16 @@ const Settings = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Provider</label>
-                                <select className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all"
-                                    value={formData.whatsapp_provider} onChange={e => setFormData({...formData, whatsapp_provider: e.target.value})}>
+                                <select name="whatsapp_provider" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all"
+                                    value={formData.whatsapp_provider} onChange={handleChange}>
                                     <option value="META">Meta Cloud API (Official)</option>
                                     <option value="TWILIO">Twilio</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Phone Number ID</label>
-                                <input placeholder="e.g. 105672..." className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
-                                    value={formData.whatsapp_phone_id} onChange={e => setFormData({...formData, whatsapp_phone_id: e.target.value})} />
+                                <input name="whatsapp_phone_id" placeholder="e.g. 105672..." className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                    value={formData.whatsapp_phone_id} onChange={handleChange} />
                             </div>
                         </div>
 
@@ -392,10 +415,11 @@ const Settings = () => {
                                 <Lock className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
                                 <input 
                                     type={showPassword ? "text" : "password"}
+                                    name="whatsapp_auth_token"
                                     placeholder="Meta/Twilio Token" 
                                     className="w-full pl-12 pr-12 p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all font-mono text-sm" 
                                     value={formData.whatsapp_auth_token} 
-                                    onChange={e => setFormData({...formData, whatsapp_auth_token: e.target.value})} 
+                                    onChange={handleChange} 
                                 />
                                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600">
                                     {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}

@@ -99,7 +99,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST'],
       items: [
         { icon: <CalendarCheck size={18} />, label: 'Booking List', path: '/bookings' },
-        { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' },
+        { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' }, // Included here
       ]
     },
     {

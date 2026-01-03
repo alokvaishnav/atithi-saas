@@ -3,7 +3,7 @@ import {
   Plus, Search, BedDouble, Trash2, Edit3, 
   CheckCircle, Loader2, MoreVertical, X, Wrench, 
   AlertCircle, User, Brush, Wifi, Tv, Wind, Coffee,
-  Layers, Users, BarChart3
+  Layers, Users, BarChart3, Calendar
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
@@ -24,7 +24,7 @@ const Rooms = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
 
-  // 🛡️ SECURITY: Only Owners and Managers can Add/Edit/Delete rooms
+  // 🛡️ SECURITY
   const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
 
   // Form Data
@@ -35,7 +35,8 @@ const Rooms = () => {
     floor: '1',
     capacity: '2',
     status: 'AVAILABLE',
-    amenities: [] // Managed as an Array in Frontend state
+    amenities: [],
+    ical_link: '' // NEW FIELD
   });
 
   const AMENITY_OPTIONS = [
@@ -76,7 +77,7 @@ const Rooms = () => {
       occupancyRate: rooms.length > 0 ? Math.round((rooms.filter(r => r.status === 'OCCUPIED').length / rooms.length) * 100) : 0
   };
 
-  // --- SUBMIT (FIXED 400 ERROR) ---
+  // --- SUBMIT ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -85,12 +86,11 @@ const Rooms = () => {
       const url = isEditing ? `${API_URL}/api/rooms/${editId}/` : `${API_URL}/api/rooms/`;
       const method = isEditing ? 'PATCH' : 'POST';
 
-      // 🚨 CRITICAL FIX: Backend expects 'amenities' as a JSON String, but 'capacity' as a Number.
       const payload = {
           ...formData,
           price_per_night: parseFloat(formData.price_per_night),
           capacity: parseInt(formData.capacity),
-          amenities: JSON.stringify(formData.amenities) // Convert Array -> String
+          amenities: JSON.stringify(formData.amenities)
       };
 
       const res = await fetch(url, {
@@ -135,13 +135,10 @@ const Rooms = () => {
   };
 
   const openEdit = (room) => {
-    // 🚨 CRITICAL FIX: Parse the amenities string back to an Array for the UI
     let parsedAmenities = [];
     try {
         parsedAmenities = typeof room.amenities === 'string' ? JSON.parse(room.amenities) : room.amenities;
-    } catch (e) {
-        parsedAmenities = [];
-    }
+    } catch (e) { parsedAmenities = []; }
 
     setFormData({ 
         room_number: room.room_number, 
@@ -150,7 +147,8 @@ const Rooms = () => {
         floor: room.floor || '1',
         capacity: room.capacity || '2',
         status: room.status,
-        amenities: Array.isArray(parsedAmenities) ? parsedAmenities : []
+        amenities: Array.isArray(parsedAmenities) ? parsedAmenities : [],
+        ical_link: room.ical_link || ''
     });
     setEditId(room.id);
     setIsEditing(true);
@@ -169,7 +167,7 @@ const Rooms = () => {
   };
 
   const resetForm = () => {
-    setFormData({ room_number: '', room_type: 'SINGLE', price_per_night: '', floor: '1', capacity: '2', status: 'AVAILABLE', amenities: [] });
+    setFormData({ room_number: '', room_type: 'SINGLE', price_per_night: '', floor: '1', capacity: '2', status: 'AVAILABLE', amenities: [], ical_link: '' });
     setIsEditing(false);
     setEditId(null);
   };
@@ -286,7 +284,6 @@ const Rooms = () => {
           const design = getStatusDesign(room.status);
           const StatusIcon = design.icon;
           
-          // Parse amenities safely for display
           let displayAmenities = [];
           try {
              displayAmenities = typeof room.amenities === 'string' ? JSON.parse(room.amenities) : room.amenities;
@@ -302,7 +299,6 @@ const Rooms = () => {
                     <span className="text-[10px] font-black uppercase tracking-widest">{design.label}</span>
                 </div>
                 
-                {/* 🛡️ CONTEXT MENU: Hidden for non-admins */}
                 {isAdmin && (
                     <div className="relative group/menu">
                         <button className="p-1 text-slate-300 hover:text-slate-600"><MoreVertical size={18}/></button>
@@ -346,7 +342,6 @@ const Rooms = () => {
               <div className="mt-auto border-t border-slate-100 pt-4 flex justify-between items-center">
                 <p className="text-lg font-black text-slate-900 tracking-tight">₹{parseFloat(room.price_per_night).toLocaleString()}</p>
                 
-                {/* Quick Actions (Allowed for all users who can view the page) */}
                 {room.status === 'DIRTY' && (
                     <button onClick={() => handleStatusChange(room.id, 'AVAILABLE')} title="Mark Clean" className="bg-emerald-100 text-emerald-700 p-2 rounded-xl hover:bg-emerald-200 transition-colors">
                         <Brush size={16}/>
@@ -420,6 +415,36 @@ const Rooms = () => {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Price Per Night (₹)</label>
                         <input required type="number" placeholder="2500" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none text-lg transition-all" 
                             value={formData.price_per_night} onChange={e => setFormData({...formData, price_per_night: e.target.value})} />
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Channel Sync (Optional)</label>
+                        <div className="relative">
+                            <Calendar className="absolute left-3 top-3.5 text-slate-400" size={16}/>
+                            <input 
+                                type="url" 
+                                placeholder="Paste OTA iCal Link (Airbnb/Booking.com)" 
+                                className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all text-xs" 
+                                value={formData.ical_link} 
+                                onChange={e => setFormData({...formData, ical_link: e.target.value})} 
+                            />
+                        </div>
+                        {isEditing && editId && (
+                            <div className="mt-2 p-3 bg-blue-50 rounded-xl border border-blue-100 flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Your iCal Export Link</span>
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        const url = `${API_URL}/api/rooms/${editId}/ical/`;
+                                        navigator.clipboard.writeText(url);
+                                        alert("Link copied to clipboard!");
+                                    }}
+                                    className="text-[10px] font-black bg-white px-3 py-1 rounded-lg shadow-sm hover:text-blue-600"
+                                >
+                                    COPY LINK
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div>
