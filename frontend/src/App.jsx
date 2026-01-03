@@ -26,7 +26,7 @@ import CalendarView from './pages/CalendarView';
 import Folio from './pages/Folio';
 import POS from './pages/POS';
 import PrintGRC from './pages/PrintGRC';
-import OnboardingWizard from './pages/OnboardingWizard'; // NEW IMPORT
+import OnboardingWizard from './pages/OnboardingWizard'; 
 
 // --- MANAGEMENT MODULES ---
 import Rooms from './pages/Rooms';
@@ -156,7 +156,7 @@ const AppLayout = () => {
                 {/* 🟢 GENERAL ACCESS (Everyone) */}
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/support" element={<Support />} />
-                <Route path="/onboarding" element={<OnboardingWizard />} /> {/* NEW ROUTE */}
+                <Route path="/onboarding" element={<OnboardingWizard />} />
 
                 {/* 🟠 FRONT OFFICE & RESERVATIONS */}
                 <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />

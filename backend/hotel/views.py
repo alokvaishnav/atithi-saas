@@ -14,6 +14,7 @@ from .utils import generate_ical_for_room # Import iCal generator
 from django.db.models import Sum, Count, Q
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
+from django.contrib.auth import get_user_model # <--- ADDED THIS IMPORT
 from datetime import datetime, timedelta, date
 import csv
 import json
@@ -566,9 +567,12 @@ class SuperAdminStatsView(APIView):
     permission_classes = [permissions.IsAdminUser] # Ensures is_superuser=True
     
     def get(self, request):
+        User = get_user_model() # Get User Model safely
+        
         total_hotels = CustomUser.objects.filter(role='OWNER').count()
         total_rooms = Room.objects.count()
         
+        # Return Stats + List of Hotel Owners
         return Response({
             'stats': {
                 'total_hotels': total_hotels,
@@ -581,7 +585,30 @@ class SuperAdminStatsView(APIView):
                 'name': u.hotel_settings.hotel_name if hasattr(u, 'hotel_settings') else 'Unconfigured',
                 'owner': u.username,
                 'email': u.email,
-                'status': 'ACTIVE',
+                'status': 'ACTIVE' if u.is_active else 'SUSPENDED', # Return actual status
                 'joined': u.date_joined
             } for u in CustomUser.objects.filter(role='OWNER')]
         })
+
+    # --- ADDED THIS METHOD TO HANDLE BAN/UNBAN ACTIONS ---
+    def post(self, request):
+        action = request.data.get('action')
+        user_id = request.data.get('user_id')
+        User = get_user_model()
+
+        if action == 'TOGGLE_STATUS' and user_id:
+            try:
+                user = User.objects.get(id=user_id)
+                # Prevent banning yourself
+                if user.is_superuser:
+                    return Response({'error': 'Cannot ban Super Admin'}, status=400)
+                
+                # Toggle Status
+                user.is_active = not user.is_active
+                user.save()
+                
+                return Response({'status': 'Updated', 'new_status': 'ACTIVE' if user.is_active else 'SUSPENDED'})
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=404)
+        
+        return Response({'error': 'Invalid Action'}, status=400)

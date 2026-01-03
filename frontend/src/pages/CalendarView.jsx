@@ -83,7 +83,7 @@ const CalendarView = () => {
 
               return {
                   id: b.id,
-                  title: `RM ${roomNum} - ${b.guest_details?.full_name?.split(' ')[0]}`,
+                  title: `RM ${roomNum} - ${b.guest_details?.full_name?.split(' ')[0] || 'Guest'}`,
                   start: new Date(b.check_in_date),
                   end: new Date(b.check_out_date),
                   resource: b, // Keep full booking data accessible
@@ -112,8 +112,8 @@ const CalendarView = () => {
     });
     setEvents(updatedEvents);
 
-    // 2. Formatting dates for API (YYYY-MM-DD)
-    const formatDate = (d) => d.toISOString().split('T')[0];
+    // 2. Formatting dates for API (YYYY-MM-DD) safely
+    const formatDate = (d) => moment(d).format('YYYY-MM-DD');
 
     // 3. Backend Update
     try {

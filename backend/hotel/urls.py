@@ -1,42 +1,40 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    # ViewSets (CRUD operations handled by Router)
+    # --- ViewSets ---
     RoomViewSet, BookingViewSet, GuestViewSet, 
     InventoryViewSet, ExpenseViewSet, MenuItemViewSet, 
     OrderViewSet, HousekeepingViewSet, ActivityLogViewSet, 
     StaffViewSet,
 
-    # Auth & Account Views
+    # --- Auth & Account Views ---
     CustomLoginView, RegisterView, StaffRegisterView,
     PasswordResetRequestView, PasswordResetConfirmView,
 
-    # Core System Views
+    # --- Core System Views ---
     SettingsView, AnalyticsView,
     
-    # License Views
+    # --- License Views ---
     LicenseStatusView, LicenseActivateView,
 
-    # POS & Reports Views
+    # --- POS & Reports Views ---
     POSChargeView, ReportExportView, DailyReportPDFView,
 
-    # Super Admin Views
+    # --- Super Admin Views ---
     SuperAdminStatsView,
 
-    # Channel Manager View (NEW IMPORT)
+    # --- Channel Manager View ---
     RoomICalView
 )
 
 # --- ROUTER CONFIGURATION ---
-# This automatically generates URLs for standard CRUD operations (GET, POST, PUT, DELETE)
-# Example: /api/rooms/, /api/bookings/, /api/bookings/{id}/
 router = DefaultRouter()
 router.register(r'rooms', RoomViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'guests', GuestViewSet)
 router.register(r'inventory', InventoryViewSet)
 router.register(r'expenses', ExpenseViewSet)
-router.register(r'services', MenuItemViewSet)
+router.register(r'services', MenuItemViewSet) # Kept as 'services' per your code
 router.register(r'orders', OrderViewSet)
 router.register(r'housekeeping', HousekeepingViewSet)
 router.register(r'logs', ActivityLogViewSet)
@@ -72,7 +70,6 @@ urlpatterns = [
     path('reports/export/', ReportExportView.as_view(), name='report-export'),
 
     # 8. Channel Manager (NEW ROUTE)
-    # Provides the .ics file link for OTAs (Airbnb/Booking.com)
     path('rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
 
     # 9. Super Admin Controls

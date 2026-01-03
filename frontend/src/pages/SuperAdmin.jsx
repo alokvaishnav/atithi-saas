@@ -53,11 +53,13 @@ const SuperAdmin = () => {
       if (res.ok) {
         const data = await res.json();
         setTenants(data.hotels || []);
-        setStats(data.stats || stats);
+        setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
         
-        // Fetch Logs if needed
-        const logRes = await fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (logRes.ok) setLogs(await logRes.json());
+        // Fetch Logs
+        try {
+            const logRes = await fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (logRes.ok) setLogs(await logRes.json());
+        } catch (e) { console.log("Logs fetch failed", e); }
       }
     } catch (err) { 
       console.error("SuperAdmin Engine Error:", err); 
@@ -65,24 +67,28 @@ const SuperAdmin = () => {
       setLoading(false); 
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token]); 
 
   useEffect(() => { fetchStats(true); }, [fetchStats]);
 
   // --- ACTIONS ---
+  
+  // 🛠️ FIXED: Uses the correct POST endpoint defined in views.py
   const toggleStatus = async (id, currentStatus) => {
     if(!window.confirm(`Are you sure you want to ${currentStatus === 'ACTIVE' ? 'SUSPEND' : 'ACTIVATE'} this hotel?`)) return;
     
     try {
-        const newStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-        const res = await fetch(`${API_URL}/api/super-admin/tenants/${id}/`, {
-            method: 'PATCH',
+        const res = await fetch(`${API_URL}/api/super-admin/stats/`, { 
+            method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ status: newStatus })
+            body: JSON.stringify({ action: 'TOGGLE_STATUS', user_id: id })
         });
+        
         if(res.ok) {
-            setTenants(tenants.map(t => t.id === id ? { ...t, status: newStatus } : t));
-            fetchStats(false);
+            fetchStats(false); // Refresh list
+        } else {
+            const err = await res.json();
+            alert("Action Failed: " + (err.error || "Unknown Error"));
         }
     } catch (err) { console.error(err); }
   };
@@ -103,8 +109,8 @@ const SuperAdmin = () => {
                 hotel_name: formData.name,
                 username: formData.domain,
                 email: formData.admin_email,
-                password: 'DefaultPassword123!', // In real app, generate random or send invite link
-                user_role: 'OWNER'
+                password: 'DefaultPassword123!', 
+                role: 'OWNER'
             })
         });
 
@@ -114,7 +120,8 @@ const SuperAdmin = () => {
             fetchStats(false);
             alert("Tenant Deployed Successfully 🚀");
         } else {
-            alert("Deployment failed. Instance name likely exists.");
+            const err = await res.json();
+            alert("Deployment failed: " + (err.error || "Unknown error"));
         }
     } catch (err) { 
         console.error(err); 
