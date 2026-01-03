@@ -12,7 +12,8 @@ SECRET_KEY = 'django-insecure-local-dev-key-CHANGE-IN-PROD'
 # Set to False when deploying to AWS/DigitalOcean public IP if you have a domain
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']  # Allow all hosts for dev/AWS EC2 (Restrict in prod)
+# ALLOWED_HOSTS: Add your AWS IP and any domains you use
+ALLOWED_HOSTS = ['*', '16.171.144.127', 'localhost', '127.0.0.1']
 
 # Application definition
 INSTALLED_APPS = [
@@ -132,6 +133,10 @@ SIMPLE_JWT = {
 # CORS Settings (Allow React Frontend & Public Access)
 CORS_ALLOW_ALL_ORIGINS = True  # Required for public booking pages
 CORS_ALLOW_CREDENTIALS = True
+
+# File Upload Limits (For high-res logos)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
 
 # --- EMAIL CONFIGURATION (SMTP) ---
 # Required for Booking Confirmations & Welcome Emails

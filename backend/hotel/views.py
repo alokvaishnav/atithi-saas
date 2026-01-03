@@ -1,47 +1,52 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
-# --- NEW IMPORTS FOR PDF AUTH & UTILS ---
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from .utils import generate_ical_for_room # Import iCal generator
-# ----------------------------------------
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
-from django.contrib.auth import get_user_model # <--- ADDED THIS IMPORT
+from django.contrib.auth import get_user_model
+from django.utils import timezone
 from datetime import datetime, timedelta, date
 import csv
 import json
 
-from django.db.models import Min
-
-# For PDF Generation
+# --- PDF Generation Imports ---
 try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import letter
 except ImportError:
-    pass # Handle gracefully if reportlab isn't installed
+    pass 
 
+# --- Local Imports ---
+from .utils import generate_ical_for_room, send_booking_email
 from .models import (
     Room, Booking, HotelSettings, Guest, InventoryItem, Expense, 
-    MenuItem, Order, HousekeepingTask, ActivityLog, BookingCharge, BookingPayment
+    MenuItem, Order, HousekeepingTask, ActivityLog, BookingCharge, 
+    BookingPayment, PlatformSettings
 )
 from .serializers import (
     RoomSerializer, BookingSerializer, GuestSerializer, InventorySerializer, 
     ExpenseSerializer, MenuItemSerializer, OrderSerializer, HousekeepingTaskSerializer,
-    ActivityLogSerializer, StaffSerializer, HotelSettingsSerializer
+    ActivityLogSerializer, StaffSerializer, HotelSettingsSerializer,
+    PublicHotelSerializer, PublicRoomSerializer, PublicBookingSerializer,
+    PlatformSettingsSerializer
 )
 from core.models import CustomUser
 
-# --- 1. AUTHENTICATION & TOKENS ---
+# ==============================================================================
+# 1. AUTHENTICATION & ONBOARDING
+# ==============================================================================
 
 class CustomTokenSerializer(TokenObtainPairSerializer):
+    """
+    Custom JWT Token that includes user Role, ID, and Hotel Name payload.
+    """
     def validate(self, attrs):
         data = super().validate(attrs)
         
@@ -57,6 +62,7 @@ class CustomTokenSerializer(TokenObtainPairSerializer):
                 # Owner sees their own settings
                 settings = getattr(self.user, 'hotel_settings', None)
                 data['hotel_name'] = settings.hotel_name if settings else 'Unconfigured'
+                data['hotel_setup'] = settings.hotel_name != "My Hotel"
             else:
                 # Staff sees their Owner's settings
                 owner = self.user.hotel_owner
@@ -73,6 +79,10 @@ class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenSerializer
 
 class RegisterView(APIView):
+    """
+    Registers a new SaaS Tenant (Hotel Owner).
+    Automatically creates a HotelSettings object for them.
+    """
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
@@ -86,24 +96,25 @@ class RegisterView(APIView):
                 username=data['username'], 
                 email=data.get('email', ''), 
                 password=data['password'], 
-                role='OWNER'
+                role='OWNER',
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', '')
             )
             
-            # Create Default Hotel Settings
+            # Create Default Hotel Settings immediately
             HotelSettings.objects.create(owner=user, hotel_name=data.get('hotel_name', 'My Hotel'))
             
-            return Response({'status': 'Success', 'message': 'Account created successfully'})
+            return Response({'status': 'Success', 'message': 'Account created successfully'}, status=201)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-# --- PASSWORD RESET (MOCK) ---
 class PasswordResetRequestView(APIView):
     permission_classes = [permissions.AllowAny]
     def post(self, request):
         email = request.data.get('email')
         if not email: return Response({'error': 'Email required'}, status=400)
-        # TODO: Integrate SendGrid/SMTP here
-        return Response({'status': 'Email Sent'})
+        # TODO: Integrate SendGrid/SMTP here using PlatformSettings
+        return Response({'status': 'Email Sent (Mock)'})
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -111,11 +122,14 @@ class PasswordResetConfirmView(APIView):
         return Response({'status': 'Password Reset Successful'})
 
 
-# --- 2. BASE SAAS VIEWSET (MULTI-TENANCY CORE) ---
+# ==============================================================================
+# 2. BASE SAAS VIEWSET (MULTI-TENANCY CORE)
+# ==============================================================================
 
 class BaseSaaSViewSet(viewsets.ModelViewSet):
     """
-    Automatic filtering: Users only see data belonging to their Hotel Owner.
+    Core ViewSet that implements Multi-Tenancy.
+    It automatically filters data so Users ONLY see data belonging to their Hotel Owner.
     """
     permission_classes = [permissions.IsAuthenticated]
     
@@ -132,10 +146,13 @@ class BaseSaaSViewSet(viewsets.ModelViewSet):
         return self.queryset.filter(owner=owner)
 
     def perform_create(self, serializer):
+        # Automatically assign the correct owner when creating data
         serializer.save(owner=self.get_owner())
 
 
-# --- 3. MODULE VIEWSETS ---
+# ==============================================================================
+# 3. HOTEL OPERATIONS MODULES
+# ==============================================================================
 
 class RoomViewSet(BaseSaaSViewSet):
     queryset = Room.objects.all()
@@ -174,11 +191,11 @@ class BookingViewSet(BaseSaaSViewSet):
 
     @action(detail=True, methods=['get'])
     def folio(self, request, pk=None):
+        """Calculates the full bill (Folio) for a booking"""
         booking = self.get_object()
         charges = BookingCharge.objects.filter(booking=booking)
         payments = BookingPayment.objects.filter(booking=booking)
         
-        # Calculate Finances
         total_charges = sum(c.amount for c in charges) + booking.total_amount
         total_paid = sum(p.amount for p in payments)
         
@@ -207,12 +224,21 @@ class BookingViewSet(BaseSaaSViewSet):
 
         BookingPayment.objects.create(booking=booking, amount=amount, payment_mode=mode)
         
+        # Check if fully paid
+        charges = BookingCharge.objects.filter(booking=booking).aggregate(Sum('amount'))['amount__sum'] or 0
+        total_due = booking.total_amount + charges
+        total_paid = BookingPayment.objects.filter(booking=booking).aggregate(Sum('amount'))['amount__sum'] or 0
+        
+        if total_paid >= total_due:
+            booking.payment_status = 'PAID'
+            booking.save()
+        
         ActivityLog.objects.create(
             owner=self.get_owner(),
             action='PAYMENT',
             details=f"Received {amount} via {mode} for Booking #{booking.id}"
         )
-        return Response({'status': 'Payment Recorded'})
+        return Response({'status': 'Payment Recorded', 'new_balance': total_due - total_paid})
 
     @action(detail=True, methods=['post'])
     def charges(self, request, pk=None):
@@ -228,6 +254,7 @@ class BookingViewSet(BaseSaaSViewSet):
         
         # 1. Update Booking Status
         booking.status = 'CHECKED_OUT'
+        booking.checked_out_at = timezone.now()
         booking.save()
         
         # 2. Update Room Status -> Dirty
@@ -251,10 +278,9 @@ class BookingViewSet(BaseSaaSViewSet):
         )
         return Response({'status': 'Checked Out'})
 
-    # Public endpoint for digital folio (No Auth Required for Guest View)
+    # Public endpoint for digital folio (No Auth Required for Guest View via QR)
     @action(detail=True, methods=['get'], permission_classes=[permissions.AllowAny], url_path='public_folio')
     def public_folio(self, request, pk=None):
-        # Reuse the folio logic
         return self.folio(request, pk)
 
 
@@ -287,7 +313,9 @@ class ActivityLogViewSet(BaseSaaSViewSet):
     serializer_class = ActivityLogSerializer
 
 
-# --- 4. STAFF MANAGEMENT ---
+# ==============================================================================
+# 4. STAFF MANAGEMENT
+# ==============================================================================
 
 class StaffViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -322,7 +350,9 @@ class StaffRegisterView(APIView):
             return Response({'error': str(e)}, status=400)
 
 
-# --- 5. SETTINGS & ANALYTICS ---
+# ==============================================================================
+# 5. SETTINGS & ANALYTICS
+# ==============================================================================
 
 class SettingsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -386,7 +416,9 @@ class AnalyticsView(APIView):
         })
 
 
-# --- 6. POS SYSTEM ---
+# ==============================================================================
+# 6. POS SYSTEM
+# ==============================================================================
 
 class POSChargeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -432,7 +464,9 @@ class POSChargeView(APIView):
         return Response({'status': 'Payment Processed'})
 
 
-# --- 7. LICENSING (SAAS CONTROL) ---
+# ==============================================================================
+# 7. LICENSING & EXTERNAL
+# ==============================================================================
 
 class LicenseStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -452,15 +486,36 @@ class LicenseActivateView(APIView):
         # Validate key logic here
         return Response({'status': 'ACTIVE', 'expiry_date': '2030-01-01'})
 
+class RoomICalView(APIView):
+    permission_classes = [permissions.AllowAny] # Must be public for OTAs to fetch
+    
+    def get(self, request, room_id):
+        # 1. Fetch Room (Anyone can fetch if they have ID, security via obscurity URL in Prod)
+        room = get_object_or_404(Room, id=room_id)
+        
+        # 2. Generate iCal content
+        try:
+            ical_content = generate_ical_for_room(room)
+            
+            # 3. Return as File
+            response = HttpResponse(ical_content, content_type='text/calendar')
+            filename = f"room_{room.room_number}_calendar.ics"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
 
-# --- 8. REPORTS & PDF GENERATION ---
+
+# ==============================================================================
+# 8. REPORTS & PDF GENERATION
+# ==============================================================================
 
 class DailyReportPDFView(APIView):
-    # 🚨 FIX: AllowAny so we can manually check token inside get()
+    # AllowAny so we can manually check token inside get() from URL param
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
-        # --- NEW LOGIC TO ALLOW URL TOKEN FOR DOWNLOADS ---
+        # --- LOGIC TO ALLOW URL TOKEN FOR DOWNLOADS ---
         token = request.query_params.get('token')
         if token:
             try:
@@ -541,35 +596,35 @@ class ReportExportView(APIView):
         return response
 
 
-# --- 9. CHANNEL MANAGER / ICAL (NEW) ---
+# ==============================================================================
+# 9. SUPER ADMIN (PLATFORM OWNER)
+# ==============================================================================
 
-class RoomICalView(APIView):
-    permission_classes = [permissions.AllowAny] # Must be public for OTAs to fetch
-    
-    def get(self, request, room_id):
-        # 1. Fetch Room (Anyone can fetch if they have ID, security via obscurity URL in Prod)
-        room = get_object_or_404(Room, id=room_id)
-        
-        # 2. Generate iCal content
-        try:
-            ical_content = generate_ical_for_room(room)
-            
-            # 3. Return as File
-            response = HttpResponse(ical_content, content_type='text/calendar')
-            filename = f"room_{room.room_number}_calendar.ics"
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            return response
-        except Exception as e:
-            return Response({'error': str(e)}, status=500)
+class PlatformSettingsView(APIView):
+    """
+    Manages Global SaaS Config: Logo, SMTP, Support Info.
+    Singleton pattern enforced in Model.
+    """
+    permission_classes = [permissions.IsAdminUser] # Only Super Admin/CEO
 
+    def get(self, request):
+        settings, _ = PlatformSettings.objects.get_or_create(id=1)
+        serializer = PlatformSettingsSerializer(settings)
+        return Response(serializer.data)
 
-# --- 10. SUPER ADMIN (PLATFORM OWNER) ---
+    def post(self, request):
+        settings, _ = PlatformSettings.objects.get_or_create(id=1)
+        serializer = PlatformSettingsSerializer(settings, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
 
 class SuperAdminStatsView(APIView):
     permission_classes = [permissions.IsAdminUser] # Ensures is_superuser=True
     
     def get(self, request):
-        User = get_user_model() # Get User Model safely
+        User = get_user_model()
         
         total_hotels = CustomUser.objects.filter(role='OWNER').count()
         total_rooms = Room.objects.count()
@@ -584,23 +639,23 @@ class SuperAdminStatsView(APIView):
             },
             'hotels': [{
                 'id': u.id, 
-                'name': u.hotel_settings.hotel_name if hasattr(u, 'hotel_settings') else 'Unconfigured',
-                'owner': u.username,
+                'username': u.username,
                 'email': u.email,
-                'status': 'ACTIVE' if u.is_active else 'SUSPENDED', # Return actual status
-                'joined': u.date_joined
+                'date_joined': u.date_joined,
+                'is_active': u.is_active,
+                'plan': 'PRO', # Placeholder
+                'hotel_settings': HotelSettingsSerializer(getattr(u, 'hotel_settings', None)).data
             } for u in CustomUser.objects.filter(role='OWNER')]
         })
 
-    # --- ADDED THIS METHOD TO HANDLE BAN/UNBAN ACTIONS ---
     def post(self, request):
         action = request.data.get('action')
-        user_id = request.data.get('user_id')
+        hotel_id = request.data.get('hotel_id')
         User = get_user_model()
 
-        if action == 'TOGGLE_STATUS' and user_id:
+        if action == 'toggle_status' and hotel_id:
             try:
-                user = User.objects.get(id=user_id)
+                user = User.objects.get(id=hotel_id)
                 # Prevent banning yourself
                 if user.is_superuser:
                     return Response({'error': 'Cannot ban Super Admin'}, status=400)
@@ -614,8 +669,11 @@ class SuperAdminStatsView(APIView):
                 return Response({'error': 'User not found'}, status=404)
         
         return Response({'error': 'Invalid Action'}, status=400)
-    
-# --- 11. PUBLIC BOOKING ENGINE (WEBSITE BUILDER) ---
+
+
+# ==============================================================================
+# 10. PUBLIC BOOKING ENGINE (WEBSITE BUILDER)
+# ==============================================================================
 
 class PublicHotelView(APIView):
     permission_classes = [permissions.AllowAny] # Public Access
@@ -628,13 +686,12 @@ class PublicHotelView(APIView):
         if not settings:
             return Response({'error': 'Hotel not configured'}, status=404)
 
-        # Get available rooms grouped by type
-        # In a real app, you'd filter by availability dates here
+        # Get available rooms
         rooms = Room.objects.filter(owner=user, status='AVAILABLE')
         
         return Response({
-            'hotel': HotelSettingsSerializer(settings).data,
-            'rooms': RoomSerializer(rooms, many=True).data
+            'hotel': PublicHotelSerializer(settings).data,
+            'rooms': PublicRoomSerializer(rooms, many=True).data
         })
 
 class PublicBookingCreateView(APIView):
@@ -657,7 +714,6 @@ class PublicBookingCreateView(APIView):
             )
 
             # 3. Find an Available Room of requested type
-            # Simple logic: Pick first available. Advanced: Check date overlaps.
             room = Room.objects.filter(
                 owner=owner, 
                 room_type=data['room_type'], 
@@ -683,12 +739,16 @@ class PublicBookingCreateView(APIView):
                 check_out_date=check_out,
                 total_amount=total_amount,
                 status='CONFIRMED',
-                payment_status='PENDING'
+                payment_status='PENDING',
+                source='WEB'
             )
 
-            # 6. Mark room booked (Optional: normally driven by date, but good for MVP)
-            # room.status = 'BOOKED'
-            # room.save()
+            # 6. Auto-Update Room Status
+            room.status = 'BOOKED'
+            room.save()
+            
+            # 7. Send Automated Email
+            send_booking_email(booking, 'CONFIRMATION')
 
             return Response({'status': 'Confirmed', 'booking_id': booking.id, 'amount': total_amount})
 

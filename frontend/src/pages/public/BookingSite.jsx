@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from '../../config';
-import { Hotel, MapPin, Calendar, Users, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { Hotel, MapPin, Calendar, Users, ArrowRight, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 const BookingSite = () => {
   const { username } = useParams();
   const [hotelData, setHotelData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   
   const [form, setForm] = useState({
     guest_name: '', guest_email: '', guest_phone: '',
@@ -15,124 +17,270 @@ const BookingSite = () => {
     room_type: ''
   });
 
+  // 1. Fetch Hotel Data
   useEffect(() => {
     const fetchHotel = async () => {
         try {
             const res = await fetch(`${API_URL}/api/public/hotel/${username}/`);
-            if (res.ok) setHotelData(await res.json());
-        } catch(err) { console.error(err); } 
-        finally { setLoading(false); }
+            if (res.ok) {
+                const data = await res.json();
+                setHotelData(data);
+                // Pre-select first room type if available
+                if (data.rooms && data.rooms.length > 0) {
+                    setForm(prev => ({ ...prev, room_type: data.rooms[0].room_type }));
+                }
+            } else {
+                setError("Hotel not found or currently offline.");
+            }
+        } catch(err) { 
+            console.error(err);
+            setError("Unable to connect to booking server.");
+        } finally { 
+            setLoading(false); 
+        }
     };
     fetchHotel();
   }, [username]);
 
+  // 2. Handle Form Submission
   const handleSubmit = async (e) => {
       e.preventDefault();
+      if (!form.room_type) return alert("Please select a room type.");
+      
+      setSubmitting(true);
       try {
           const res = await fetch(`${API_URL}/api/public/book/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ...form, hotel_username: username })
           });
-          if (res.ok) setBookingSuccess(true);
-          else alert("Booking failed. Room might be unavailable.");
-      } catch (err) { alert("Network Error"); }
+          
+          if (res.ok) {
+              setBookingSuccess(true);
+              window.scrollTo(0, 0);
+          } else {
+              const err = await res.json();
+              alert("Booking Failed: " + (err.error || "Room might be unavailable."));
+          }
+      } catch (err) { 
+          alert("Network Error. Please try again."); 
+      } finally {
+          setSubmitting(false);
+      }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600"/></div>;
-  if (!hotelData) return <div className="h-screen flex items-center justify-center text-slate-400 font-black uppercase">Hotel Not Found</div>;
+  // --- LOADING STATES ---
+  if (loading) return (
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600 w-12 h-12"/>
+    </div>
+  );
 
+  if (error || !hotelData) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-center p-6">
+        <div className="bg-red-50 p-6 rounded-full mb-4">
+            <AlertCircle size={48} className="text-red-500"/>
+        </div>
+        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-widest mb-2">Unavailable</h1>
+        <p className="text-slate-500">{error || "This hotel page does not exist."}</p>
+    </div>
+  );
+
+  // --- SUCCESS STATE ---
   if (bookingSuccess) return (
-      <div className="h-screen bg-green-50 flex flex-col items-center justify-center p-8 text-center">
-          <CheckCircle size={64} className="text-green-600 mb-6 animate-bounce"/>
-          <h1 className="text-3xl font-black text-slate-800 mb-2">Booking Confirmed!</h1>
-          <p className="text-slate-500 max-w-md">Thank you for choosing {hotelData.hotel.hotel_name}. We have sent a confirmation to your email.</p>
+      <div className="h-screen bg-green-50 flex flex-col items-center justify-center p-8 text-center animate-in fade-in zoom-in duration-500">
+          <div className="bg-white p-6 rounded-full shadow-xl mb-6">
+            <CheckCircle size={64} className="text-green-600 animate-bounce"/>
+          </div>
+          <h1 className="text-4xl font-black text-slate-800 mb-4 tracking-tight">Booking Confirmed!</h1>
+          <p className="text-slate-600 max-w-md text-lg leading-relaxed">
+            Thank you for choosing <strong>{hotelData.hotel.hotel_name}</strong>.<br/>
+            We have sent a confirmation email to <strong>{form.guest_email}</strong>.
+          </p>
+          <button onClick={() => window.location.reload()} className="mt-8 px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition-all shadow-lg shadow-green-200">
+            Book Another Room
+          </button>
       </div>
   );
 
+  // --- MAIN BOOKING FORM ---
   return (
-    <div className="min-h-screen bg-slate-50 font-sans">
+    <div className="min-h-screen bg-slate-50 font-sans pb-20">
+      
       {/* Hero Banner */}
-      <div className="bg-slate-900 text-white py-16 px-8 text-center rounded-b-[50px] shadow-2xl relative overflow-hidden">
-          <div className="relative z-10">
-              <Hotel size={48} className="mx-auto mb-4 text-blue-500"/>
-              <h1 className="text-4xl md:text-5xl font-black uppercase italic tracking-tighter mb-2">{hotelData.hotel.hotel_name}</h1>
-              <p className="flex items-center justify-center gap-2 text-slate-400 text-sm font-bold uppercase tracking-widest">
-                  <MapPin size={14}/> {hotelData.hotel.address || 'Location unavailable'}
+      <div className="bg-slate-900 text-white py-20 px-8 text-center rounded-b-[60px] shadow-2xl relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+              <div className="absolute top-[-50%] left-[-10%] w-[500px] h-[500px] bg-blue-500 rounded-full blur-[100px]"></div>
+              <div className="absolute bottom-[-50%] right-[-10%] w-[500px] h-[500px] bg-purple-500 rounded-full blur-[100px]"></div>
+          </div>
+
+          <div className="relative z-10 max-w-3xl mx-auto">
+              {hotelData.hotel.logo ? (
+                  <img src={hotelData.hotel.logo} alt="Logo" className="w-24 h-24 mx-auto mb-6 rounded-2xl object-cover border-4 border-white/20 shadow-lg"/>
+              ) : (
+                  <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-white/20">
+                    <Hotel size={40} className="text-blue-400"/>
+                  </div>
+              )}
+              
+              <h1 className="text-4xl md:text-6xl font-black uppercase italic tracking-tighter mb-4 leading-tight">
+                {hotelData.hotel.hotel_name}
+              </h1>
+              
+              <p className="flex items-center justify-center gap-2 text-blue-200 text-sm md:text-base font-bold uppercase tracking-widest bg-white/5 inline-flex px-6 py-2 rounded-full border border-white/10 backdrop-blur-sm">
+                  <MapPin size={16}/> {hotelData.hotel.address || 'Location unavailable'}
               </p>
+              
+              {hotelData.hotel.description && (
+                  <p className="mt-6 text-slate-400 max-w-xl mx-auto text-sm leading-relaxed hidden md:block">
+                      {hotelData.hotel.description}
+                  </p>
+              )}
           </div>
       </div>
 
-      <div className="max-w-4xl mx-auto -mt-10 px-4 pb-20">
-          <form onSubmit={handleSubmit} className="bg-white p-8 rounded-[40px] shadow-xl border border-slate-100">
+      <div className="max-w-5xl mx-auto -mt-16 px-4 relative z-20">
+          <form onSubmit={handleSubmit} className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl border border-slate-100 animate-in slide-in-from-bottom-8 duration-700">
               
-              {/* Date & Guest Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <div className="bg-slate-50 p-4 rounded-2xl">
-                      <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                          <Calendar size={14}/> Dates
+              {/* SECTION 1: DATES & GUESTS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:border-blue-200 transition-colors">
+                      <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">
+                          <Calendar size={14}/> Stay Dates
                       </label>
-                      <div className="flex gap-2">
-                          <input required type="date" className="w-full bg-transparent font-bold outline-none" 
-                              onChange={e => setForm({...form, check_in: e.target.value})} />
-                          <span className="text-slate-300">to</span>
-                          <input required type="date" className="w-full bg-transparent font-bold outline-none" 
-                              onChange={e => setForm({...form, check_out: e.target.value})} />
+                      <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                              <p className="text-xs font-bold text-slate-400 mb-1 ml-1">Check In</p>
+                              <input required type="date" className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                                  onChange={e => setForm({...form, check_in: e.target.value})} />
+                          </div>
+                          <span className="text-slate-300 mt-6">→</span>
+                          <div className="flex-1">
+                              <p className="text-xs font-bold text-slate-400 mb-1 ml-1">Check Out</p>
+                              <input required type="date" className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                                  onChange={e => setForm({...form, check_out: e.target.value})} />
+                          </div>
                       </div>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl">
-                      <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">
-                          <Users size={14}/> Guests
+
+                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 hover:border-blue-200 transition-colors">
+                      <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">
+                          <Users size={14}/> Guest Count
                       </label>
                       <div className="flex gap-4">
-                          <input required type="number" min="1" placeholder="Adults" className="w-full bg-transparent font-bold outline-none" 
-                              onChange={e => setForm({...form, adults: parseInt(e.target.value)})} />
-                          <input type="number" min="0" placeholder="Children" className="w-full bg-transparent font-bold outline-none" 
-                              onChange={e => setForm({...form, children: parseInt(e.target.value)})} />
+                          <div className="flex-1">
+                              <p className="text-xs font-bold text-slate-400 mb-1 ml-1">Adults (12+)</p>
+                              <input required type="number" min="1" defaultValue="1" className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                                  onChange={e => setForm({...form, adults: parseInt(e.target.value)})} />
+                          </div>
+                          <div className="flex-1">
+                              <p className="text-xs font-bold text-slate-400 mb-1 ml-1">Children</p>
+                              <input type="number" min="0" defaultValue="0" className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                                  onChange={e => setForm({...form, children: parseInt(e.target.value)})} />
+                          </div>
                       </div>
                   </div>
               </div>
 
-              {/* Room Selection */}
-              <h3 className="text-xl font-black text-slate-800 mb-4">Select Room</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                  {/* Deduping rooms by type for display */}
-                  {[...new Set(hotelData.rooms.map(r => r.room_type))].map(type => {
-                      const room = hotelData.rooms.find(r => r.room_type === type);
-                      return (
-                          <label key={type} className={`block p-6 rounded-2xl border-2 cursor-pointer transition-all ${form.room_type === type ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}>
-                              <input type="radio" name="room" value={type} className="hidden" onChange={() => setForm({...form, room_type: type})} />
-                              <div className="flex justify-between items-center">
-                                  <div>
-                                      <p className="font-black text-slate-800 uppercase tracking-wide">{type}</p>
-                                      <p className="text-xs text-slate-500 font-bold">Max {room.capacity} Guests</p>
-                                  </div>
-                                  <div className="text-right">
-                                      <p className="text-xl font-black text-blue-600">{hotelData.hotel.currency_symbol}{room.price_per_night}</p>
-                                      <p className="text-[10px] uppercase font-bold text-slate-400">/ Night</p>
-                                  </div>
-                              </div>
-                          </label>
-                      );
-                  })}
-              </div>
+              {/* SECTION 2: ROOM SELECTION */}
+              <div className="mb-12">
+                  <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+                    <span className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center text-sm">2</span>
+                    Select Your Room
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {/* Unique Room Types Logic */}
+                      {[...new Set(hotelData.rooms.map(r => r.room_type))].map(type => {
+                          const room = hotelData.rooms.find(r => r.room_type === type);
+                          const isSelected = form.room_type === type;
+                          
+                          return (
+                              <label key={type} className={`relative block p-6 rounded-3xl border-2 cursor-pointer transition-all duration-300 group ${isSelected ? 'border-blue-600 bg-blue-50/50 shadow-lg shadow-blue-100 scale-[1.02]' : 'border-slate-100 hover:border-blue-200 hover:shadow-md'}`}>
+                                  <input type="radio" name="room" value={type} className="hidden" 
+                                      checked={isSelected}
+                                      onChange={() => setForm({...form, room_type: type})} 
+                                  />
+                                  
+                                  {isSelected && (
+                                      <div className="absolute -top-3 -right-3 bg-blue-600 text-white p-1.5 rounded-full shadow-md animate-in zoom-in">
+                                          <CheckCircle size={16}/>
+                                      </div>
+                                  )}
 
-              {/* Guest Details */}
-              <h3 className="text-xl font-black text-slate-800 mb-4">Your Details</h3>
-              <div className="space-y-4 mb-8">
-                  <input required placeholder="Full Name" className="w-full p-4 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
-                      onChange={e => setForm({...form, guest_name: e.target.value})} />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <input required type="email" placeholder="Email Address" className="w-full p-4 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
-                          onChange={e => setForm({...form, guest_email: e.target.value})} />
-                      <input required type="tel" placeholder="Phone Number" className="w-full p-4 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none"
-                          onChange={e => setForm({...form, guest_phone: e.target.value})} />
+                                  <div className="flex justify-between items-start mb-4">
+                                      <div>
+                                          <p className="font-black text-slate-800 uppercase tracking-tight text-lg group-hover:text-blue-700 transition-colors">{type.replace('_', ' ')}</p>
+                                          <p className="text-xs text-slate-500 font-bold mt-1 bg-white inline-block px-2 py-1 rounded-md border border-slate-100">
+                                            Max {room.capacity} Guests
+                                          </p>
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="mt-6 pt-6 border-t border-slate-200/60 flex justify-between items-end">
+                                      <div>
+                                          <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Starting From</p>
+                                          <p className="text-2xl font-black text-slate-900 tracking-tight">
+                                            <span className="text-sm align-top text-slate-400 mr-0.5">{hotelData.hotel.currency_symbol}</span>
+                                            {room.price_per_night}
+                                          </p>
+                                      </div>
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-300 group-hover:bg-blue-100 group-hover:text-blue-500'}`}>
+                                          <ArrowRight size={16}/>
+                                      </div>
+                                  </div>
+                              </label>
+                          );
+                      })}
                   </div>
               </div>
 
-              <button className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl flex items-center justify-center gap-3">
-                  Confirm Booking <ArrowRight size={20}/>
+              {/* SECTION 3: GUEST DETAILS */}
+              <div className="mb-10">
+                  <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+                    <span className="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center text-sm">3</span>
+                    Your Details
+                  </h3>
+                  
+                  <div className="space-y-6 bg-slate-50/50 p-8 rounded-[30px] border border-slate-100">
+                      <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-2 block">Full Name</label>
+                          <input required placeholder="e.g. John Doe" className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 focus:border-blue-500 outline-none transition-all focus:shadow-lg focus:shadow-blue-100/50"
+                              onChange={e => setForm({...form, guest_name: e.target.value})} />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-2 block">Email Address</label>
+                              <input required type="email" placeholder="john@example.com" className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 focus:border-blue-500 outline-none transition-all focus:shadow-lg focus:shadow-blue-100/50"
+                                  onChange={e => setForm({...form, guest_email: e.target.value})} />
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-2 block">Phone Number</label>
+                              <input required type="tel" placeholder="+91 98765 43210" className="w-full p-4 bg-white rounded-2xl font-bold border border-slate-200 focus:border-blue-500 outline-none transition-all focus:shadow-lg focus:shadow-blue-100/50"
+                                  onChange={e => setForm({...form, guest_phone: e.target.value})} />
+                          </div>
+                      </div>
+                  </div>
+              </div>
+
+              {/* SUBMIT BUTTON */}
+              <button 
+                  type="submit" 
+                  disabled={submitting || !form.room_type} 
+                  className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 active:bg-blue-700 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
+              >
+                  {submitting ? <Loader2 className="animate-spin"/> : (
+                      <>
+                        Confirm Booking <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform"/>
+                      </>
+                  )}
               </button>
+              
+              <p className="text-center text-xs font-bold text-slate-400 mt-6 uppercase tracking-wider">
+                  Secure Booking powered by Atithi SaaS
+              </p>
 
           </form>
       </div>

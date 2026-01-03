@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     HotelSettings, Room, Guest, Booking, InventoryItem, 
     Expense, MenuItem, Order, HousekeepingTask, ActivityLog,
-    BookingCharge, BookingPayment
+    BookingCharge, BookingPayment, PlatformSettings
 )
 from core.models import CustomUser
 
@@ -12,7 +12,8 @@ try:
 except ImportError:
     pass # Handle circular imports gracefully during migration
 
-# --- SETTINGS & CONFIG ---
+# --- 1. SETTINGS & CONFIG ---
+
 class HotelSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = HotelSettings
@@ -24,7 +25,16 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
             'whatsapp_auth_token': {'write_only': True}
         }
 
-# --- PUBLIC FACING SERIALIZERS (WEBSITE BUILDER) ---
+class PlatformSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlatformSettings
+        fields = '__all__'
+        extra_kwargs = {
+            'smtp_password': {'write_only': True},
+            'whatsapp_token': {'write_only': True}
+        }
+
+# --- 2. PUBLIC FACING SERIALIZERS (WEBSITE BUILDER) ---
 
 class PublicHotelSerializer(serializers.ModelSerializer):
     """Exposes only public hotel info for the booking website"""
@@ -50,7 +60,8 @@ class PublicBookingSerializer(serializers.Serializer):
     adults = serializers.IntegerField()
     children = serializers.IntegerField()
 
-# --- ROOMS ---
+# --- 3. CORE SERIALIZERS ---
+
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
@@ -58,14 +69,12 @@ class RoomSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['owner']
 
-# --- GUESTS ---
 class GuestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Guest
         fields = '__all__'
         read_only_fields = ['owner']
 
-# --- BOOKING & FINANCIALS ---
 class BookingChargeSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookingCharge
@@ -154,7 +163,7 @@ class BookingSerializer(serializers.ModelSerializer):
             **validated_data
         )
         
-        # --- 5. AUTOMATION TRIGGER (NEW) ---
+        # --- 5. AUTOMATION TRIGGER ---
         # Automatically send confirmation email if enabled in settings
         try:
             if hasattr(owner, 'hotel_settings') and owner.hotel_settings.auto_send_confirmation:
@@ -165,7 +174,8 @@ class BookingSerializer(serializers.ModelSerializer):
         
         return booking
 
-# --- INVENTORY & EXPENSES ---
+# --- 4. INVENTORY & EXPENSES ---
+
 class InventorySerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryItem
@@ -178,7 +188,8 @@ class ExpenseSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['owner']
 
-# --- POS & SERVICES ---
+# --- 5. POS & SERVICES ---
+
 class MenuItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = MenuItem
@@ -191,7 +202,8 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['owner', 'created_at']
 
-# --- HOUSEKEEPING ---
+# --- 6. HOUSEKEEPING ---
+
 class HousekeepingTaskSerializer(serializers.ModelSerializer):
     # Flatten related data for easier frontend display
     room_number = serializers.CharField(source='room.room_number', read_only=True)
@@ -205,7 +217,8 @@ class HousekeepingTaskSerializer(serializers.ModelSerializer):
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.username if obj.assigned_to else "Unassigned"
 
-# --- LOGS & STAFF ---
+# --- 7. LOGS & STAFF ---
+
 class ActivityLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityLog

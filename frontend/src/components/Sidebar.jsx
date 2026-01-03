@@ -99,7 +99,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'RECEPTIONIST'],
       items: [
         { icon: <CalendarCheck size={18} />, label: 'Booking List', path: '/bookings' },
-        { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' }, // Included here
+        { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' },
       ]
     },
     {
@@ -120,8 +120,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER'], 
       items: [
         { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
-        // Subscription hidden in MVP
-        // { icon: <CreditCard size={18} />, label: 'Subscription Plan', path: '/pricing' }, 
       ]
     },
     {
@@ -171,6 +169,32 @@ const Sidebar = ({ isOpen, onClose }) => {
 
         {/* Navigation Groups */}
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
+          
+          {/* 👑 SUPER ADMIN SECTION - ONLY FOR SUPERUSER */}
+          {(user?.is_superuser || user?.role === 'SUPERADMIN') && (
+              <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
+                <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
+                  SaaS Control Plane
+                </div>
+                <button
+                  onClick={() => navigate('/super-admin')}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
+                    location.pathname === '/super-admin' 
+                      ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
+                      : 'text-purple-300 hover:bg-purple-500/10'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
+                      <Server size={18} />
+                    </span>
+                    <span className="uppercase tracking-widest">Global HQ</span>
+                  </div>
+                  <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                </button>
+              </div>
+          )}
+
           {groups.map((group, index) => (
             (group.roles.includes(role) || user?.is_superuser) && group.items.length > 0 && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
@@ -201,41 +225,18 @@ const Sidebar = ({ isOpen, onClose }) => {
               </div>
             )
           ))}
-
-          {/* SUPER ADMIN SECTION */}
-          {user && user.is_superuser && (
-              <div className="animate-in fade-in slide-in-from-left-4 duration-500">
-                <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
-                  System Control
-                </div>
-                <button
-                  onClick={() => navigate('/super-admin')}
-                  className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
-                    location.pathname === '/super-admin' 
-                      ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
-                      : 'text-purple-300 hover:bg-purple-500/10'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className={`${location.pathname === '/super-admin' ? 'text-white' : 'text-purple-400'} transition-colors`}>
-                      <Server size={18} />
-                    </span>
-                    <span className="uppercase tracking-widest">Global Stats</span>
-                  </div>
-                  <ChevronRight size={12} className={`transition-opacity ${location.pathname === '/super-admin' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                </button>
-              </div>
-          )}
         </nav>
 
         {/* User Session Footer */}
         <div className="p-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-md sticky bottom-0">
           <div className="px-4 py-3 mb-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
-                <ShieldCheck size={16} className="text-blue-400"/>
+                <ShieldCheck size={16} className={user?.is_superuser ? "text-purple-400" : "text-blue-400"}/>
               </div>
               <div className="overflow-hidden">
-                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">Identity</p>
+                  <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">
+                    {user?.is_superuser ? 'System Admin' : 'Active Identity'}
+                  </p>
                   <p className="text-[11px] font-black text-white tracking-tight uppercase truncate">
                     {user?.username || role || 'Staff'}
                   </p>

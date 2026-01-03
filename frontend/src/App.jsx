@@ -17,6 +17,7 @@ import Register from './pages/Register';
 import DigitalFolio from './pages/DigitalFolio';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import BookingSite from './pages/public/BookingSite'; // Public Website
 
 // --- CORE OPERATIONS ---
 import Dashboard from './pages/Dashboard';
@@ -35,6 +36,7 @@ import EditGuest from './pages/EditGuest';
 import Services from './pages/Services';
 import Inventory from './pages/Inventory';
 import Housekeeping from './pages/Housekeeping';
+import HousekeepingMobile from './pages/HousekeepingMobile'; // Mobile App
 
 // --- ADMIN & FINANCE ---
 import Expenses from './pages/Expenses';
@@ -45,9 +47,6 @@ import Support from './pages/Support';
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
 import SuperAdmin from './pages/SuperAdmin'; 
-
-import HousekeepingMobile from './pages/HousekeepingMobile';
-import BookingSite from './pages/public/BookingSite';
 
 // 🦴 LOADING SKELETON (UX Improvement)
 const AppSkeleton = () => (
@@ -228,19 +227,10 @@ const AppLayout = () => {
                   </ProtectedRoute>
                 } />
 
-                {/* 🧹 HOUSEKEEPING */}
+                {/* 🧹 HOUSEKEEPING (Desktop) */}
                 <Route path="/housekeeping" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
                     <Housekeeping />
-                  </ProtectedRoute>
-                } />
-                {/* PUBLIC WEBSITE (Website Builder) - No Auth Required */}
-                <Route path="/book/:username" element={<BookingSite />} />
-
-                {/* HOUSEKEEPING MOBILE VIEW */}
-                <Route path="/hk-mobile" element={
-                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING']}>
-                    <HousekeepingMobile />
                   </ProtectedRoute>
                 } />
 
@@ -273,8 +263,20 @@ const AppContent = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
+        {/* 🌏 PUBLIC HOTEL WEBSITE (The Booking Engine) */}
+        {/* CRITICAL FIX: Moved outside AppLayout so guests can see it without logging in */}
+        <Route path="/hotel/:username" element={<BookingSite />} />
+
         {/* EXTERNAL GUEST FACING (No Auth Required) */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
+
+        {/* 🧹 HOUSEKEEPING MOBILE APP (Protected but Full Screen) */}
+        {/* CRITICAL FIX: Moved outside AppLayout so it takes full mobile screen */}
+        <Route path="/hk-mobile" element={
+          <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING']}>
+            <HousekeepingMobile />
+          </ProtectedRoute>
+        } />
 
         {/* CATCH ALL: If logged in, show AppLayout. If not, Login will catch it via ProtectedRoute logic inside */}
         <Route path="/*" element={

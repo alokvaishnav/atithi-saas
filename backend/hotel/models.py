@@ -3,7 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 import json
 
-# --- 1. HOTEL SETTINGS (Global Configuration) ---
+# --- 1. HOTEL SETTINGS (Global Configuration for Tenants) ---
 class HotelSettings(models.Model):
     owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='hotel_settings')
     
@@ -24,7 +24,7 @@ class HotelSettings(models.Model):
     check_in_time = models.TimeField(default="12:00")
     check_out_time = models.TimeField(default="11:00")
     
-    # Automation - Email (SMTP)
+    # Automation - Email (SMTP for this specific hotel)
     smtp_server = models.CharField(max_length=255, blank=True, null=True)
     smtp_port = models.CharField(max_length=10, default="587")
     smtp_username = models.CharField(max_length=255, blank=True, null=True)
@@ -32,7 +32,7 @@ class HotelSettings(models.Model):
     auto_send_confirmation = models.BooleanField(default=False)
     auto_send_invoice = models.BooleanField(default=False)
 
-    # Automation - WhatsApp (Meta/Twilio)
+    # Automation - WhatsApp (Meta/Twilio for this specific hotel)
     whatsapp_provider = models.CharField(max_length=20, default='META', choices=[('META', 'Meta Cloud'), ('TWILIO', 'Twilio')])
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_auth_token = models.CharField(max_length=255, blank=True, null=True)
@@ -65,7 +65,7 @@ class Room(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     room_number = models.CharField(max_length=20)
     room_type = models.CharField(max_length=20, choices=ROOM_TYPES, default='SINGLE')
-    floor = models.CharField(max_length=10, default='1') # Changed to CharField to match your snippet if needed, else Integer is better. Sticking to Char per your code.
+    floor = models.CharField(max_length=10, default='1') 
     capacity = models.IntegerField(default=2)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
@@ -122,20 +122,15 @@ class Booking(models.Model):
     
     check_in_date = models.DateField()
     check_out_date = models.DateField()
-    checked_in_at = models.DateTimeField(blank=True, null=True) # Added for accurate timestamping
+    checked_in_at = models.DateTimeField(blank=True, null=True)
     checked_out_at = models.DateTimeField(blank=True, null=True)
     
-    number_of_adults = models.IntegerField(default=1) # Renamed to match older ViewSets logic if needed, or keep 'adults'
-    # Actually, stick to 'adults' / 'children' to match your serializer from before, 
-    # OR map them. I will use 'adults' as per your provided file, but add 'number_of_adults' as property/alias if needed.
-    # Let's stick to your file's fields for simplicity + the payment_status field needed by views.
+    number_of_adults = models.IntegerField(default=1) # Alias if needed by frontend
     adults = models.IntegerField(default=1)
     children = models.IntegerField(default=0)
     
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    
-    # CRITICAL: Re-added payment_status as it is used in BookingViewSet logic often
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='PENDING')
     
     source = models.CharField(max_length=50, default='WALK_IN') 
@@ -167,8 +162,8 @@ class InventoryItem(models.Model):
     category = models.CharField(max_length=100, default='SUPPLIES')
     
     # Stock Logic
-    current_stock = models.IntegerField(default=0) # Renamed to match your file (was total_stock)
-    min_stock_alert = models.IntegerField(default=5) # Renamed (was low_stock_limit)
+    current_stock = models.IntegerField(default=0) 
+    min_stock_alert = models.IntegerField(default=5) 
     unit = models.CharField(max_length=50, default='PCS') 
     
     last_updated = models.DateTimeField(auto_now=True)
@@ -230,3 +225,39 @@ class ActivityLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     
     def __str__(self): return f"{self.action} - {self.timestamp}"
+
+# --- 5. SAAS PLATFORM SETTINGS (SUPER ADMIN ONLY) ---
+class PlatformSettings(models.Model):
+    """
+    Settings for the SaaS Owner (You).
+    Configures White-labeling, Global SMTP, Support Contacts, etc.
+    """
+    # Branding
+    app_name = models.CharField(max_length=50, default="Atithi SaaS")
+    company_name = models.CharField(max_length=100, default="My Tech Company")
+    logo = models.ImageField(upload_to='platform/', null=True, blank=True)
+    
+    # Contact Info (Visible to Tenants)
+    support_email = models.EmailField(default="support@example.com")
+    support_phone = models.CharField(max_length=20, default="+91-9999999999")
+    address = models.TextField(blank=True, null=True)
+
+    # System SMTP (Global Fallback for Password Resets/Welcome Emails)
+    smtp_host = models.CharField(max_length=100, blank=True, null=True)
+    smtp_port = models.CharField(max_length=10, default="587")
+    smtp_user = models.CharField(max_length=100, blank=True, null=True)
+    smtp_password = models.CharField(max_length=100, blank=True, null=True)
+
+    # System WhatsApp (Global Notifications)
+    whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
+    whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        # Singleton Pattern: Ensure only 1 instance exists
+        if not self.pk and PlatformSettings.objects.exists():
+            # If trying to create a 2nd row, prevent it (or return early)
+            return
+        super(PlatformSettings, self).save(*args, **kwargs)
+
+    def __str__(self):
+        return "Global Platform Configuration"

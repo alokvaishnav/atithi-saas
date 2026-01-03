@@ -3,7 +3,7 @@ from .models import (
     HotelSettings, Room, Guest, Booking, 
     BookingPayment, BookingCharge,
     InventoryItem, MenuItem, Order, Expense, 
-    HousekeepingTask, ActivityLog
+    HousekeepingTask, ActivityLog, PlatformSettings
 )
 
 # --- 1. CORE ADMIN CONFIGURATIONS ---
@@ -58,7 +58,16 @@ class ActivityLogAdmin(admin.ModelAdmin):
         return obj.details[:50] + "..." if len(obj.details) > 50 else obj.details
     short_details.short_description = "Details"
 
-# --- 3. REGISTER MODELS ---
+# --- 3. PLATFORM ADMIN (SUPER ADMIN) ---
+
+class PlatformSettingsAdmin(admin.ModelAdmin):
+    list_display = ('app_name', 'company_name', 'support_email', 'smtp_host')
+    
+    # Helper to enforce Singleton pattern in Admin (prevent adding more than 1 row)
+    def has_add_permission(self, request):
+        return not PlatformSettings.objects.exists()
+
+# --- 4. REGISTER MODELS ---
 
 admin.site.register(HotelSettings, HotelSettingsAdmin)
 admin.site.register(Room, RoomAdmin)
@@ -72,3 +81,4 @@ admin.site.register(Order, OrderAdmin)
 admin.site.register(Expense)
 admin.site.register(HousekeepingTask, HousekeepingAdmin)
 admin.site.register(ActivityLog, ActivityLogAdmin)
+admin.site.register(PlatformSettings, PlatformSettingsAdmin)

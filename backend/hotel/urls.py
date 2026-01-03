@@ -21,11 +21,12 @@ from .views import (
     POSChargeView, ReportExportView, DailyReportPDFView,
 
     # --- Super Admin Views ---
-    SuperAdminStatsView,
+    SuperAdminStatsView, PlatformSettingsView,
 
     # --- Channel Manager View ---
     RoomICalView,
 
+    # --- Public Booking Views ---
     PublicHotelView, PublicBookingCreateView
 )
 
@@ -76,6 +77,7 @@ urlpatterns = [
 
     # 9. Super Admin Controls
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
+    path('super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
 
     # --- Public Booking Engine ---
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),

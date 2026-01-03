@@ -9,7 +9,10 @@ import json
 def send_booking_email(booking, email_type='CONFIRMATION'):
     """
     Sends automated emails to guests.
-    Tries to use the Hotel's custom SMTP settings first.
+    Priority:
+    1. Hotel's Custom SMTP
+    2. Platform's Global SMTP (CEO Settings)
+    3. Django Default (settings.py)
     """
     try:
         # Access the hotel settings related to this booking's owner
@@ -54,10 +57,11 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
         We look forward to hosting you!
         """
 
-        # Logic: Use Custom SMTP if available, else System Default
+        # Logic: Determine SMTP Connection
         connection = None
         sender_email = settings.EMAIL_HOST_USER
 
+        # A. Try Hotel Custom SMTP (Tenant Level)
         if conf.smtp_server and conf.smtp_username and conf.smtp_password:
             try:
                 connection = get_connection(
@@ -67,10 +71,28 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
                     password=conf.smtp_password,
                     use_tls=True
                 )
-                sender_email = conf.smtp_username
+                sender_email = conf.email or conf.smtp_username
             except Exception as e:
-                print(f"Custom SMTP Failed, reverting to default: {e}")
-                connection = None # Fallback to default
+                print(f"Hotel Custom SMTP Failed, attempting fallback: {e}")
+                connection = None 
+
+        # B. Try Platform Global SMTP (CEO/Super Admin Level) - NEW
+        if not connection:
+            try:
+                from .models import PlatformSettings
+                ps = PlatformSettings.objects.first()
+                if ps and ps.smtp_host and ps.smtp_user:
+                    connection = get_connection(
+                        host=ps.smtp_host,
+                        port=int(ps.smtp_port),
+                        username=ps.smtp_user,
+                        password=ps.smtp_password,
+                        use_tls=True
+                    )
+                    sender_email = ps.support_email or ps.smtp_user
+            except Exception as e:
+                print(f"Platform Global SMTP Failed: {e}")
+                connection = None # Will fallback to settings.py default
 
         # Send Mail
         send_mail(
