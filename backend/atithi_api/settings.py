@@ -103,6 +103,7 @@ STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media Files (User Uploads like Hotel Logos)
+# CRITICAL for the Settings Page Logo Upload functionality
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
@@ -128,8 +129,8 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# CORS Settings (Allow React Frontend)
-CORS_ALLOW_ALL_ORIGINS = True  # For dev. In prod, list specific domains.
+# CORS Settings (Allow React Frontend & Public Access)
+CORS_ALLOW_ALL_ORIGINS = True  # Required for public booking pages
 CORS_ALLOW_CREDENTIALS = True
 
 # --- EMAIL CONFIGURATION (SMTP) ---
@@ -139,6 +140,6 @@ EMAIL_HOST = 'smtp.gmail.com' # Change to your provider (Outlook/Zoho/AWS SES) i
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 # Note: In a SaaS, these default credentials are used only for system notifications.
-# Hotel-specific emails will use the credentials stored in HotelSettings (we will implement this logic later).
+# Hotel-specific emails will use the credentials stored in HotelSettings.
 EMAIL_HOST_USER = 'your-system-email@gmail.com' 
 EMAIL_HOST_PASSWORD = 'your-app-password' # Use App Password, NOT your real Gmail password

@@ -3,13 +3,13 @@ import {
   Save, Building, MapPin, Globe, Phone, 
   Loader2, Image as ImageIcon, Mail, FileText,
   Server, Lock, MessageCircle, Eye, EyeOff, CheckCircle,
-  Upload, Clock, Coins, Info, Plus, Trash
+  Upload, Clock, Coins, Info, Copy, ExternalLink, Smartphone
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
 const Settings = () => {
-  const { token, updateGlobalProfile } = useAuth(); 
+  const { token, user, updateGlobalProfile } = useAuth(); 
   
   const [formData, setFormData] = useState({
     // General & Branding
@@ -46,6 +46,10 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('GENERAL');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Derived Links for "Digital Presence"
+  const publicLink = `${window.location.origin}/book/${user?.username}`;
+  const hkLink = `${window.location.origin}/hk-mobile`;
 
   // --- FETCH SETTINGS ---
   useEffect(() => {
@@ -145,6 +149,11 @@ const Settings = () => {
     }
   };
 
+  const copyToClipboard = (text) => {
+      navigator.clipboard.writeText(text);
+      alert("Link copied to clipboard!");
+  };
+
   if (loading) return <div className="p-20 text-center flex justify-center items-center gap-2"><Loader2 className="animate-spin text-blue-600"/> Loading System Config...</div>;
 
   return (
@@ -159,7 +168,7 @@ const Settings = () => {
             </div>
             <button 
                 onClick={handleSave} 
-                type="button" // Use type="button" to prevent default form submission unless inside form
+                type="button" 
                 disabled={saving}
                 className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 shadow-lg shadow-blue-200 flex items-center gap-2 transition-all disabled:opacity-70"
             >
@@ -169,12 +178,12 @@ const Settings = () => {
         </div>
 
         {/* TABS NAVIGATION */}
-        <div className="flex gap-2 mb-6 bg-white p-2 rounded-2xl border border-slate-200 w-fit">
-            {['GENERAL', 'EMAIL', 'WHATSAPP'].map((tab) => (
+        <div className="flex gap-2 mb-6 bg-white p-2 rounded-2xl border border-slate-200 w-fit overflow-x-auto">
+            {['GENERAL', 'DIGITAL PRESENCE', 'EMAIL', 'WHATSAPP'].map((tab) => (
                 <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                         activeTab === tab 
                         ? 'bg-slate-900 text-white shadow-md' 
                         : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
@@ -315,7 +324,65 @@ const Settings = () => {
                 </div>
             )}
 
-            {/* --- TAB 2: EMAIL (SMTP) --- */}
+            {/* --- TAB 2: DIGITAL PRESENCE (NEW) --- */}
+            {activeTab === 'DIGITAL PRESENCE' && (
+                <div className="relative z-10 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    
+                    {/* Public Website Card */}
+                    <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-8 rounded-[30px] shadow-xl text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+                        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+                            <div className="p-6 bg-white/10 rounded-3xl border border-white/20 backdrop-blur-sm">
+                                <Globe size={48} className="text-blue-200"/>
+                            </div>
+                            <div className="flex-1 text-center md:text-left">
+                                <h3 className="text-2xl font-black uppercase italic tracking-tighter mb-2">Your Booking Engine</h3>
+                                <p className="text-blue-100 text-sm font-medium mb-6 max-w-md">
+                                    Share this link on Google Maps, Instagram, and WhatsApp to get direct commission-free bookings.
+                                </p>
+                                
+                                <div className="bg-slate-900/30 p-2 pl-4 rounded-xl flex items-center justify-between gap-4 border border-white/10">
+                                    <span className="font-mono text-xs truncate text-blue-200">{publicLink}</span>
+                                    <div className="flex gap-1">
+                                        <button type="button" onClick={() => copyToClipboard(publicLink)} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title="Copy">
+                                            <Copy size={16}/>
+                                        </button>
+                                        <a href={publicLink} target="_blank" rel="noreferrer" className="p-2 hover:bg-white/10 rounded-lg transition-colors text-blue-200" title="Open">
+                                            <ExternalLink size={16}/>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Housekeeping App Card */}
+                    <div className="bg-slate-50 p-8 rounded-[30px] shadow-sm border border-slate-200 flex flex-col md:flex-row items-center gap-8">
+                        <div className="p-6 bg-purple-100 rounded-3xl border border-purple-200">
+                            <Smartphone size={48} className="text-purple-600"/>
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-xl font-black text-slate-800 uppercase italic tracking-tighter mb-2">Housekeeping Portal</h3>
+                            <p className="text-slate-500 text-sm mb-4">
+                                Share this link with your cleaning staff. It's a simplified mobile view to mark rooms as Clean/Dirty without needing login.
+                            </p>
+                            <div className="bg-white p-2 pl-4 rounded-xl flex items-center justify-between gap-4 border border-slate-200 shadow-sm">
+                                <span className="font-mono text-xs truncate text-slate-600">{hkLink}</span>
+                                <div className="flex gap-1">
+                                    <button type="button" onClick={() => copyToClipboard(hkLink)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500">
+                                        <Copy size={16}/>
+                                    </button>
+                                    <a href={hkLink} target="_blank" rel="noreferrer" className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-blue-600">
+                                        <ExternalLink size={16}/>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- TAB 3: EMAIL (SMTP) --- */}
             {activeTab === 'EMAIL' && (
                 <div className="relative z-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div>
@@ -385,7 +452,7 @@ const Settings = () => {
                 </div>
             )}
 
-            {/* --- TAB 3: WHATSAPP --- */}
+            {/* --- TAB 4: WHATSAPP --- */}
             {activeTab === 'WHATSAPP' && (
                 <div className="relative z-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div>

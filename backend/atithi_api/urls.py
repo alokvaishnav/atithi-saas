@@ -20,7 +20,10 @@ from hotel.views import (
     SettingsView, AnalyticsView,
     LicenseStatusView, LicenseActivateView,
     POSChargeView, ReportExportView, DailyReportPDFView,
-    SuperAdminStatsView
+    SuperAdminStatsView,
+
+    # --- NEW IMPORTS (Website Builder & iCal) ---
+    PublicHotelView, PublicBookingCreateView, RoomICalView
 )
 
 # --- 1. ROUTER CONFIGURATION ---
@@ -69,6 +72,14 @@ urlpatterns = [
 
     # Super Admin
     path('api/super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
+
+    # --- NEW: Public Booking Engine (Website Builder) ---
+    # These endpoints do NOT require a login token
+    path('api/public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
+    path('api/public/book/', PublicBookingCreateView.as_view(), name='public-book'),
+
+    # --- NEW: Channel Manager (iCal for Airbnb/Booking.com) ---
+    path('api/room/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
 ]
 
 # --- 3. MEDIA FILES SERVING (DEV MODE) ---

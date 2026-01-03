@@ -46,6 +46,9 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 import SuperAdmin from './pages/SuperAdmin'; 
 
+import HousekeepingMobile from './pages/HousekeepingMobile';
+import BookingSite from './pages/public/BookingSite';
+
 // 🦴 LOADING SKELETON (UX Improvement)
 const AppSkeleton = () => (
   <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -229,6 +232,15 @@ const AppLayout = () => {
                 <Route path="/housekeeping" element={
                   <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
                     <Housekeeping />
+                  </ProtectedRoute>
+                } />
+                {/* PUBLIC WEBSITE (Website Builder) - No Auth Required */}
+                <Route path="/book/:username" element={<BookingSite />} />
+
+                {/* HOUSEKEEPING MOBILE VIEW */}
+                <Route path="/hk-mobile" element={
+                  <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING']}>
+                    <HousekeepingMobile />
                   </ProtectedRoute>
                 } />
 

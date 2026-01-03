@@ -24,6 +24,32 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
             'whatsapp_auth_token': {'write_only': True}
         }
 
+# --- PUBLIC FACING SERIALIZERS (WEBSITE BUILDER) ---
+
+class PublicHotelSerializer(serializers.ModelSerializer):
+    """Exposes only public hotel info for the booking website"""
+    class Meta:
+        model = HotelSettings
+        fields = ['hotel_name', 'description', 'address', 'phone', 'email', 'website', 'logo', 'currency_symbol', 'check_in_time', 'check_out_time']
+
+class PublicRoomSerializer(serializers.ModelSerializer):
+    """Groups rooms by type for the booking engine"""
+    class Meta:
+        model = Room
+        fields = ['id', 'room_number', 'room_type', 'price_per_night', 'capacity', 'floor', 'amenities']
+
+class PublicBookingSerializer(serializers.Serializer):
+    """Handles bookings from the public website"""
+    hotel_username = serializers.CharField() # The 'slug' (e.g., grand_hotel)
+    guest_name = serializers.CharField()
+    guest_email = serializers.EmailField()
+    guest_phone = serializers.CharField()
+    room_type = serializers.CharField()
+    check_in = serializers.DateField()
+    check_out = serializers.DateField()
+    adults = serializers.IntegerField()
+    children = serializers.IntegerField()
+
 # --- ROOMS ---
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
@@ -48,7 +74,7 @@ class BookingChargeSerializer(serializers.ModelSerializer):
 class BookingPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookingPayment
-        fields = ['id', 'amount', 'payment_mode', 'date']
+        fields = ['id', 'amount', 'payment_mode', 'date', 'transaction_id']
 
 class BookingSerializer(serializers.ModelSerializer):
     # Nested serializers for read operations (provides full details in JSON)
@@ -187,8 +213,13 @@ class ActivityLogSerializer(serializers.ModelSerializer):
         read_only_fields = ['owner', 'timestamp']
 
 class StaffSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    
     class Meta:
         model = CustomUser
-        # Only expose safe fields for staff listing
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'date_joined']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'password', 'date_joined']
         read_only_fields = ['date_joined']
+        
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(**validated_data)
+        return user

@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, date
 import csv
 import json
 
+from django.db.models import Min
+
 # For PDF Generation
 try:
     from reportlab.pdfgen import canvas
@@ -612,3 +614,85 @@ class SuperAdminStatsView(APIView):
                 return Response({'error': 'User not found'}, status=404)
         
         return Response({'error': 'Invalid Action'}, status=400)
+    
+# --- 11. PUBLIC BOOKING ENGINE (WEBSITE BUILDER) ---
+
+class PublicHotelView(APIView):
+    permission_classes = [permissions.AllowAny] # Public Access
+
+    def get(self, request, username):
+        """Fetch hotel details by username (subdomain logic)"""
+        user = get_object_or_404(CustomUser, username=username, role='OWNER')
+        settings = getattr(user, 'hotel_settings', None)
+        
+        if not settings:
+            return Response({'error': 'Hotel not configured'}, status=404)
+
+        # Get available rooms grouped by type
+        # In a real app, you'd filter by availability dates here
+        rooms = Room.objects.filter(owner=user, status='AVAILABLE')
+        
+        return Response({
+            'hotel': HotelSettingsSerializer(settings).data,
+            'rooms': RoomSerializer(rooms, many=True).data
+        })
+
+class PublicBookingCreateView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        data = request.data
+        try:
+            # 1. Find the Hotel Owner
+            owner = CustomUser.objects.get(username=data['hotel_username'], role='OWNER')
+            
+            # 2. Find or Create Guest
+            guest, _ = Guest.objects.get_or_create(
+                email=data['guest_email'],
+                owner=owner,
+                defaults={
+                    'full_name': data['guest_name'],
+                    'phone': data['guest_phone']
+                }
+            )
+
+            # 3. Find an Available Room of requested type
+            # Simple logic: Pick first available. Advanced: Check date overlaps.
+            room = Room.objects.filter(
+                owner=owner, 
+                room_type=data['room_type'], 
+                status='AVAILABLE'
+            ).first()
+
+            if not room:
+                return Response({'error': 'No rooms available of this type'}, status=400)
+
+            # 4. Calculate Total Price
+            check_in = datetime.strptime(data['check_in'], '%Y-%m-%d').date()
+            check_out = datetime.strptime(data['check_out'], '%Y-%m-%d').date()
+            nights = (check_out - check_in).days
+            if nights < 1: nights = 1
+            total_amount = room.price_per_night * nights
+
+            # 5. Create Booking
+            booking = Booking.objects.create(
+                owner=owner,
+                room=room,
+                guest=guest,
+                check_in_date=check_in,
+                check_out_date=check_out,
+                total_amount=total_amount,
+                status='CONFIRMED',
+                payment_status='PENDING'
+            )
+
+            # 6. Mark room booked (Optional: normally driven by date, but good for MVP)
+            # room.status = 'BOOKED'
+            # room.save()
+
+            return Response({'status': 'Confirmed', 'booking_id': booking.id, 'amount': total_amount})
+
+        except CustomUser.DoesNotExist:
+            return Response({'error': 'Invalid Hotel ID'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)

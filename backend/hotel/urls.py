@@ -24,7 +24,9 @@ from .views import (
     SuperAdminStatsView,
 
     # --- Channel Manager View ---
-    RoomICalView
+    RoomICalView,
+
+    PublicHotelView, PublicBookingCreateView
 )
 
 # --- ROUTER CONFIGURATION ---
@@ -74,4 +76,8 @@ urlpatterns = [
 
     # 9. Super Admin Controls
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
+
+    # --- Public Booking Engine ---
+    path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
+    path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
 ]

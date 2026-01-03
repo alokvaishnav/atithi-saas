@@ -5,4 +5,5 @@ django-cors-headers>=4.3
 gunicorn>=21.2
 reportlab>=4.0
 icalendar>=5.0
-requests
+requests>=2.31
+Pillow>=10.0
