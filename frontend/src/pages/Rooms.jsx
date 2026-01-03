@@ -3,7 +3,7 @@ import {
   Plus, Search, BedDouble, Trash2, Edit3, 
   CheckCircle, Loader2, MoreVertical, X, Wrench, 
   AlertCircle, User, Brush, Wifi, Tv, Wind, Coffee,
-  Layers, Users, BarChart3, Trash
+  Layers, Users, BarChart3
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
@@ -35,7 +35,7 @@ const Rooms = () => {
     floor: '1',
     capacity: '2',
     status: 'AVAILABLE',
-    amenities: [] 
+    amenities: [] // Managed as an Array in Frontend state
   });
 
   const AMENITY_OPTIONS = [
@@ -76,7 +76,7 @@ const Rooms = () => {
       occupancyRate: rooms.length > 0 ? Math.round((rooms.filter(r => r.status === 'OCCUPIED').length / rooms.length) * 100) : 0
   };
 
-  // --- SUBMIT ---
+  // --- SUBMIT (FIXED 400 ERROR) ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -85,11 +85,12 @@ const Rooms = () => {
       const url = isEditing ? `${API_URL}/api/rooms/${editId}/` : `${API_URL}/api/rooms/`;
       const method = isEditing ? 'PATCH' : 'POST';
 
+      // 🚨 CRITICAL FIX: Backend expects 'amenities' as a JSON String, but 'capacity' as a Number.
       const payload = {
           ...formData,
           price_per_night: parseFloat(formData.price_per_night),
           capacity: parseInt(formData.capacity),
-          amenities: formData.amenities 
+          amenities: JSON.stringify(formData.amenities) // Convert Array -> String
       };
 
       const res = await fetch(url, {
@@ -103,7 +104,8 @@ const Rooms = () => {
         resetForm();
         fetchRooms();
       } else {
-        alert("Failed to save room. Please check your inputs.");
+        const errorData = await res.json();
+        alert(`Failed to save: ${JSON.stringify(errorData)}`);
       }
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
@@ -133,6 +135,14 @@ const Rooms = () => {
   };
 
   const openEdit = (room) => {
+    // 🚨 CRITICAL FIX: Parse the amenities string back to an Array for the UI
+    let parsedAmenities = [];
+    try {
+        parsedAmenities = typeof room.amenities === 'string' ? JSON.parse(room.amenities) : room.amenities;
+    } catch (e) {
+        parsedAmenities = [];
+    }
+
     setFormData({ 
         room_number: room.room_number, 
         room_type: room.room_type, 
@@ -140,7 +150,7 @@ const Rooms = () => {
         floor: room.floor || '1',
         capacity: room.capacity || '2',
         status: room.status,
-        amenities: room.amenities || []
+        amenities: Array.isArray(parsedAmenities) ? parsedAmenities : []
     });
     setEditId(room.id);
     setIsEditing(true);
@@ -276,6 +286,12 @@ const Rooms = () => {
           const design = getStatusDesign(room.status);
           const StatusIcon = design.icon;
           
+          // Parse amenities safely for display
+          let displayAmenities = [];
+          try {
+             displayAmenities = typeof room.amenities === 'string' ? JSON.parse(room.amenities) : room.amenities;
+          } catch(e) { displayAmenities = []; }
+
           return (
             <div key={room.id} className={`bg-white p-5 rounded-[24px] border-2 transition-all hover:-translate-y-1 hover:shadow-xl group relative flex flex-col ${design.border}`}>
               
@@ -320,9 +336,9 @@ const Rooms = () => {
                   </div>
                   <div className="h-4 w-px bg-slate-200"></div>
                   <div className="flex gap-2">
-                      {room.amenities?.includes('WIFI') && <Wifi size={14} className="text-slate-400"/>}
-                      {room.amenities?.includes('TV') && <Tv size={14} className="text-slate-400"/>}
-                      {room.amenities?.includes('AC') && <Wind size={14} className="text-slate-400"/>}
+                      {Array.isArray(displayAmenities) && displayAmenities.includes('WIFI') && <Wifi size={14} className="text-slate-400"/>}
+                      {Array.isArray(displayAmenities) && displayAmenities.includes('TV') && <Tv size={14} className="text-slate-400"/>}
+                      {Array.isArray(displayAmenities) && displayAmenities.includes('AC') && <Wind size={14} className="text-slate-400"/>}
                   </div>
               </div>
 

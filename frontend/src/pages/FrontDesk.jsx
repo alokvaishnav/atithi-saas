@@ -76,10 +76,16 @@ const FrontDesk = () => {
     } catch (err) { console.error(err); }
   };
 
-  // --- PDF GENERATOR ---
+  // --- PDF GENERATOR (FIXED AUTH) ---
   const generateNightAudit = () => {
-    // Opens the backend PDF generation endpoint in a new tab
-    window.open(`${API_URL}/api/reports/daily-pdf/?token=${token}`, '_blank');
+    // We attach the token to the URL so the backend View can validate the request manually
+    // This bypasses the browser's limitation on sending Headers with window.open
+    if (!token) {
+        alert("Session invalid. Please login again.");
+        return;
+    }
+    const pdfUrl = `${API_URL}/api/reports/daily-pdf/?token=${token}`;
+    window.open(pdfUrl, '_blank');
   };
 
   // --- DERIVED DATA ---

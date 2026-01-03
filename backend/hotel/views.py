@@ -4,6 +4,12 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+# --- NEW IMPORTS FOR PDF AUTH FIX ---
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.exceptions import AuthenticationFailed
+# ------------------------------------
+
 from django.db.models import Sum, Count, Q
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse
@@ -446,9 +452,26 @@ class LicenseActivateView(APIView):
 # --- 8. REPORTS & PDF GENERATION ---
 
 class DailyReportPDFView(APIView):
+    # This remains IsAuthenticated, but we handle token manually in GET
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
+        # --- NEW LOGIC TO ALLOW URL TOKEN FOR DOWNLOADS ---
+        token = request.query_params.get('token')
+        if token:
+            try:
+                validated_token = JWTAuthentication().get_validated_token(token)
+                user = JWTAuthentication().get_user(validated_token)
+                if user:
+                    request.user = user
+            except (AuthenticationFailed, Exception):
+                pass # If token invalid, fall back to default auth check
+        # --------------------------------------------------
+
+        # If still not authenticated, deny
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication credentials were not provided.'}, status=401)
+
         # Prepare PDF response
         response = HttpResponse(content_type='application/pdf')
         filename = f"Night_Audit_{datetime.now().strftime('%Y-%m-%d')}.pdf"
@@ -479,6 +502,7 @@ class DailyReportPDFView(APIView):
         p.drawString(50, 650, f"Total Revenue Collected: Rs. {today_payments}")
         p.drawString(50, 630, f"Total Expenses: Rs. {today_expenses}")
         p.drawString(50, 610, f"Current Occupancy: {occupancy} Rooms")
+        p.drawString(50, 590, f"Net Daily Cash Flow: Rs. {today_payments - today_expenses}")
         
         p.showPage()
         p.save()
