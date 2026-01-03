@@ -131,3 +131,14 @@ SIMPLE_JWT = {
 # CORS Settings (Allow React Frontend)
 CORS_ALLOW_ALL_ORIGINS = True  # For dev. In prod, list specific domains.
 CORS_ALLOW_CREDENTIALS = True
+
+# --- EMAIL CONFIGURATION (SMTP) ---
+# Required for Booking Confirmations & Welcome Emails
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com' # Change to your provider (Outlook/Zoho/AWS SES) if needed
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+# Note: In a SaaS, these default credentials are used only for system notifications.
+# Hotel-specific emails will use the credentials stored in HotelSettings (we will implement this logic later).
+EMAIL_HOST_USER = 'your-system-email@gmail.com' 
+EMAIL_HOST_PASSWORD = 'your-app-password' # Use App Password, NOT your real Gmail password

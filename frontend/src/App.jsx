@@ -26,6 +26,7 @@ import CalendarView from './pages/CalendarView';
 import Folio from './pages/Folio';
 import POS from './pages/POS';
 import PrintGRC from './pages/PrintGRC';
+import OnboardingWizard from './pages/OnboardingWizard'; // NEW IMPORT
 
 // --- MANAGEMENT MODULES ---
 import Rooms from './pages/Rooms';
@@ -144,7 +145,7 @@ const AppLayout = () => {
                 </div>
             </header>
 
-            {/* Desktop Header (Optional / Integrated into pages usually, but kept for Logout access) */}
+            {/* Desktop Header */}
             <div className="hidden md:flex justify-end p-4 absolute top-0 right-0 z-20 pointer-events-none">
                  {/* This area usually handled inside pages like Dashboard, but we ensure global styles here */}
             </div>
@@ -155,6 +156,7 @@ const AppLayout = () => {
                 {/* 🟢 GENERAL ACCESS (Everyone) */}
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/support" element={<Support />} />
+                <Route path="/onboarding" element={<OnboardingWizard />} /> {/* NEW ROUTE */}
 
                 {/* 🟠 FRONT OFFICE & RESERVATIONS */}
                 <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />

@@ -21,7 +21,10 @@ from .views import (
     POSChargeView, ReportExportView, DailyReportPDFView,
 
     # Super Admin Views
-    SuperAdminStatsView
+    SuperAdminStatsView,
+
+    # Channel Manager View (NEW IMPORT)
+    RoomICalView
 )
 
 # --- ROUTER CONFIGURATION ---
@@ -62,15 +65,16 @@ urlpatterns = [
     path('license/activate/', LicenseActivateView.as_view(), name='license-activate'),
 
     # 6. Point of Sale (POS)
-    # Handles the Checkout/Charge logic from POS.jsx
     path('pos/charge/', POSChargeView.as_view(), name='pos-charge'),
 
     # 7. Reports & Exports
-    # Handles PDF generation and CSV exports from Reports.jsx
     path('reports/daily-pdf/', DailyReportPDFView.as_view(), name='daily-report-pdf'),
     path('reports/export/', ReportExportView.as_view(), name='report-export'),
 
-    # 8. Super Admin Controls
-    # Handles the platform stats from SuperAdmin.jsx
+    # 8. Channel Manager (NEW ROUTE)
+    # Provides the .ics file link for OTAs (Airbnb/Booking.com)
+    path('rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
+
+    # 9. Super Admin Controls
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
 ]

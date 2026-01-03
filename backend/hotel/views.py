@@ -5,10 +5,11 @@ from rest_framework.decorators import action
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-# --- NEW IMPORTS FOR PDF AUTH FIX ---
+# --- NEW IMPORTS FOR PDF AUTH & UTILS ---
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-# ------------------------------------
+from .utils import generate_ical_for_room # Import iCal generator
+# ----------------------------------------
 
 from django.db.models import Sum, Count, Q
 from django.shortcuts import get_object_or_404
@@ -537,7 +538,29 @@ class ReportExportView(APIView):
         return response
 
 
-# --- 9. SUPER ADMIN (PLATFORM OWNER) ---
+# --- 9. CHANNEL MANAGER / ICAL (NEW) ---
+
+class RoomICalView(APIView):
+    permission_classes = [permissions.AllowAny] # Must be public for OTAs to fetch
+    
+    def get(self, request, room_id):
+        # 1. Fetch Room (Anyone can fetch if they have ID, security via obscurity URL in Prod)
+        room = get_object_or_404(Room, id=room_id)
+        
+        # 2. Generate iCal content
+        try:
+            ical_content = generate_ical_for_room(room)
+            
+            # 3. Return as File
+            response = HttpResponse(ical_content, content_type='text/calendar')
+            filename = f"room_{room.room_number}_calendar.ics"
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+# --- 10. SUPER ADMIN (PLATFORM OWNER) ---
 
 class SuperAdminStatsView(APIView):
     permission_classes = [permissions.IsAdminUser] # Ensures is_superuser=True

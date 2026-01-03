@@ -6,6 +6,12 @@ from .models import (
 )
 from core.models import CustomUser
 
+# --- NEW: Import the Email Utility we just created ---
+try:
+    from .utils import send_booking_email
+except ImportError:
+    pass # Handle circular imports gracefully during migration
+
 # --- SETTINGS & CONFIG ---
 class HotelSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,6 +28,7 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
+        # This now includes 'ical_link' automatically from the updated model
         fields = '__all__'
         read_only_fields = ['owner']
 
@@ -60,7 +67,7 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Booking
         fields = '__all__'
         # These fields are calculated or linked automatically
-        read_only_fields = ['owner', 'guest', 'room', 'total_amount', 'status']
+        read_only_fields = ['owner', 'guest', 'room', 'total_amount', 'status', 'source']
 
     def create(self, validated_data):
         # 1. Extract non-model fields
@@ -81,9 +88,10 @@ class BookingSerializer(serializers.ModelSerializer):
             }
         )
         
-        # If guest exists but name changed, update it (optional)
-        if not created and guest.full_name != guest_name:
-            guest.full_name = guest_name
+        # If guest exists but name/email changed, update it
+        if not created:
+            if guest_name: guest.full_name = guest_name
+            if guest_email: guest.email = guest_email
             guest.save()
 
         # 3. Handle Room & Pricing Logic
@@ -109,7 +117,6 @@ class BookingSerializer(serializers.ModelSerializer):
                 room.save()
                 
             except Room.DoesNotExist:
-                # If invalid room ID sent, proceed as a "Room Unassigned" booking
                 pass 
 
         # 4. Create the Booking
@@ -120,6 +127,15 @@ class BookingSerializer(serializers.ModelSerializer):
             status='CHECKED_IN' if room else 'CONFIRMED', # Check-in if room assigned
             **validated_data
         )
+        
+        # --- 5. AUTOMATION TRIGGER (NEW) ---
+        # Automatically send confirmation email if enabled in settings
+        try:
+            if hasattr(owner, 'hotel_settings') and owner.hotel_settings.auto_send_confirmation:
+                from .utils import send_booking_email
+                send_booking_email(booking, 'CONFIRMATION')
+        except Exception as e:
+            print(f"Automation Error: {e}") # Log error but don't fail the booking
         
         return booking
 

@@ -19,11 +19,15 @@ class HotelSettings(models.Model):
     check_out_time = models.TimeField(default='11:00')
     currency_symbol = models.CharField(max_length=5, default='₹')
 
-    # SMTP (Email)
+    # SMTP (Email Automation)
     smtp_server = models.CharField(max_length=255, blank=True, null=True)
     smtp_port = models.CharField(max_length=10, default='587')
     smtp_username = models.CharField(max_length=255, blank=True, null=True)
     smtp_password = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Automation Toggles [NEW]
+    auto_send_confirmation = models.BooleanField(default=False)
+    auto_send_invoice = models.BooleanField(default=False)
 
     # WhatsApp API
     whatsapp_provider = models.CharField(max_length=50, default='META') # META or TWILIO
@@ -54,6 +58,9 @@ class Room(models.Model):
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
     amenities = models.TextField(default="[]", blank=True) # Store JSON string of amenities IDs
+    
+    # Channel Manager (iCal) [NEW]
+    ical_link = models.URLField(blank=True, null=True, help_text="Paste OTA Calendar Link (Airbnb/Booking.com)")
 
     def __str__(self): return f'{self.room_number} ({self.room_type})'
 
@@ -101,6 +108,9 @@ class Booking(models.Model):
     # Financials
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONFIRMED')
+    
+    # Source Tracking [NEW]
+    source = models.CharField(max_length=50, default='WALK_IN') # OTA, WALK_IN, PHONE
     
     created_at = models.DateTimeField(auto_now_add=True)
 
