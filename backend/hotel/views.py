@@ -608,8 +608,20 @@ class PlatformSettingsView(APIView):
     """
     Manages Global SaaS Config: Logo, SMTP, Support Info.
     Singleton pattern enforced in Model.
+    
+    - GET: Available to all authenticated users (so they can see Support Info).
+    - POST: Restricted to Super Admin only.
     """
-    permission_classes = [permissions.IsAdminUser] # Only Super Admin/CEO
+
+    def get_permissions(self):
+        """
+        Custom permission logic:
+        - GET requests: Allow any authenticated user.
+        - POST requests: Allow only Super Admins.
+        """
+        if self.request.method == 'GET':
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAdminUser()]
 
     def get(self, request):
         settings, _ = PlatformSettings.objects.get_or_create(id=1)

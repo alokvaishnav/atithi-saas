@@ -1,14 +1,38 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
+import { API_URL } from '../config';
 import { 
   ShieldCheck, ArrowRight, Star, Globe, TrendingUp, 
   Menu, X, Check, Zap, Layout, CreditCard, Users, 
-  Twitter, Linkedin, Instagram, ChevronDown 
+  Twitter, Linkedin, Instagram, ChevronDown, Server 
 } from 'lucide-react';
 
 const Home = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
+  
+  // --- DYNAMIC BRANDING STATE ---
+  const [brand, setBrand] = useState({
+    app_name: 'Atithi HMS',
+    company_name: 'Atithi Tech',
+    support_email: 'sales@atithi.com'
+  });
+
+  // Fetch Global Settings to make Landing Page Dynamic
+  useEffect(() => {
+    const fetchBranding = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`);
+            // Note: We need a public endpoint for this ideally, 
+            // but for now, we use defaults if unauthenticated or error.
+            if (res.data) setBrand(prev => ({ ...prev, ...res.data }));
+        } catch (err) {
+            // Silently fail to defaults if public access is restricted
+        }
+    };
+    fetchBranding();
+  }, []);
 
   const toggleFaq = (index) => {
     setOpenFaq(openFaq === index ? null : index);
@@ -27,7 +51,7 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
                 <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-600/20"><ShieldCheck size={24} className="text-white"/></div>
-                <span className="text-xl font-black tracking-tighter italic uppercase">Atithi HMS</span>
+                <span className="text-xl font-black tracking-tighter italic uppercase">{brand.app_name}</span>
             </div>
 
             {/* Desktop Links */}
@@ -244,7 +268,7 @@ const Home = () => {
                             </li>
                         ))}
                     </ul>
-                    <a href="mailto:sales@atithi.com" className="block w-full py-4 text-center rounded-xl border border-white/10 font-bold uppercase text-xs hover:bg-white hover:text-slate-900 transition-all">Contact Sales</a>
+                    <a href={`mailto:${brand.support_email}`} className="block w-full py-4 text-center rounded-xl border border-white/10 font-bold uppercase text-xs hover:bg-white hover:text-slate-900 transition-all">Contact Sales</a>
                 </div>
             </div>
           </div>
@@ -306,7 +330,7 @@ const Home = () => {
                 <div className="col-span-2 md:col-span-1">
                     <div className="flex items-center gap-2 mb-6">
                         <ShieldCheck size={20} className="text-blue-500"/>
-                        <span className="font-black italic uppercase">Atithi HMS</span>
+                        <span className="font-black italic uppercase">{brand.app_name}</span>
                     </div>
                     <p className="text-slate-500 text-xs leading-relaxed">
                         Empowering hoteliers with modern technology. Built for speed, reliability, and growth.
@@ -318,7 +342,6 @@ const Home = () => {
                         <li><a href="#" className="hover:text-blue-400 transition-colors">Features</a></li>
                         <li><a href="#" className="hover:text-blue-400 transition-colors">Pricing</a></li>
                         <li><a href="#" className="hover:text-blue-400 transition-colors">API</a></li>
-                        <li><a href="#" className="hover:text-blue-400 transition-colors">Integrations</a></li>
                     </ul>
                 </div>
                 <div>
@@ -327,7 +350,6 @@ const Home = () => {
                         <li><a href="#" className="hover:text-blue-400 transition-colors">About</a></li>
                         <li><a href="#" className="hover:text-blue-400 transition-colors">Careers</a></li>
                         <li><a href="#" className="hover:text-blue-400 transition-colors">Blog</a></li>
-                        <li><a href="#" className="hover:text-blue-400 transition-colors">Contact</a></li>
                     </ul>
                 </div>
                 <div>
@@ -341,7 +363,7 @@ const Home = () => {
             </div>
             
             <div className="border-t border-white/5 pt-10 flex flex-col md:flex-row justify-between items-center gap-4">
-                <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest">© 2024 Atithi HMS. All rights reserved.</p>
+                <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest">© {new Date().getFullYear()} {brand.company_name}. All rights reserved.</p>
                 <div className="flex gap-6">
                     <a href="#" className="text-slate-600 text-[10px] font-bold uppercase tracking-widest hover:text-slate-400">Privacy</a>
                     <a href="#" className="text-slate-600 text-[10px] font-bold uppercase tracking-widest hover:text-slate-400">Terms</a>

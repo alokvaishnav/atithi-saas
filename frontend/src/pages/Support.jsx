@@ -1,21 +1,53 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Mail, Phone, HelpCircle, FileText, MessageSquare, 
   Send, Server, Database, Wifi, CheckCircle, 
-  Loader2, Plus, Trash
+  Loader2, Plus, Trash, LifeBuoy
 } from 'lucide-react';
+import axios from 'axios';
+import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext';
 
 const Support = () => {
+  const { token, user } = useAuth();
+  
+  // --- 1. DYNAMIC COMPANY INFO STATE ---
+  const [info, setInfo] = useState({
+    app_name: 'Atithi SaaS',
+    company_name: 'Atithi Tech',
+    support_email: 'support@atithi.com',
+    support_phone: '+91 98765 43210',
+    address: 'Tech Park'
+  });
+
+  // --- 2. TICKET FORM STATE ---
   const [ticket, setTicket] = useState({ subject: '', category: 'BUG', message: '' });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Fake sending a ticket (Connect this to backend later)
+  // --- 3. FETCH SETTINGS ON LOAD ---
+  useEffect(() => {
+    const fetchSupportInfo = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.data) {
+          setInfo(prev => ({ ...prev, ...res.data }));
+        }
+      } catch (err) {
+        console.error("Could not load dynamic support info, using defaults.");
+      }
+    };
+    fetchSupportInfo();
+  }, [token]);
+
+  // --- 4. TICKET SUBMISSION (SIMULATED) ---
   const handleSubmit = (e) => {
     e.preventDefault();
     setSending(true);
     
-    // Simulate API Call
+    // Simulate API Call (Since we haven't built a Ticketing Backend yet)
     setTimeout(() => {
         setSending(false);
         setSent(true);
@@ -31,32 +63,44 @@ const Support = () => {
       
       {/* HEADER */}
       <div className="mb-8">
-        <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Help Desk</h2>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Support, Tickets & System Status</p>
+        <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic flex items-center gap-3">
+            <LifeBuoy className="text-blue-600" size={32}/> {info.app_name} Help Desk
+        </h2>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1 ml-1">
+            Support provided by {info.company_name}
+        </p>
       </div>
 
-      {/* TOP CARDS (Contact Methods) */}
+      {/* TOP CARDS (Dynamic Contact Methods) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        
+        {/* Phone Card */}
         <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-blue-200 transition-all">
             <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Phone size={24}/>
             </div>
             <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Emergency Line</p>
-                <p className="text-lg font-black text-slate-800">+91 98765 43210</p>
+                <a href={`tel:${info.support_phone}`} className="text-lg font-black text-slate-800 hover:text-blue-600 transition-colors">
+                    {info.support_phone}
+                </a>
             </div>
         </div>
 
+        {/* Email Card */}
         <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-purple-200 transition-all">
             <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Mail size={24}/>
             </div>
             <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Support</p>
-                <p className="text-lg font-black text-slate-800">support@atithi.com</p>
+                <a href={`mailto:${info.support_email}`} className="text-lg font-black text-slate-800 hover:text-purple-600 transition-colors break-all">
+                    {info.support_email}
+                </a>
             </div>
         </div>
 
+        {/* Guides Card */}
         <div className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-green-200 transition-all">
             <div className="w-12 h-12 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
                 <FileText size={24}/>
@@ -189,8 +233,10 @@ const Support = () => {
                     </div>
 
                     <div className="pt-4 border-t border-white/10">
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Last Backup</p>
-                        <p className="text-xs font-bold text-slate-300">Today, 04:00 AM (Auto-Success)</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Your Account</p>
+                        <p className="text-xs font-bold text-slate-300">
+                             {user?.is_superuser ? 'Super Admin' : (user?.role || 'Staff')} License
+                        </p>
                     </div>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    # --- ViewSets ---
+    # --- ViewSets (CRUD operations) ---
     RoomViewSet, BookingViewSet, GuestViewSet, 
     InventoryViewSet, ExpenseViewSet, MenuItemViewSet, 
     OrderViewSet, HousekeepingViewSet, ActivityLogViewSet, 
@@ -77,10 +77,12 @@ urlpatterns = [
     path('rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
 
     # 9. Super Admin Controls (SaaS Platform)
+    # These endpoints power the "Global HQ" dashboard
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
     path('super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
 
     # 10. Public Booking Engine (Website Builder)
+    # These endpoints power the guest-facing websites
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
 ]
