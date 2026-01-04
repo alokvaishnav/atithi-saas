@@ -46,7 +46,7 @@ import Accounting from './pages/Accounting';
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
-import SuperAdmin from './pages/SuperAdmin'; 
+import GlobalSettings from './pages/SuperAdmin/GlobalSettings'; // <--- NEW IMPORT
 
 // 🦴 LOADING SKELETON (UX Improvement)
 const AppSkeleton = () => (
@@ -177,8 +177,8 @@ const AppLayout = () => {
 
                 {/* 👑 SUPER ADMIN (Owner Only) */}
                 <Route path="/super-admin" element={
-                  <ProtectedRoute allowedRoles={['OWNER']}>
-                    <SuperAdmin />
+                  <ProtectedRoute allowedRoles={['OWNER', 'SUPERADMIN']}>
+                    <GlobalSettings />
                   </ProtectedRoute>
                 } />
 

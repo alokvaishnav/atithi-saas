@@ -1,23 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_URL } from '../../config';
-import { Hotel, MapPin, Calendar, Users, ArrowRight, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { 
+  Hotel, MapPin, Calendar, Users, ArrowRight, 
+  Loader2, CheckCircle, AlertCircle 
+} from 'lucide-react';
 
 const BookingSite = () => {
   const { username } = useParams();
+  
+  // State
   const [hotelData, setHotelData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // Form State
   const [form, setForm] = useState({
-    guest_name: '', guest_email: '', guest_phone: '',
-    check_in: '', check_out: '', adults: 1, children: 0,
+    guest_name: '', 
+    guest_email: '', 
+    guest_phone: '',
+    check_in: '', 
+    check_out: '', 
+    adults: 1, 
+    children: 0,
     room_type: ''
   });
 
-  // 1. Fetch Hotel Data
+  // 1. Fetch Hotel Data (On Load)
   useEffect(() => {
     const fetchHotel = async () => {
         try {
@@ -25,7 +36,7 @@ const BookingSite = () => {
             if (res.ok) {
                 const data = await res.json();
                 setHotelData(data);
-                // Pre-select first room type if available
+                // Pre-select first room type if available to improve UX
                 if (data.rooms && data.rooms.length > 0) {
                     setForm(prev => ({ ...prev, room_type: data.rooms[0].room_type }));
                 }
@@ -45,6 +56,7 @@ const BookingSite = () => {
   // 2. Handle Form Submission
   const handleSubmit = async (e) => {
       e.preventDefault();
+      
       if (!form.room_type) return alert("Please select a room type.");
       
       setSubmitting(true);
@@ -57,25 +69,26 @@ const BookingSite = () => {
           
           if (res.ok) {
               setBookingSuccess(true);
-              window.scrollTo(0, 0);
+              window.scrollTo(0, 0); // Scroll to top to show success message
           } else {
               const err = await res.json();
-              alert("Booking Failed: " + (err.error || "Room might be unavailable."));
+              alert("Booking Failed: " + (err.error || "Room might be unavailable for selected dates."));
           }
       } catch (err) { 
-          alert("Network Error. Please try again."); 
+          alert("Network Error. Please check your connection."); 
       } finally {
           setSubmitting(false);
       }
   };
 
-  // --- LOADING STATES ---
+  // --- LOADING STATE ---
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="animate-spin text-blue-600 w-12 h-12"/>
     </div>
   );
 
+  // --- ERROR STATE ---
   if (error || !hotelData) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-center p-6">
         <div className="bg-red-50 p-6 rounded-full mb-4">
@@ -116,6 +129,7 @@ const BookingSite = () => {
           </div>
 
           <div className="relative z-10 max-w-3xl mx-auto">
+              {/* Hotel Logo Logic */}
               {hotelData.hotel.logo ? (
                   <img src={hotelData.hotel.logo} alt="Logo" className="w-24 h-24 mx-auto mb-6 rounded-2xl object-cover border-4 border-white/20 shadow-lg"/>
               ) : (
@@ -191,7 +205,7 @@ const BookingSite = () => {
                   </h3>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {/* Unique Room Types Logic */}
+                      {/* Unique Room Types Logic: Groups multiple rooms of same type */}
                       {[...new Set(hotelData.rooms.map(r => r.room_type))].map(type => {
                           const room = hotelData.rooms.find(r => r.room_type === type);
                           const isSelected = form.room_type === type;

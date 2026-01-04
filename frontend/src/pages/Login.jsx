@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Loader2, Lock, User, ShieldCheck, AlertCircle } from 'lucide-react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { Loader2, Lock, User, ShieldCheck, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext'; 
 
 const Login = () => {
@@ -8,17 +8,27 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null); 
-  
+  const [successMsg, setSuccessMsg] = useState('');
+
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth(); 
 
-  // 🧹 CLEANUP: Clear any stale session data when landing on Login
-  // This prevents the "Ghost Identity" bug where old roles persist.
+  // 1️⃣ HANDLE SUCCESS MESSAGES (e.g. from Registration)
+  useEffect(() => {
+    if (location.state?.msg) {
+        setSuccessMsg(location.state.msg);
+        // Clear history state so message doesn't persist on refresh
+        window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
+  // 2️⃣ CLEANUP: Clear any stale session data
   useEffect(() => {
     const keysToRemove = [
         'access_token', 
         'refresh_token', 
-        'user_data', // We now use this unified key
+        'user_data', 
         'user_role', 
         'username', 
         'hotel_name', 
@@ -34,17 +44,14 @@ const Login = () => {
     setError(null);
 
     try {
-      // 🟢 FIX: We delegate the API call to AuthContext.
-      // This ensures the role is parsed and saved correctly before we redirect.
-      // 
+      // Delegate API call to AuthContext
       const result = await login(username, password);
 
       if (result.success) {
-         // Login successful, AuthContext has updated the state.
-         // Redirect to Dashboard (or the protected route they tried to access)
+         // Login successful, redirect to Dashboard
          navigate('/dashboard'); 
       } else {
-         // Login failed (Invalid credentials or server error)
+         // Login failed
          setError(result.msg || 'Login Failed. Please check your credentials.');
       }
 
@@ -78,6 +85,15 @@ const Login = () => {
           Secure Personnel Access
         </p>
 
+        {/* Success Message Banner */}
+        {successMsg && (
+            <div className="mb-6 bg-emerald-50 border border-emerald-100 text-emerald-600 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold animate-in slide-in-from-top-2">
+                <CheckCircle size={18} className="shrink-0"/>
+                {successMsg}
+            </div>
+        )}
+
+        {/* Error Message Banner */}
         {error && (
             <div className="mb-6 bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold animate-in slide-in-from-top-2">
                 <AlertCircle size={18} className="shrink-0"/>

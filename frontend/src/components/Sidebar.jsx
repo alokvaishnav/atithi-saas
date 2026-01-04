@@ -1,14 +1,15 @@
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   LayoutDashboard, BedDouble, Users, CalendarCheck, 
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
   BookOpen, ChevronRight, Settings, Package, X, 
-  Server, BarChart3
+  Server
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
+import axios from 'axios';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
@@ -17,6 +18,13 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 🔐 USE AUTH CONTEXT
   const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
+  // State for SaaS Platform Branding (Support Info)
+  const [platformInfo, setPlatformInfo] = useState({
+    appName: 'Atithi SaaS',
+    companyName: 'Tech Support',
+    supportPhone: ''
+  });
+
   // MOBILE AUTO-CLOSE: Close sidebar when route changes on small screens
   useEffect(() => {
     if (onClose && window.innerWidth < 768) {
@@ -24,37 +32,59 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   }, [location.pathname, onClose]);
 
-  // FETCH BRANDING: Syncs the Hotel Name from Backend Settings
+  // 1. FETCH HOTEL BRANDING (Tenant Name)
   useEffect(() => {
-    const fetchBranding = async () => {
-      // 🛡️ SECURITY FIX: Only fetch settings if the user is allowed to see them.
+    const fetchHotelBranding = async () => {
       if (!token) return;
+      // Only fetch if role allows (Owners/Managers)
       if (role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
 
       try {
-        const res = await fetch(`${API_URL}/api/settings/`, {
+        const res = await axios.get(`${API_URL}/api/settings/`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (res.ok) {
-            const data = await res.json();
-            // Handle both object and array responses (DRF sometimes returns list)
-            const settings = Array.isArray(data) ? data[0] : data;
-            
-            if (settings && settings.hotel_name) {
-                updateGlobalProfile(settings.hotel_name.toUpperCase());
-            }
+        const data = res.data;
+        // Handle both object and array responses
+        const settings = Array.isArray(data) ? data[0] : data;
+        
+        if (settings && settings.hotel_name) {
+            updateGlobalProfile(settings.hotel_name.toUpperCase());
         }
       } catch (err) {
-        console.log("Using cached/default branding");
+        console.log("Using cached/default hotel branding");
       }
     };
     
-    // Only fetch if we don't have a name yet or if role changed (login)
     if (!hotelName || hotelName === 'ATITHI HMS') {
-        fetchBranding();
+        fetchHotelBranding();
     }
   }, [updateGlobalProfile, role, user, token, hotelName]); 
+
+  // 2. FETCH PLATFORM BRANDING (SaaS Support Info)
+  useEffect(() => {
+    const fetchPlatformSettings = async () => {
+        if (!token) return;
+        try {
+            // Note: Ensure your backend allows GET access to this endpoint for authenticated users
+            const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.data) {
+                setPlatformInfo({
+                    appName: res.data.app_name || 'Atithi SaaS',
+                    companyName: res.data.company_name || 'Tech Support',
+                    supportPhone: res.data.support_phone || ''
+                });
+            }
+        } catch (error) {
+            // Fallback silently if unauthorized
+            console.log("Using default platform info");
+        }
+    };
+    fetchPlatformSettings();
+  }, [token]);
+
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
@@ -67,7 +97,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const groups = [
     {
       title: "Main",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'], // Everyone
+      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
       items: [
         { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
       ]
@@ -107,8 +137,8 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
-        { icon: <Wallet size={18} />, label: 'Accounting', path: '/accounting' },
-        // 🔒 Hide Staff Directory from Accountants (Only Owner/Manager)
+        // { icon: <Wallet size={18} />, label: 'Accounting', path: '/accounting' },
+        // 🔒 Hide Staff Directory from Accountants
         ...(['OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
             { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
         ] : []),
@@ -148,7 +178,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         
-        {/* Brand Header */}
+        {/* BRAND HEADER (Hotel Name) */}
         <div className="p-8 border-b border-white/5 flex items-center justify-between bg-slate-950">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20 text-white">
@@ -156,9 +186,11 @@ const Sidebar = ({ isOpen, onClose }) => {
             </div>
             <div className="overflow-hidden">
               <h1 className="text-sm font-black text-white italic tracking-tighter leading-none uppercase truncate max-w-[140px]">
-                {hotelName || "ATITHI HMS"}
+                {hotelName || "Loading..."}
               </h1>
-              <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">Enterprise Cloud</p>
+              <p className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] mt-1">
+                {platformInfo.appName}
+              </p>
             </div>
           </div>
           
@@ -167,10 +199,10 @@ const Sidebar = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Navigation Groups */}
+        {/* NAVIGATION */}
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
-          {/* 👑 SUPER ADMIN SECTION - ONLY FOR SUPERUSER */}
+          {/* 👑 SUPER ADMIN SECTION */}
           {(user?.is_superuser || user?.role === 'SUPERADMIN') && (
               <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
@@ -227,7 +259,14 @@ const Sidebar = ({ isOpen, onClose }) => {
           ))}
         </nav>
 
-        {/* User Session Footer */}
+        {/* SUPPORT / FOOTER INFO */}
+        <div className="px-6 pb-2">
+            <div className="text-[10px] text-slate-600 text-center uppercase tracking-widest">
+                Support: {platformInfo.supportPhone || platformInfo.companyName}
+            </div>
+        </div>
+
+        {/* USER SESSION FOOTER */}
         <div className="p-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-md sticky bottom-0">
           <div className="px-4 py-3 mb-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">

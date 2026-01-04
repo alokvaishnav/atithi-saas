@@ -3,13 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, Building, User, Lock, Mail, ArrowRight, 
   Eye, EyeOff, CheckCircle, AlertCircle, ShieldCheck,
-  Plus, Trash 
+  CreditCard // Icon for Name fields
 } from 'lucide-react';
 import { API_URL } from '../config';
 
 const Register = () => {
   const [formData, setFormData] = useState({
     hotel_name: '', 
+    first_name: '', // Added for Welcome Email
+    last_name: '',  // Added for Welcome Email
     username: '', 
     email: '', 
     password: '', 
@@ -62,9 +64,11 @@ const Register = () => {
 
     setLoading(true);
     try {
-        // Exclude confirmPassword from API payload
+        // Prepare Payload
         const payload = {
             hotel_name: formData.hotel_name,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
             username: formData.username,
             email: formData.email,
             password: formData.password
@@ -78,8 +82,8 @@ const Register = () => {
 
         if (res.ok) {
             // Success Animation/Redirect
-            alert("Registration Successful! Welcome aboard. 🚀");
-            navigate('/login');
+            // Pass a state message to login page so it can show a success banner
+            navigate('/login', { state: { msg: 'Registration Successful! Please check your email.' } });
         } else {
             const err = await res.json();
             // Handle specific API error messages + Generic backend errors
@@ -135,13 +139,33 @@ const Register = () => {
                         value={formData.hotel_name} onChange={e => setFormData({...formData, hotel_name: e.target.value})} />
                 </div>
             </div>
+
+            {/* Name Fields (First & Last) */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">First Name</label>
+                    <div className="relative group">
+                        <User className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
+                        <input required placeholder="John" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                            value={formData.first_name} onChange={e => setFormData({...formData, first_name: e.target.value})} />
+                    </div>
+                </div>
+                <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Last Name</label>
+                    <div className="relative group">
+                        <User className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
+                        <input required placeholder="Doe" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                            value={formData.last_name} onChange={e => setFormData({...formData, last_name: e.target.value})} />
+                    </div>
+                </div>
+            </div>
             
             {/* Username & Email Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Username</label>
                     <div className="relative group">
-                        <User className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
+                        <CreditCard className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
                         <input required placeholder="admin_user" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
                     </div>

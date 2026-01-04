@@ -5,7 +5,65 @@ from datetime import datetime
 import requests # Needed for WhatsApp API
 import json
 
-# --- 1. EMAIL AUTOMATION (Dynamic SMTP) ---
+# --- 1. WELCOME EMAIL (New SaaS Registration) ---
+def send_welcome_email(user, password):
+    """
+    Sends a welcome email to new Hotel Owners using the Global Platform SMTP.
+    Uses the EDITABLE template from PlatformSettings.
+    """
+    try:
+        # Import inside function to avoid circular import error with models.py
+        from .models import PlatformSettings
+        
+        # 1. Fetch Global Config
+        ps = PlatformSettings.objects.first()
+        if not ps or not ps.smtp_host:
+            print("⚠️ Global SMTP not configured. Welcome email skipped.")
+            return False
+
+        # 2. Setup Connection to Global SMTP
+        connection = get_connection(
+            host=ps.smtp_host,
+            port=int(ps.smtp_port),
+            username=ps.smtp_user,
+            password=ps.smtp_password,
+            use_tls=True
+        )
+
+        # 3. Dynamic Replacement (The Magic Part)
+        # We replace the placeholders in your DB template with real data
+        context = {
+            "{name}": user.first_name or user.username,
+            "{username}": user.username,
+            "{password}": password,
+            "{app_name}": ps.app_name,
+            "{company_name}": ps.company_name
+        }
+
+        subject = ps.welcome_email_subject
+        message = ps.welcome_email_body
+
+        for key, value in context.items():
+            subject = subject.replace(key, str(value))
+            message = message.replace(key, str(value))
+
+        # 4. Send Email
+        send_mail(
+            subject,
+            message,
+            ps.support_email or ps.smtp_user, # From
+            [user.email], # To
+            connection=connection,
+            fail_silently=False
+        )
+        print(f"✅ Welcome email sent to {user.email}")
+        return True
+    except Exception as e:
+        print(f"❌ Welcome Email Failed: {e}")
+        return False
+
+
+# --- 2. BOOKING EMAIL AUTOMATION (Dynamic SMTP) ---
 def send_booking_email(booking, email_type='CONFIRMATION'):
     """
     Sends automated emails to guests.
@@ -112,7 +170,7 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
         return False
 
 
-# --- 2. WHATSAPP AUTOMATION (Meta Cloud API) ---
+# --- 3. WHATSAPP AUTOMATION (Meta Cloud API) ---
 def send_whatsapp_message(booking, msg_type='CONFIRMATION'):
     """
     Sends WhatsApp notification using Meta Cloud API.
@@ -163,7 +221,7 @@ def send_whatsapp_message(booking, msg_type='CONFIRMATION'):
         return False
 
 
-# --- 3. CHANNEL MANAGER (iCal Generator) ---
+# --- 4. CHANNEL MANAGER (iCal Generator) ---
 def generate_ical_for_room(room):
     """
     Generates an iCalendar (.ics) string for a specific room.

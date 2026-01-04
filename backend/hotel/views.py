@@ -24,7 +24,8 @@ except ImportError:
     pass 
 
 # --- Local Imports ---
-from .utils import generate_ical_for_room, send_booking_email
+# UPDATE: Added send_welcome_email to imports
+from .utils import generate_ical_for_room, send_booking_email, send_welcome_email
 from .models import (
     Room, Booking, HotelSettings, Guest, InventoryItem, Expense, 
     MenuItem, Order, HousekeepingTask, ActivityLog, BookingCharge, 
@@ -90,7 +91,7 @@ class RegisterView(APIView):
             if CustomUser.objects.filter(username=data.get('username')).exists():
                 return Response({'error': 'Username already exists'}, status=400)
             
-            # Create the Owner User
+            # 1. Create the Owner User
             user = CustomUser.objects.create_user(
                 username=data['username'], 
                 email=data.get('email', ''), 
@@ -100,8 +101,12 @@ class RegisterView(APIView):
                 last_name=data.get('last_name', '')
             )
             
-            # Create Default Hotel Settings immediately
+            # 2. Create Default Hotel Settings immediately
             HotelSettings.objects.create(owner=user, hotel_name=data.get('hotel_name', 'My Hotel'))
+            
+            # 3. Trigger Welcome Email (Uses Global SMTP + Editable Template)
+            # We pass the raw password so it can be sent in the email (before hash is lost)
+            send_welcome_email(user, data['password'])
             
             return Response({'status': 'Success', 'message': 'Account created successfully'}, status=201)
         except Exception as e:

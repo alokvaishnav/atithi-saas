@@ -260,6 +260,17 @@ class PlatformSettings(models.Model):
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
 
+    # --- NEW: EDITABLE WELCOME EMAIL (The missing piece) ---
+    welcome_email_subject = models.CharField(
+        max_length=255, 
+        default="Welcome to {app_name} - Your Hotel Manager",
+        help_text="Available placeholders: {app_name}, {name}"
+    )
+    welcome_email_body = models.TextField(
+        default="Hi {name},\n\nWelcome to {app_name}! Your account has been created.\n\nUsername: {username}\nPassword: {password}\n\nLogin here: http://16.171.144.127/login\n\nBest,\n{company_name}",
+        help_text="Available placeholders: {name}, {app_name}, {username}, {password}, {company_name}"
+    )
+
     def save(self, *args, **kwargs):
         # Force Singleton (Always ID 1)
         self.pk = 1

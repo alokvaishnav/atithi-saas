@@ -9,11 +9,15 @@ from .models import (
 # --- 1. CORE ADMIN CONFIGURATIONS ---
 
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ('id', 'guest', 'room', 'check_in_date', 'check_out_date', 'status', 'payment_status', 'total_amount')
-    list_filter = ('status', 'payment_status', 'check_in_date', 'created_at')
-    search_fields = ('guest__full_name', 'guest__email', 'id')
+    list_display = ('id', 'guest_name', 'room', 'check_in_date', 'check_out_date', 'status', 'payment_status', 'total_amount', 'source')
+    list_filter = ('status', 'payment_status', 'check_in_date', 'source', 'created_at')
+    search_fields = ('guest__full_name', 'guest__email', 'id', 'room__room_number')
     readonly_fields = ('created_at',)
     ordering = ('-created_at',)
+
+    def guest_name(self, obj):
+        return obj.guest.full_name
+    guest_name.short_description = "Guest"
 
 class RoomAdmin(admin.ModelAdmin):
     list_display = ('room_number', 'room_type', 'status', 'price_per_night', 'floor', 'owner')
@@ -28,9 +32,10 @@ class GuestAdmin(admin.ModelAdmin):
 
 class HotelSettingsAdmin(admin.ModelAdmin):
     list_display = ('hotel_name', 'owner', 'phone', 'email', 'city_display')
-    search_fields = ('hotel_name', 'owner__username')
+    search_fields = ('hotel_name', 'owner__username', 'email')
     
     def city_display(self, obj):
+        # Safe extraction of city from address if possible
         return obj.address.split(',')[-1].strip() if obj.address else '-'
     city_display.short_description = "City"
 
@@ -63,6 +68,26 @@ class ActivityLogAdmin(admin.ModelAdmin):
 class PlatformSettingsAdmin(admin.ModelAdmin):
     list_display = ('app_name', 'company_name', 'support_email', 'smtp_host')
     
+    # Organized layout for better UX in Admin Panel
+    fieldsets = (
+        ('Branding & Identity', {
+            'fields': ('app_name', 'company_name', 'logo')
+        }),
+        ('Support Contact Info', {
+            'fields': ('support_email', 'support_phone', 'address')
+        }),
+        ('System SMTP (Global Fallback)', {
+            'fields': ('smtp_host', 'smtp_port', 'smtp_user', 'smtp_password')
+        }),
+        ('Welcome Email Automation (Editable)', {
+            'fields': ('welcome_email_subject', 'welcome_email_body'),
+            'description': "Use placeholders: {name}, {username}, {password}, {app_name}, {company_name}"
+        }),
+        ('System WhatsApp', {
+            'fields': ('whatsapp_phone_id', 'whatsapp_token')
+        }),
+    )
+
     # Helper to enforce Singleton pattern in Admin (prevent adding more than 1 row)
     def has_add_permission(self, request):
         return not PlatformSettings.objects.exists()

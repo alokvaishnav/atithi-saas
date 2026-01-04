@@ -6,7 +6,7 @@ from .models import (
 )
 from core.models import CustomUser
 
-# --- NEW: Import the Email Utility we just created ---
+# --- NEW: Import the Email Utility ---
 try:
     from .utils import send_booking_email
 except ImportError:
@@ -14,10 +14,24 @@ except ImportError:
 
 # --- 1. USER & STAFF SERIALIZERS ---
 
+class HotelSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HotelSettings
+        fields = '__all__'
+        read_only_fields = ['owner', 'license_key', 'license_expiry']
+        # Hide sensitive passwords in GET requests, allow in POST/PATCH
+        extra_kwargs = {
+            'smtp_password': {'write_only': True},
+            'whatsapp_auth_token': {'write_only': True}
+        }
+
 class UserSerializer(serializers.ModelSerializer):
+    # CRITICAL: Include settings so frontend knows the Hotel Name/Logo
+    hotel_settings = HotelSettingsSerializer(read_only=True)
+
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined']
+        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined', 'hotel_settings']
 
 class StaffSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -32,17 +46,6 @@ class StaffSerializer(serializers.ModelSerializer):
         return user
 
 # --- 2. SETTINGS & CONFIG ---
-
-class HotelSettingsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = HotelSettings
-        fields = '__all__'
-        read_only_fields = ['owner', 'license_key', 'license_expiry']
-        # Hide sensitive passwords in GET requests, allow in POST/PATCH
-        extra_kwargs = {
-            'smtp_password': {'write_only': True},
-            'whatsapp_auth_token': {'write_only': True}
-        }
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):
     class Meta:
