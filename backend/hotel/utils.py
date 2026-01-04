@@ -10,8 +10,8 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
     """
     Sends automated emails to guests.
     Priority:
-    1. Hotel's Custom SMTP
-    2. Platform's Global SMTP (CEO Settings)
+    1. Hotel's Custom SMTP (Tenant)
+    2. Platform's Global SMTP (Super Admin/CEO)
     3. Django Default (settings.py)
     """
     try:
@@ -27,7 +27,7 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
         if not guest_email:
             return False 
 
-        # Check Automation Toggles
+        # Check Automation Toggles (Only applies if using Tenant Settings)
         if email_type == 'CONFIRMATION' and not conf.auto_send_confirmation:
             return False
         if email_type == 'INVOICE' and not conf.auto_send_invoice:
@@ -59,7 +59,7 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
 
         # Logic: Determine SMTP Connection
         connection = None
-        sender_email = settings.EMAIL_HOST_USER
+        sender_email = settings.EMAIL_HOST_USER # Default fallback
 
         # A. Try Hotel Custom SMTP (Tenant Level)
         if conf.smtp_server and conf.smtp_username and conf.smtp_password:
@@ -76,11 +76,13 @@ def send_booking_email(booking, email_type='CONFIRMATION'):
                 print(f"Hotel Custom SMTP Failed, attempting fallback: {e}")
                 connection = None 
 
-        # B. Try Platform Global SMTP (CEO/Super Admin Level) - NEW
+        # B. Try Platform Global SMTP (CEO/Super Admin Level) - FALLBACK
         if not connection:
             try:
+                # Import inside function to avoid circular import error
                 from .models import PlatformSettings
                 ps = PlatformSettings.objects.first()
+                
                 if ps and ps.smtp_host and ps.smtp_user:
                     connection = get_connection(
                         host=ps.smtp_host,
@@ -118,8 +120,9 @@ def send_whatsapp_message(booking, msg_type='CONFIRMATION'):
     try:
         conf = booking.owner.hotel_settings
         
-        # Check if WhatsApp is configured
+        # Check if WhatsApp is configured for Tenant
         if not conf.whatsapp_phone_id or not conf.whatsapp_auth_token:
+            # Optional: Add Fallback to Global WhatsApp here if desired
             return False
             
         guest_phone = booking.guest.phone
@@ -171,15 +174,17 @@ def generate_ical_for_room(room):
     cal.add('version', '2.0')
 
     # Get all active bookings
-    bookings = room.bookings.exclude(status='CANCELLED')
+    # Note: 'bookings' is the related_name defined in models.py for Room
+    active_bookings = room.bookings.exclude(status='CANCELLED')
 
-    for booking in bookings:
+    for booking in active_bookings:
         event = Event()
         # We use 'Booked' as summary to protect guest privacy in the public feed
         event.add('summary', 'Booked') 
         event.add('dtstart', booking.check_in_date)
         event.add('dtend', booking.check_out_date)
         event.add('dtstamp', datetime.now())
+        # Unique ID for the calendar event
         event.add('uid', f'{booking.id}@atithi.live')
         
         cal.add_component(event)

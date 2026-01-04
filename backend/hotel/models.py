@@ -115,6 +115,12 @@ class Booking(models.Model):
         ('PARTIAL', 'Partial'),
         ('PAID', 'Paid'),
     ]
+    SOURCE_CHOICES = [
+        ('WALK_IN', 'Walk In'),
+        ('WEB', 'Website'),
+        ('PHONE', 'Phone'),
+        ('OTA', 'Online Travel Agent'),
+    ]
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
@@ -125,15 +131,17 @@ class Booking(models.Model):
     checked_in_at = models.DateTimeField(blank=True, null=True)
     checked_out_at = models.DateTimeField(blank=True, null=True)
     
-    number_of_adults = models.IntegerField(default=1) # Alias if needed by frontend
+    # Kept both to match your existing DB migration history
+    number_of_adults = models.IntegerField(default=1) 
     adults = models.IntegerField(default=1)
     children = models.IntegerField(default=0)
     
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='PENDING')
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES, default='WALK_IN') 
     
-    source = models.CharField(max_length=50, default='WALK_IN') 
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -253,10 +261,8 @@ class PlatformSettings(models.Model):
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        # Singleton Pattern: Ensure only 1 instance exists
-        if not self.pk and PlatformSettings.objects.exists():
-            # If trying to create a 2nd row, prevent it (or return early)
-            return
+        # Force Singleton (Always ID 1)
+        self.pk = 1
         super(PlatformSettings, self).save(*args, **kwargs)
 
     def __str__(self):

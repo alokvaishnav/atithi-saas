@@ -34,8 +34,7 @@ from .serializers import (
     RoomSerializer, BookingSerializer, GuestSerializer, InventorySerializer, 
     ExpenseSerializer, MenuItemSerializer, OrderSerializer, HousekeepingTaskSerializer,
     ActivityLogSerializer, StaffSerializer, HotelSettingsSerializer,
-    PublicHotelSerializer, PublicRoomSerializer, PublicBookingSerializer,
-    PlatformSettingsSerializer
+    PublicHotelSerializer, PublicRoomSerializer, PlatformSettingsSerializer
 )
 from core.models import CustomUser
 

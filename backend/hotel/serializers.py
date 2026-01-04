@@ -12,7 +12,26 @@ try:
 except ImportError:
     pass # Handle circular imports gracefully during migration
 
-# --- 1. SETTINGS & CONFIG ---
+# --- 1. USER & STAFF SERIALIZERS ---
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined']
+
+class StaffSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'password', 'date_joined']
+        read_only_fields = ['date_joined']
+        
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(**validated_data)
+        return user
+
+# --- 2. SETTINGS & CONFIG ---
 
 class HotelSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -34,7 +53,7 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             'whatsapp_token': {'write_only': True}
         }
 
-# --- 2. PUBLIC FACING SERIALIZERS (WEBSITE BUILDER) ---
+# --- 3. PUBLIC FACING SERIALIZERS (WEBSITE BUILDER) ---
 
 class PublicHotelSerializer(serializers.ModelSerializer):
     """Exposes only public hotel info for the booking website"""
@@ -60,7 +79,7 @@ class PublicBookingSerializer(serializers.Serializer):
     adults = serializers.IntegerField()
     children = serializers.IntegerField()
 
-# --- 3. CORE SERIALIZERS ---
+# --- 4. CORE SERIALIZERS (OPERATIONS) ---
 
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
@@ -85,6 +104,10 @@ class BookingPaymentSerializer(serializers.ModelSerializer):
         model = BookingPayment
         fields = ['id', 'amount', 'payment_mode', 'date', 'transaction_id']
 
+# Alias for views that might try to import PaymentSerializer
+class PaymentSerializer(BookingPaymentSerializer):
+    pass
+
 class BookingSerializer(serializers.ModelSerializer):
     # Nested serializers for read operations (provides full details in JSON)
     guest_details = GuestSerializer(source='guest', read_only=True)
@@ -98,11 +121,19 @@ class BookingSerializer(serializers.ModelSerializer):
     guest_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
     room_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
+    # Calculated field for balance
+    balance = serializers.SerializerMethodField()
+
     class Meta:
         model = Booking
         fields = '__all__'
         # These fields are calculated or linked automatically
         read_only_fields = ['owner', 'guest', 'room', 'total_amount', 'status', 'source']
+
+    def get_balance(self, obj):
+        total_charges = obj.total_amount + sum(c.amount for c in obj.charges.all())
+        total_paid = sum(p.amount for p in obj.payments.all())
+        return total_charges - total_paid
 
     def create(self, validated_data):
         # 1. Extract non-model fields
@@ -174,7 +205,7 @@ class BookingSerializer(serializers.ModelSerializer):
         
         return booking
 
-# --- 4. INVENTORY & EXPENSES ---
+# --- 5. INVENTORY & EXPENSES ---
 
 class InventorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -188,7 +219,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['owner']
 
-# --- 5. POS & SERVICES ---
+# --- 6. POS & SERVICES ---
 
 class MenuItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -202,7 +233,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['owner', 'created_at']
 
-# --- 6. HOUSEKEEPING ---
+# --- 7. HOUSEKEEPING ---
 
 class HousekeepingTaskSerializer(serializers.ModelSerializer):
     # Flatten related data for easier frontend display
@@ -217,22 +248,12 @@ class HousekeepingTaskSerializer(serializers.ModelSerializer):
     def get_assigned_to_name(self, obj):
         return obj.assigned_to.username if obj.assigned_to else "Unassigned"
 
-# --- 7. LOGS & STAFF ---
+# --- 8. LOGS ---
 
 class ActivityLogSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='owner.username') # Actually shows who did it if owner is user
+
     class Meta:
         model = ActivityLog
         fields = '__all__'
         read_only_fields = ['owner', 'timestamp']
-
-class StaffSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    
-    class Meta:
-        model = CustomUser
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'password', 'date_joined']
-        read_only_fields = ['date_joined']
-        
-    def create(self, validated_data):
-        user = CustomUser.objects.create_user(**validated_data)
-        return user

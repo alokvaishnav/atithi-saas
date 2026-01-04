@@ -9,7 +9,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-local-dev-key-CHANGE-IN-PROD'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Set to False when deploying to AWS/DigitalOcean public IP if you have a domain
 DEBUG = True
 
 # ALLOWED_HOSTS: Add your AWS IP and any domains you use
@@ -135,8 +134,9 @@ CORS_ALLOW_ALL_ORIGINS = True  # Required for public booking pages
 CORS_ALLOW_CREDENTIALS = True
 
 # File Upload Limits (For high-res logos)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
+# Set to 10MB to prevent server crashes on large uploads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 
 
 # --- EMAIL CONFIGURATION (SMTP) ---
 # Required for Booking Confirmations & Welcome Emails
@@ -144,7 +144,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com' # Change to your provider (Outlook/Zoho/AWS SES) if needed
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-# Note: In a SaaS, these default credentials are used only for system notifications.
-# Hotel-specific emails will use the credentials stored in HotelSettings.
+
+# Note: In your SaaS, these default credentials are used only for system notifications
+# or as a fallback if the Hotel Owner hasn't set their own SMTP.
+# Replace these with your actual "App Password" (not login password)
 EMAIL_HOST_USER = 'your-system-email@gmail.com' 
-EMAIL_HOST_PASSWORD = 'your-app-password' # Use App Password, NOT your real Gmail password
+EMAIL_HOST_PASSWORD = 'your-app-password'

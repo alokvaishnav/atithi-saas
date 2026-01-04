@@ -20,9 +20,11 @@ from hotel.views import (
     SettingsView, AnalyticsView,
     LicenseStatusView, LicenseActivateView,
     POSChargeView, ReportExportView, DailyReportPDFView,
-    SuperAdminStatsView,
+    
+    # Super Admin Views
+    SuperAdminStatsView, PlatformSettingsView, # <--- ADDED THIS IMPORT
 
-    # --- NEW IMPORTS (Website Builder & iCal) ---
+    # Website Builder & iCal Views
     PublicHotelView, PublicBookingCreateView, RoomICalView
 )
 
@@ -72,6 +74,8 @@ urlpatterns = [
 
     # Super Admin
     path('api/super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
+    # This was the missing link causing the 404 error:
+    path('api/super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
 
     # --- NEW: Public Booking Engine (Website Builder) ---
     # These endpoints do NOT require a login token

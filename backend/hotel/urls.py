@@ -31,13 +31,14 @@ from .views import (
 )
 
 # --- ROUTER CONFIGURATION ---
+# This automatically generates URLs for standard CRUD operations (GET, POST, PUT, DELETE)
 router = DefaultRouter()
 router.register(r'rooms', RoomViewSet)
 router.register(r'bookings', BookingViewSet)
 router.register(r'guests', GuestViewSet)
 router.register(r'inventory', InventoryViewSet)
 router.register(r'expenses', ExpenseViewSet)
-router.register(r'services', MenuItemViewSet) # Kept as 'services' per your code
+router.register(r'services', MenuItemViewSet) # Mapped to 'services' to match Frontend API calls
 router.register(r'orders', OrderViewSet)
 router.register(r'housekeeping', HousekeepingViewSet)
 router.register(r'logs', ActivityLogViewSet)
@@ -72,14 +73,14 @@ urlpatterns = [
     path('reports/daily-pdf/', DailyReportPDFView.as_view(), name='daily-report-pdf'),
     path('reports/export/', ReportExportView.as_view(), name='report-export'),
 
-    # 8. Channel Manager (NEW ROUTE)
+    # 8. Channel Manager (iCal for Airbnb/Booking.com)
     path('rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
 
-    # 9. Super Admin Controls
+    # 9. Super Admin Controls (SaaS Platform)
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
     path('super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
 
-    # --- Public Booking Engine ---
+    # 10. Public Booking Engine (Website Builder)
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
 ]
