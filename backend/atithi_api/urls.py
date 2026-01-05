@@ -39,7 +39,7 @@ router.register(r'expenses', ExpenseViewSet)
 router.register(r'services', MenuItemViewSet)
 router.register(r'orders', OrderViewSet)
 router.register(r'housekeeping', HousekeepingViewSet)
-router.register(r'logs', ActivityLogViewSet)
+router.register(r'logs', ActivityLogViewSet, basename='activitylog')
 router.register(r'staff', StaffViewSet, basename='staff')
 
 # --- 2. URL PATTERNS ---
