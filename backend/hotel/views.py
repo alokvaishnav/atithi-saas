@@ -86,7 +86,7 @@ from .serializers import (
     MenuItemSerializer, 
     OrderSerializer, 
     # Alias HousekeepingTaskSerializer to match usage in views
-    HousekeepingTaskSerializer as HousekeepingSerializer, 
+    HousekeepingSerializer as HousekeepingTaskSerializer, 
     ActivityLogSerializer, 
     StaffSerializer, 
     HotelSettingsSerializer,

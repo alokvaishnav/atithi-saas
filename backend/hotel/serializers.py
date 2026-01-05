@@ -245,7 +245,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 # --- 7. HOUSEKEEPING ---
 
-class HousekeepingSerializer(serializers.ModelSerializer):
+class HousekeepingTaskSerializer(serializers.ModelSerializer):
     # Flatten related data for easier frontend display
     room_number = serializers.CharField(source='room.room_number', read_only=True)
     assigned_to_name = serializers.SerializerMethodField()
