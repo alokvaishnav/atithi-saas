@@ -267,3 +267,7 @@ class ActivityLogSerializer(serializers.ModelSerializer):
         model = ActivityLog
         fields = '__all__'
         read_only_fields = ['owner', 'timestamp']
+
+
+# This ensures both names work and fixes the import error
+HousekeepingSerializer = HousekeepingTaskSerializer

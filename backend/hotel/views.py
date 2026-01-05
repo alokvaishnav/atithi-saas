@@ -85,8 +85,7 @@ from .serializers import (
     ExpenseSerializer, 
     MenuItemSerializer, 
     OrderSerializer, 
-    # Alias HousekeepingTaskSerializer to match usage in views
-    HousekeepingSerializer as HousekeepingTaskSerializer, 
+    HousekeepingTaskSerializer, 
     ActivityLogSerializer, 
     StaffSerializer, 
     HotelSettingsSerializer,
@@ -94,6 +93,8 @@ from .serializers import (
     PublicRoomSerializer, 
     PlatformSettingsSerializer
 )
+
+HousekeepingSerializer = HousekeepingTaskSerializer
 
 # ==============================================================================
 # 1. AUTHENTICATION & ONBOARDING
