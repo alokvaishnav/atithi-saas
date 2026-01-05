@@ -3,7 +3,7 @@ from .models import (
     HotelSettings, Room, Guest, Booking, 
     BookingPayment, BookingCharge,
     InventoryItem, MenuItem, Order, Expense, 
-    HousekeepingTask, ActivityLog, PlatformSettings
+    HousekeepingTask, ActivityLog, PlatformSettings, GlobalAnnouncement
 )
 
 # --- 1. CORE ADMIN CONFIGURATIONS ---
@@ -92,6 +92,12 @@ class PlatformSettingsAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return not PlatformSettings.objects.exists()
 
+class GlobalAnnouncementAdmin(admin.ModelAdmin):
+    list_display = ('title', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at')
+    search_fields = ('title', 'message')
+    ordering = ('-created_at',)
+
 # --- 4. REGISTER MODELS ---
 
 admin.site.register(HotelSettings, HotelSettingsAdmin)
@@ -107,3 +113,4 @@ admin.site.register(Expense)
 admin.site.register(HousekeepingTask, HousekeepingAdmin)
 admin.site.register(ActivityLog, ActivityLogAdmin)
 admin.site.register(PlatformSettings, PlatformSettingsAdmin)
+admin.site.register(GlobalAnnouncement, GlobalAnnouncementAdmin)

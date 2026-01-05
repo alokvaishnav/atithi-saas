@@ -2,36 +2,51 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     # --- ViewSets (CRUD operations) ---
-    RoomViewSet, BookingViewSet, GuestViewSet, 
-    InventoryViewSet, ExpenseViewSet, MenuItemViewSet, 
-    OrderViewSet, HousekeepingViewSet, ActivityLogViewSet, 
+    RoomViewSet, 
+    BookingViewSet, 
+    GuestViewSet, 
+    InventoryViewSet, 
+    ExpenseViewSet, 
+    MenuItemViewSet, 
+    OrderViewSet, 
+    HousekeepingViewSet, 
+    ActivityLogViewSet, 
     StaffViewSet,
 
     # --- Auth & Account Views ---
-    CustomLoginView, RegisterView, StaffRegisterView,
-    PasswordResetRequestView, PasswordResetConfirmView,
+    CustomTokenObtainPairView,  # Updated to match JWT implementation
+    StaffRegisterView,
+    PasswordResetRequestView, 
+    PasswordResetConfirmView,
 
     # --- Core System Views ---
-    SettingsView, AnalyticsView,
+    SettingsView, 
+    AnalyticsView,
     
     # --- License Views ---
-    LicenseStatusView, LicenseActivateView,
+    LicenseStatusView, 
+    LicenseActivateView,
 
     # --- POS & Reports Views ---
-    POSChargeView, ReportExportView, DailyReportPDFView,
+    POSChargeView, 
+    ReportExportView, 
+    DailyReportPDFView,
 
     # --- Super Admin Views ---
-    SuperAdminStatsView, PlatformSettingsView,
+    SuperAdminStatsView, 
+    PlatformSettingsView,
 
     # --- Channel Manager View ---
     RoomICalView,
 
     # --- Public Booking Views ---
-    PublicHotelView, PublicBookingCreateView
+    PublicHotelView, 
+    PublicBookingCreateView
 )
 
 # --- ROUTER CONFIGURATION ---
 # This automatically generates URLs for standard CRUD operations (GET, POST, PUT, DELETE)
+# and custom @action decorators like 'mark-clean', 'folio', 'pay', etc.
 router = DefaultRouter()
 router.register(r'rooms', RoomViewSet)
 router.register(r'bookings', BookingViewSet)
@@ -50,8 +65,8 @@ urlpatterns = [
     path('', include(router.urls)),
 
     # 2. Authentication
-    path('login/', CustomLoginView.as_view(), name='login'),
-    path('register/', RegisterView.as_view(), name='register'),
+    # Note: RegisterView is usually handled by a separate serializer/view in core
+    path('login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('register/staff/', StaffRegisterView.as_view(), name='register-staff'),
     
     # 3. Password Reset
@@ -70,19 +85,18 @@ urlpatterns = [
     path('pos/charge/', POSChargeView.as_view(), name='pos-charge'),
 
     # 7. Reports & Exports
+    # Supports ?token=... for direct browser download
     path('reports/daily-pdf/', DailyReportPDFView.as_view(), name='daily-report-pdf'),
     path('reports/export/', ReportExportView.as_view(), name='report-export'),
 
     # 8. Channel Manager (iCal for Airbnb/Booking.com)
     path('rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
 
-    # 9. Super Admin Controls (SaaS Platform)
-    # These endpoints power the "Global HQ" dashboard
+    # 9. Super Admin Controls (SaaS Platform HQ)
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
     path('super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
 
-    # 10. Public Booking Engine (Website Builder)
-    # These endpoints power the guest-facing websites
+    # 10. Public Booking Engine (Guest Facing)
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
 ]

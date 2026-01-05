@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     HotelSettings, Room, Guest, Booking, InventoryItem, 
     Expense, MenuItem, Order, HousekeepingTask, ActivityLog,
-    BookingCharge, BookingPayment, PlatformSettings
+    BookingCharge, BookingPayment, PlatformSettings, GlobalAnnouncement
 )
 from core.models import CustomUser
 
@@ -45,7 +45,7 @@ class StaffSerializer(serializers.ModelSerializer):
         user = CustomUser.objects.create_user(**validated_data)
         return user
 
-# --- 2. SETTINGS & CONFIG ---
+# --- 2. SETTINGS, CONFIG & ANNOUNCEMENTS ---
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -55,6 +55,11 @@ class PlatformSettingsSerializer(serializers.ModelSerializer):
             'smtp_password': {'write_only': True},
             'whatsapp_token': {'write_only': True}
         }
+
+class GlobalAnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GlobalAnnouncement
+        fields = '__all__'
 
 # --- 3. PUBLIC FACING SERIALIZERS (WEBSITE BUILDER) ---
 
@@ -126,6 +131,8 @@ class BookingSerializer(serializers.ModelSerializer):
 
     # Calculated field for balance
     balance = serializers.SerializerMethodField()
+    guest_name_display = serializers.CharField(source='guest.full_name', read_only=True)
+    room_number_display = serializers.CharField(source='room.room_number', read_only=True)
 
     class Meta:
         model = Booking
@@ -238,7 +245,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
 # --- 7. HOUSEKEEPING ---
 
-class HousekeepingTaskSerializer(serializers.ModelSerializer):
+class HousekeepingSerializer(serializers.ModelSerializer):
     # Flatten related data for easier frontend display
     room_number = serializers.CharField(source='room.room_number', read_only=True)
     assigned_to_name = serializers.SerializerMethodField()

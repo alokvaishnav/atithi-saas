@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { 
   Building, Loader2, LogIn, LogOut, 
   CheckCircle, AlertCircle, 
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, TrendingDown,
   ArrowUpRight, ShieldCheck, Brush, History, Activity, ListFilter,
-  PieChart, Plus, Trash
+  Plus, Trash, Megaphone
 } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
+import axios from 'axios'; // Ensure axios is imported for cleaner API calls
 import { API_URL } from '../config'; 
 import { useAuth } from '../context/AuthContext'; 
 
@@ -18,7 +19,7 @@ const Dashboard = () => {
   const [trendData, setTrendData] = useState([]);
   const [tasks, setTasks] = useState([]);        
   const [logs, setLogs] = useState([]); 
-  const [analyticsAPI, setAnalyticsAPI] = useState(null);
+  const [announcements, setAnnouncements] = useState([]); // NEW: Global Announcements
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,60 +29,28 @@ const Dashboard = () => {
   // 🟢 USE CONTEXT
   const { token, role, user, hotelName } = useAuth();
 
-  // 🛡️ ROLE HELPERS (Define who sees what)
+  // 🛡️ ROLE HELPERS
   const canSeeFinance = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role) || user?.is_superuser;
   const canSeeLogs = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
 
-  // --- ANALYTICS CALCULATION (Client Side fallback / Enhancement) ---
-  const calculateAnalytics = useCallback((currentRooms, currentBookings) => {
-    // Safety check: Ensure inputs are arrays
-    const safeRooms = Array.isArray(currentRooms) ? currentRooms : [];
-    const safeBookings = Array.isArray(currentBookings) ? currentBookings : [];
-
-    // 1. Operational Tasks (Always Visible)
-    const dirtyRooms = safeRooms.filter(r => r.status === 'DIRTY');
+  // --- ANALYTICS CALCULATION (Client Side Fallback & Liability Calc) ---
+  const calculateClientSideStats = useCallback((currentRooms, currentBookings) => {
+    // 1. Operational Tasks (Dirty Rooms)
+    const dirtyRooms = Array.isArray(currentRooms) ? currentRooms.filter(r => r.status === 'DIRTY') : [];
     setTasks(dirtyRooms);
 
-    // 2. Financials (Restricted)
-    if (canSeeFinance) {
-        // Simple client-side calc for immediate feedback
-        const totalRev = safeBookings.reduce((sum, b) => sum + parseFloat(b.total_amount || 0), 0);
-        const totalPaid = safeBookings.reduce((sum, b) => {
+    // 2. Calculate Liability (Pending Payments) locally as it relies on granular booking data
+    if (canSeeFinance && Array.isArray(currentBookings)) {
+        const totalLiability = currentBookings.reduce((sum, b) => {
+            // Only count confirmed or checked-in bookings for liability
+            if (b.status === 'CANCELLED') return sum;
+            
+            const total = parseFloat(b.total_amount || 0);
             const paid = b.payments?.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0) || 0;
-            return sum + paid;
+            return sum + (total - paid);
         }, 0);
-        
-        // Basic Estimation (Backend is source of truth)
-        const estimatedExpenses = totalRev * 0.4; 
-        
-        setFinancials({
-            revenue: totalRev || 0,
-            expenses: estimatedExpenses || 0,
-            profit: (totalRev - estimatedExpenses) || 0,
-            liability: (totalRev - totalPaid) || 0 
-        });
 
-        // Trend Data (Last 7 Days)
-        const last7Days = {};
-        const today = new Date();
-        for(let i=6; i>=0; i--) {
-            const d = new Date(today);
-            d.setDate(d.getDate() - i);
-            last7Days[d.toISOString().split('T')[0]] = 0;
-        }
-
-        safeBookings.forEach(b => {
-            const date = b.check_in_date; 
-            if (last7Days[date] !== undefined) {
-                last7Days[date] += parseFloat(b.total_amount || 0);
-            }
-        });
-
-        const trend = Object.keys(last7Days).map(date => ({
-            date,
-            daily_revenue: last7Days[date] || 0
-        }));
-        setTrendData(trend);
+        setFinancials(prev => ({ ...prev, liability: totalLiability }));
     }
   }, [canSeeFinance]);
 
@@ -118,20 +87,33 @@ const Dashboard = () => {
         setRooms(Array.isArray(roomsData) ? roomsData : []);
         setBookings(Array.isArray(bookingsData) ? bookingsData : []);
         
-        // Handle Restricted Data
+        // Always run client side calc for Tasks & Liability
+        calculateClientSideStats(roomsData, bookingsData);
+        
+        // Handle Logs
         if (resLogs && resLogs.ok) setLogs(await resLogs.json());
         
+        // Handle Analytics (Financials + Announcements + Trend)
         if (resAnalytics && resAnalytics.ok) {
             const analyticsData = await resAnalytics.json();
-            setAnalyticsAPI(analyticsData);
-            if(analyticsData.financials) {
-                 setFinancials(analyticsData.financials);
-                 if(analyticsData.trend) setTrendData(analyticsData.trend);
-            } else {
-                 calculateAnalytics(roomsData, bookingsData);
+            
+            // 1. Set Announcements
+            setAnnouncements(analyticsData.announcements || []);
+
+            // 2. Set Financials (Prefer Backend Data)
+            if (analyticsData.stats) {
+                setFinancials(prev => ({
+                    ...prev, // Keep liability from client calc
+                    revenue: analyticsData.stats.revenue || 0,
+                    expenses: analyticsData.stats.total_expenses || 0,
+                    profit: analyticsData.stats.net_profit || 0,
+                }));
             }
-        } else {
-             calculateAnalytics(roomsData, bookingsData);
+
+            // 3. Set Trend
+            if (analyticsData.trend) {
+                setTrendData(analyticsData.trend);
+            }
         }
       }
 
@@ -141,7 +123,7 @@ const Dashboard = () => {
       if (showLoader) setLoading(false); 
       setRefreshing(false);
     }
-  }, [token, canSeeFinance, canSeeLogs, calculateAnalytics]);
+  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats]);
 
   useEffect(() => { 
     fetchData(true); 
@@ -169,7 +151,8 @@ const Dashboard = () => {
   const maintenance = safeRooms.filter(r => r.status === 'MAINTENANCE').length;
   
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
-  const healthScore = analyticsAPI?.health_score || (totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0);
+  // Calculate health score dynamically
+  const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
   const maxRevenue = Math.max(...revenueValues, 1000); 
@@ -188,7 +171,7 @@ const Dashboard = () => {
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans animate-in fade-in duration-500">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="bg-blue-600 text-white p-1 rounded-md shadow-lg shadow-blue-200"><ShieldCheck size={14}/></span>
@@ -212,6 +195,26 @@ const Dashboard = () => {
             </div>
         </div>
       </div>
+
+      {/* 📢 GLOBAL ANNOUNCEMENTS (NEW SECTION) */}
+      {announcements.length > 0 && (
+        <div className="mb-10 space-y-4">
+          {announcements.map((ann, index) => (
+            <div key={index} className="bg-indigo-600 text-white p-4 md:p-5 rounded-3xl shadow-xl shadow-indigo-200 flex items-start gap-4 animate-in slide-in-from-top-4 border-l-8 border-yellow-400">
+              <div className="p-3 bg-white/10 rounded-xl shrink-0">
+                <Megaphone size={24} className="text-yellow-300 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">{ann.title}</h3>
+                <p className="text-indigo-100 leading-relaxed text-sm mt-1">{ann.message}</p>
+                <p className="text-[10px] text-indigo-300 mt-2 font-mono uppercase opacity-70">
+                    Broadcasted: {new Date(ann.created_at).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 🚨 TASKS ROW (Visible to All) */}
       {tasks.length > 0 && (
@@ -249,7 +252,7 @@ const Dashboard = () => {
                 <div className="w-12 h-12 md:w-14 md:h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center shadow-inner group-hover:bg-red-600 group-hover:text-white transition-colors"><TrendingDown size={28}/></div>
                 <AlertCircle className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Est. Expenses</p>
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Expenses</p>
               <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">₹{(financials.expenses || 0).toLocaleString()}</h3>
             </div>
 

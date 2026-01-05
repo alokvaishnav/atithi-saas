@@ -260,7 +260,7 @@ class PlatformSettings(models.Model):
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
 
-    # --- NEW: EDITABLE WELCOME EMAIL (The missing piece) ---
+    # --- EDITABLE WELCOME EMAIL ---
     welcome_email_subject = models.CharField(
         max_length=255, 
         default="Welcome to {app_name} - Your Hotel Manager",
@@ -278,3 +278,13 @@ class PlatformSettings(models.Model):
 
     def __str__(self):
         return "Global Platform Configuration"
+
+# --- 6. GLOBAL ANNOUNCEMENTS (SUPER ADMIN BROADCAST) ---
+class GlobalAnnouncement(models.Model):
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
