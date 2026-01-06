@@ -82,7 +82,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // 👑 ADMIN / Superuser bypasses all role checks automatically
+  // Superuser bypasses role checks
   if (user?.is_superuser || role === 'ADMIN') return children;
 
   // If roles are defined and user doesn't have them
@@ -158,7 +158,7 @@ const AppLayout = () => {
                 </div>
             </header>
 
-            {/* Desktop Header Placeholder */}
+            {/* Desktop Header Placeholder (if needed for global search/actions) */}
             <div className="hidden md:flex justify-end p-4 absolute top-0 right-0 z-20 pointer-events-none"></div>
 
             {/* SCROLLABLE PAGE AREA */}
@@ -180,13 +180,13 @@ const AppLayout = () => {
                 <Route path="/folio/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Folio /></ProtectedRoute>} />
                 <Route path="/print-grc/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><PrintGRC /></ProtectedRoute>} />
 
-                {/* 🔴 POS & SERVICES */}
+                {/* 🔴 POS & SERVICES (Restricted: No Housekeeping) */}
                 <Route path="/pos" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><POS /></ProtectedRoute>} />
                 <Route path="/services" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
 
-                {/* 👑 SUPER ADMIN (Platform Control) */}
+                {/* 👑 SUPER ADMIN */}
                 <Route path="/super-admin" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'SUPERADMIN']}>
+                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'SUPERADMIN']}>
                     <GlobalSettings />
                   </ProtectedRoute>
                 } />
@@ -243,7 +243,7 @@ const AppLayout = () => {
                   </ProtectedRoute>
                 } />
 
-                {/* Fallback for authenticated users */}
+                {/* Fallback for internal authenticated users */}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </div>
@@ -261,7 +261,7 @@ const AppContent = () => {
 
   return (
     <Routes>
-        {/* ROOT LOGIC */}
+        {/* ROOT LOGIC: Redirect based on auth status */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
         
         {/* PUBLIC AUTH ROUTES */}
@@ -275,17 +275,17 @@ const AppContent = () => {
         {/* 🌏 PUBLIC HOTEL WEBSITE */}
         <Route path="/hotel/:username" element={<BookingSite />} />
 
-        {/* EXTERNAL GUEST FACING */}
+        {/* EXTERNAL GUEST FACING (No Auth Required) */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
-        {/* 🧹 HOUSEKEEPING MOBILE APP (Protected but Full Screen) */}
+        {/* 🧹 HOUSEKEEPING MOBILE APP */}
         <Route path="/hk-mobile" element={
           <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING']}>
             <HousekeepingMobile />
           </ProtectedRoute>
         } />
 
-        {/* CATCH ALL */}
+        {/* 🟢 CATCH ALL: Handled by AppLayout which contains internal Routes */}
         <Route path="/*" element={
           <ProtectedRoute>
             <AppLayout />
