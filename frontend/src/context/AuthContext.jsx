@@ -32,7 +32,6 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const initAuth = () => {
         try {
-            // We use a single JSON object for safer storage
             const storedToken = localStorage.getItem('access_token');
             const storedUserData = localStorage.getItem('user_data');
 
@@ -42,12 +41,14 @@ export const AuthProvider = ({ children }) => {
                 setToken(storedToken);
                 setUser(parsedUser);
                 
-                // 🟢 CRITICAL FIX: Ensure Role is Read Correctly
-                // Prioritize Superuser status, then specific role, fallback to STAFF
-                const activeRole = parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF');
+                // 🟢 FIX: Prioritize ADMIN role, then Superuser -> OWNER, then fallback
+                const activeRole = parsedUser.role === 'ADMIN' 
+                    ? 'ADMIN' 
+                    : (parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF'));
+                
                 setRole(activeRole);
                 
-                // 🟢 EXTRACT HOTEL NAME (Handle nested settings or flat key)
+                // 🟢 EXTRACT HOTEL NAME
                 const settingsName = parsedUser.hotel_settings?.hotel_name;
                 const flatName = parsedUser.hotel_name;
                 setHotelName(settingsName || flatName || 'Atithi HMS');
@@ -56,7 +57,6 @@ export const AuthProvider = ({ children }) => {
             }
         } catch (error) {
             console.error("Auth Restoration Error:", error);
-            // If data is corrupted, clear it to prevent loops
             logout(); 
         } finally {
             setLoading(false);
@@ -82,11 +82,12 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('access_token', data.access);
             localStorage.setItem('refresh_token', data.refresh);
             
-            // B. Logic for Role Identity
-            const detectedRole = data.is_superuser ? 'OWNER' : (data.role || 'STAFF');
+            // B. FIX: Detect ADMIN vs OWNER vs STAFF
+            const detectedRole = data.role === 'ADMIN' 
+                ? 'ADMIN' 
+                : (data.is_superuser ? 'OWNER' : (data.role || 'STAFF'));
             
-            // C. Extract Hotel Settings (Logo, Name, etc.)
-            // The backend UserSerializer now returns a 'hotel_settings' object.
+            // C. Extract Hotel Settings
             const settings = data.hotel_settings || {};
             const displayHotelName = settings.hotel_name || data.hotel_name || 'Atithi HMS';
 
@@ -97,10 +98,9 @@ export const AuthProvider = ({ children }) => {
                 is_superuser: data.is_superuser,
                 role: detectedRole,
                 hotel_name: displayHotelName,
-                hotel_settings: settings // Store the full settings object for the Layout to use
+                hotel_settings: settings 
             };
 
-            // Save as one blob to prevent sync issues
             localStorage.setItem('user_data', JSON.stringify(userData));
 
             // E. Update React State
@@ -120,27 +120,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 4️⃣ RBAC Helper: Enhanced with Superuser bypass
-  // usage: hasRole(['OWNER', 'MANAGER'])
+  // 4️⃣ RBAC Helper: Super Admin / Owner check
   const hasRole = (allowedRoles) => {
       if (!role) return false;
-      // Owners and Superusers bypass role checks
-      if (user?.is_superuser || role === 'OWNER') return true; 
+      // ADMIN role and Superusers bypass most restrictions
+      if (role === 'ADMIN' || user?.is_superuser || role === 'OWNER') return true; 
       return allowedRoles.includes(role);
   };
 
   // 5️⃣ Live Settings Updater
-  // Updates the context and localStorage when user changes settings
   const updateGlobalProfile = (name) => {
-      // Update state
       setHotelName(name);
-      
-      // Update local storage to persist change
       if (user) {
           const updatedUser = { 
               ...user, 
               hotel_name: name,
-              // Update nested settings too so refresh keeps the name
               hotel_settings: { ...user.hotel_settings, hotel_name: name }
           };
           setUser(updatedUser);

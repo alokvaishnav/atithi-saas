@@ -16,7 +16,6 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
-  // Access global user state and profile update functions
   const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
   // State for SaaS Platform Branding (Support Info)
@@ -36,11 +35,10 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 1. FETCH HOTEL BRANDING (Tenant Name)
   useEffect(() => {
     const fetchHotelBranding = async () => {
-      // Safety Check: Don't fetch if no token is present
       if (!token) return;
       
-      // Only fetch if role allows (Owners/Managers) or user is a superuser
-      if (role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
+      // Included 'ADMIN' in the fetch check
+      if (role !== 'ADMIN' && role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
 
       try {
         const res = await axios.get(`${API_URL}/api/settings/`, {
@@ -48,7 +46,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         });
         
         const data = res.data;
-        // Handle both object and array responses (DRF sometimes returns list for ModelViewSet)
         const settings = Array.isArray(data) ? data[0] : data;
         
         if (settings && settings.hotel_name) {
@@ -56,11 +53,9 @@ const Sidebar = ({ isOpen, onClose }) => {
         }
       } catch (err) {
         // Silent fail: Using cached/default hotel branding from Context
-        // console.log("Using cached/default hotel branding");
       }
     };
     
-    // Only fetch if name is missing or is the default generic name
     if (!hotelName || hotelName === 'ATITHI HMS') {
         fetchHotelBranding();
     }
@@ -71,7 +66,6 @@ const Sidebar = ({ isOpen, onClose }) => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
-            // Note: Backend endpoint must allow GET for authenticated users
             const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -97,18 +91,18 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   };
 
-  // 🧭 RBAC Navigation Groups
+  // 🧭 RBAC Navigation Groups - Added 'ADMIN' to allow Super Admin access
   const groups = [
     {
       title: "Main",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
       items: [
         { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
       ]
     },
     {
       title: "Front Office",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST'],
       items: [
         { icon: <ConciergeBell size={18} />, label: 'Reception Desk', path: '/front-desk' },
         { icon: <BedDouble size={18} />, label: 'Room Status', path: '/rooms' },
@@ -117,10 +111,10 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       title: "Operations",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        // 🔒 Hide POS/Inventory from Housekeeping staff
+        // 🔒 Hide POS/Inventory from Housekeeping staff - Added role check for ADMIN to see them
         ...(role !== 'HOUSEKEEPING' ? [
             { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
             { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
@@ -130,7 +124,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       title: "Reservations",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST'],
       items: [
         { icon: <CalendarCheck size={18} />, label: 'Booking List', path: '/bookings' },
         { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' },
@@ -138,12 +132,11 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       title: "Finance & Reports",
-      roles: ['OWNER', 'MANAGER', 'ACCOUNTANT'], 
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
-        // { icon: <Wallet size={18} />, label: 'Accounting', path: '/accounting' },
-        // 🔒 Hide Staff Directory from Accountants
-        ...(['OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
+        // 🔒 Hide Staff Directory from Accountants - Added ADMIN to the list
+        ...(['ADMIN', 'OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
             { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
         ] : []),
         { icon: <FileText size={18} />, label: 'Audit Reports', path: '/reports' },
@@ -151,14 +144,14 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       title: "Configuration",
-      roles: ['OWNER', 'MANAGER'], 
+      roles: ['ADMIN', 'OWNER', 'MANAGER'], 
       items: [
         { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
       ]
     },
     {
       title: "Help Desk",
-      roles: ['OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
       items: [
         { icon: <BookOpen size={18} />, label: 'Support Portal', path: '/support' },
       ]
@@ -207,7 +200,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
           {/* 👑 SUPER ADMIN SECTION */}
-          {(user?.is_superuser || user?.role === 'SUPERADMIN') && (
+          {(user?.is_superuser || role === 'ADMIN' || user?.role === 'SUPERADMIN') && (
               <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
                   SaaS Control Plane
@@ -232,7 +225,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
 
           {groups.map((group, index) => (
-            (group.roles.includes(role) || user?.is_superuser) && group.items.length > 0 && (
+            (group.roles.includes(role) || role === 'ADMIN' || user?.is_superuser) && group.items.length > 0 && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
                   {group.title}
@@ -274,11 +267,11 @@ const Sidebar = ({ isOpen, onClose }) => {
         <div className="p-6 border-t border-white/5 bg-slate-900/50 backdrop-blur-md sticky bottom-0">
           <div className="px-4 py-3 mb-4 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center">
-                <ShieldCheck size={16} className={user?.is_superuser ? "text-purple-400" : "text-blue-400"}/>
+                <ShieldCheck size={16} className={(user?.is_superuser || role === 'ADMIN') ? "text-purple-400" : "text-blue-400"}/>
               </div>
               <div className="overflow-hidden">
                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-1">
-                    {user?.is_superuser ? 'System Admin' : 'Active Identity'}
+                    {(user?.is_superuser || role === 'ADMIN') ? 'System Admin' : 'Active Identity'}
                   </p>
                   <p className="text-[11px] font-black text-white tracking-tight uppercase truncate">
                     {user?.username || role || 'Staff'}
