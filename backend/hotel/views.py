@@ -115,6 +115,9 @@ from .serializers import (
     PlatformSettingsSerializer
 )
 
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
 # Alias for backward compatibility if code references HousekeepingSerializer
 HousekeepingSerializer = HousekeepingTaskSerializer
 # ==============================================================================
@@ -2321,3 +2324,40 @@ class PublicBookingCreateView(APIView):
         except Exception as e:
             logger.error(f"Booking Creation Error: {e}", exc_info=True)
             return Response({'error': 'An internal error occurred while processing the booking.'}, status=500)
+        
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Customizes the JWT response to include User Role & Hotel Info.
+    This saves the frontend from making a second API call just to get the name/logo.
+    """
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        # Add custom claims to the token payload (encrypted inside the token)
+        token['role'] = user.role
+        token['username'] = user.username
+        return token
+
+    def validate(self, attrs):
+        # The default result contains 'access' and 'refresh' tokens
+        data = super().validate(attrs)
+        
+        # We append extra user details to the JSON response
+        data['id'] = self.user.id
+        data['username'] = self.user.username
+        data['email'] = self.user.email
+        data['role'] = self.user.role
+        
+        # Include Hotel Details if they exist (For Dashboard Header)
+        if hasattr(self.user, 'hotel_settings') and self.user.hotel_settings:
+            data['hotel_name'] = self.user.hotel_settings.hotel_name
+            if self.user.hotel_settings.logo:
+                data['hotel_logo'] = self.user.hotel_settings.logo.url
+        
+        return data
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Login Endpoint: Returns JWT + User Data
+    """
+    serializer_class = CustomTokenObtainPairSerializer
