@@ -28,10 +28,14 @@ const BookingSite = () => {
     room_type: ''
   });
 
+  // Helper: Get today's date for date picker constraints
+  const today = new Date().toISOString().split('T')[0];
+
   // 1. Fetch Hotel Data (On Load)
   useEffect(() => {
     const fetchHotel = async () => {
         try {
+            // Note: We use native fetch here, so we must construct the full URL
             const res = await fetch(`${API_URL}/api/public/hotel/${username}/`);
             if (res.ok) {
                 const data = await res.json();
@@ -72,7 +76,9 @@ const BookingSite = () => {
               window.scrollTo(0, 0); // Scroll to top to show success message
           } else {
               const err = await res.json();
-              alert("Booking Failed: " + (err.error || "Room might be unavailable for selected dates."));
+              // Display specific backend error or generic message
+              const errorMsg = err.error || (err.check_out ? err.check_out[0] : "Room might be unavailable for selected dates.");
+              alert("Booking Failed: " + errorMsg);
           }
       } catch (err) { 
           alert("Network Error. Please check your connection."); 
@@ -166,14 +172,24 @@ const BookingSite = () => {
                       <div className="flex items-center gap-4">
                           <div className="flex-1">
                               <p className="text-xs font-bold text-slate-400 mb-1 ml-1">Check In</p>
-                              <input required type="date" className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
-                                  onChange={e => setForm({...form, check_in: e.target.value})} />
+                              <input 
+                                required 
+                                type="date" 
+                                min={today}
+                                className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                                onChange={e => setForm({...form, check_in: e.target.value})} 
+                              />
                           </div>
                           <span className="text-slate-300 mt-6">→</span>
                           <div className="flex-1">
                               <p className="text-xs font-bold text-slate-400 mb-1 ml-1">Check Out</p>
-                              <input required type="date" className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
-                                  onChange={e => setForm({...form, check_out: e.target.value})} />
+                              <input 
+                                required 
+                                type="date" 
+                                min={form.check_in || today}
+                                className="w-full bg-white p-3 rounded-xl border border-slate-200 font-bold text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all" 
+                                onChange={e => setForm({...form, check_out: e.target.value})} 
+                              />
                           </div>
                       </div>
                   </div>

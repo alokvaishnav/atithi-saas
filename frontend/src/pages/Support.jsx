@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Mail, Phone, HelpCircle, FileText, MessageSquare, 
   Send, Server, Database, Wifi, CheckCircle, 
-  Loader2, Plus, Trash, LifeBuoy
+  Loader2, LifeBuoy
 } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../config';
@@ -33,13 +33,20 @@ const Support = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.data) {
-          setInfo(prev => ({ ...prev, ...res.data }));
+          // If the API returns an array, take the first item, otherwise use the object directly
+          const data = Array.isArray(res.data) ? res.data[0] : res.data;
+          setInfo(prev => ({ 
+              ...prev, 
+              app_name: data.app_name || prev.app_name,
+              company_name: data.company_name || prev.company_name,
+              support_email: data.support_email || prev.support_email
+          }));
         }
       } catch (err) {
-        console.error("Could not load dynamic support info, using defaults.");
+        console.warn("Using default support info (API unreachable)");
       }
     };
-    fetchSupportInfo();
+    if (token) fetchSupportInfo();
   }, [token]);
 
   // --- 4. TICKET SUBMISSION (SIMULATED) ---
@@ -48,6 +55,7 @@ const Support = () => {
     setSending(true);
     
     // Simulate API Call (Since we haven't built a Ticketing Backend yet)
+    // In a real app, you would POST to /api/tickets/ here
     setTimeout(() => {
         setSending(false);
         setSent(true);
@@ -107,7 +115,7 @@ const Support = () => {
             </div>
             <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Knowledge Base</p>
-                <button className="text-sm font-black text-green-600 underline">View Guides</button>
+                <button className="text-sm font-black text-green-600 underline hover:text-green-700 transition-colors">View Guides</button>
             </div>
         </div>
       </div>
@@ -172,7 +180,7 @@ const Support = () => {
                             />
                         </div>
                         <div className="pt-2">
-                            <button type="submit" disabled={sending} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all flex items-center gap-2">
+                            <button type="submit" disabled={sending} className="bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all flex items-center gap-2 shadow-lg disabled:opacity-70 disabled:cursor-not-allowed">
                                 {sending ? <Loader2 className="animate-spin" size={16}/> : <><Send size={16}/> Submit Ticket</>}
                             </button>
                         </div>

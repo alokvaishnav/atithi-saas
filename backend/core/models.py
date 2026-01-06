@@ -1,21 +1,37 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 class CustomUser(AbstractUser):
+    """
+    Custom User model supporting SaaS Tenant hierarchy.
+    - ADMIN: The SaaS Superuser (You/Platform Owner).
+    - OWNER: The Hotel Owner (Tenant).
+    - MANAGER/STAFF/etc: Employees linked to an Owner.
+    """
     ROLE_CHOICES = (
-        ('OWNER', 'Owner'),
-        ('MANAGER', 'Manager'),
+        ('ADMIN', 'SaaS Admin'),       # Superuser / Platform Owner
+        ('OWNER', 'Hotel Owner'),      # Tenant (Pays for subscription)
+        ('MANAGER', 'Manager'),        # Staff with high privileges
         ('RECEPTIONIST', 'Receptionist'),
         ('HOUSEKEEPING', 'Housekeeping'),
         ('ACCOUNTANT', 'Accountant'),
+        ('STAFF', 'Generic Staff'),    # Fallback
     )
     
-    # Enforce unique email for robust account management
-    email = models.EmailField(unique=True)
+    # Enforce unique email for robust account management (Critical for SaaS)
+    # This overrides the default Django behavior where email is optional.
+    email = models.EmailField(_('email address'), unique=True, blank=False, null=False)
     
+    # Critical for OTPs and rapid communication in hotels
+    phone_number = models.CharField(max_length=15, blank=True, null=True, unique=True)
+    
+    # User Avatar / Profile Picture
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+
     role = models.CharField(max_length=50, choices=ROLE_CHOICES, default='OWNER')
     
-    # Link staff accounts to the main Hotel Owner account
+    # Link staff accounts to the main Hotel Owner account (Multi-tenancy Link)
     # - If user is 'OWNER': this is typically NULL (they are the top level).
     # - If user is 'STAFF': this points to the 'OWNER' who employs them.
     hotel_owner = models.ForeignKey(
@@ -26,5 +42,30 @@ class CustomUser(AbstractUser):
         related_name='staff_members'
     )
 
+    class Meta:
+        ordering = ['-date_joined']
+        verbose_name = 'User'
+        verbose_name_plural = 'Users'
+
+    def save(self, *args, **kwargs):
+        """
+        Normalize email to lowercase before saving.
+        This prevents duplicates like 'User@example.com' vs 'user@example.com'.
+        """
+        if self.email:
+            self.email = self.email.lower()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_hotel_owner(self):
+        """Helper to quickly check if user is a tenant owner."""
+        return self.role == 'OWNER'
+
+    @property
+    def is_hotel_staff(self):
+        """Helper to check if user is any type of staff member."""
+        return self.role in ['MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING', 'ACCOUNTANT', 'STAFF']
+
     def __str__(self):
+        # Returns: "john_doe (MANAGER)"
         return f'{self.username} ({self.role})'

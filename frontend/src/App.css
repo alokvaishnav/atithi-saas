@@ -2,26 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 🟢 Global Resets for Dashboard Layout */
+/* =========================================
+   1. GLOBAL RESETS & TYPOGRAPHY
+   ========================================= */
 html, body, #root {
   height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
-  /* overflow: hidden;  Optional: Use this if you want the dashboard to handle all scrolling internally */
+  scroll-behavior: smooth;
 }
 
-/* 🟢 Font Setup (Inter) - Matches your index.html configuration */
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f8fafc; /* Matches bg-slate-50 */
+  color: #0f172a; /* Matches text-slate-900 */
 }
 
-/* 🟢 Custom Scrollbar Utility */
-/* Used in POS, Rooms, and Reports for a cleaner look */
+/* Global Text Selection Style */
+::selection {
+  background-color: #3b82f6; /* Blue-500 */
+  color: white;
+}
+
+/* =========================================
+   2. CUSTOM UTILITIES
+   ========================================= */
 @layer utilities {
+  
+  /* --- A. Custom Scrollbar (Slim & Clean) --- */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -32,14 +43,14 @@ body {
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-300 rounded-full;
+    @apply bg-slate-200 rounded-full;
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-slate-400;
   }
 
-  /* Fallback for scrollbar-hide if the plugin fails */
+  /* --- B. Hide Scrollbar (for cleaner UI) --- */
   .scrollbar-hide::-webkit-scrollbar {
       display: none;
   }
@@ -47,4 +58,144 @@ body {
       -ms-overflow-style: none;
       scrollbar-width: none;
   }
+
+  /* --- C. Glass Effect --- */
+  .glass {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20;
+  }
+
+  /* --- D. Mobile Safe Area (For Housekeeping App) --- */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+}
+
+/* =========================================
+   3. REACT BIG CALENDAR OVERRIDES
+   ========================================= */
+.rbc-calendar {
+  border: none !important;
+  font-family: inherit !important;
+}
+
+.rbc-header {
+  padding: 10px !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  font-size: 10px !important;
+  color: #94a3b8 !important; /* Slate-400 */
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.rbc-off-range-bg {
+  background: #f8fafc !important; /* Slate-50 */
+}
+
+.rbc-today {
+  background-color: #eff6ff !important; /* Blue-50 */
+}
+
+.rbc-event {
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* =========================================
+   4. PRINT STYLES (For Invoices/GRC)
+   ========================================= */
+@media print {
+  /* Force background colors to print (for status badges) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide UI elements */
+  aside, 
+  nav, 
+  header, 
+  button, 
+  .no-print,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset layout for printing */
+  body, #root, main, .print-container {
+    background-color: white !important;
+    color: black !important;
+    height: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Paper setup */
+  @page {
+    margin: 0;
+    size: auto;
+  }
+}
+
+/* =========================================
+   5. ANIMATIONS (Tailwind-Animate Support)
+   ========================================= */
+/* These map to the 'animate-in' classes used in the React components */
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+.animate-in {
+  animation: enter 0.3s ease-out duration-300;
+}
+
+.animate-out {
+  animation: exit 0.2s ease-in duration-200;
+}
+
+.fade-in {
+  animation-name: enter;
+  animation-duration: 0.5s;
+}
+
+.slide-in-from-bottom-4 {
+  --tw-enter-translate-y: 1rem;
+}
+
+.slide-in-from-top-2 {
+  --tw-enter-translate-y: -0.5rem;
+}
+
+/* Shake animation for errors */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.shake {
+  animation: shake 0.3s ease-in-out;
 }

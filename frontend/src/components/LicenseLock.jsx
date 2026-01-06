@@ -16,15 +16,24 @@ const LicenseLock = ({ children }) => {
 
   // 1. Verify License on Mount
   useEffect(() => {
+    // If no token exists (user not logged in), we skip the check 
+    // and let the AuthContext handle the redirect to Login.
+    if (!token) {
+        setStatus('ACTIVE');
+        return;
+    }
     checkLicense();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   const checkLicense = async () => {
     try {
         // Fetch license status from backend
         const res = await fetch(`${API_URL}/api/license/status/`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
 
         if (res.ok) {
@@ -39,14 +48,15 @@ const LicenseLock = ({ children }) => {
                 setStatus('ACTIVE');
             }
         } else {
-            // Fallback: If server checks fail, don't lock the user out immediately (Fail-Open)
-            // You can change this to 'EXPIRED' if you want strict enforcement
+            // Fallback: If server checks fail (e.g., 500 error or 401), 
+            // we default to ACTIVE to prevent locking users out during server glitches.
             console.warn("License check failed, defaulting to active.");
             setStatus('ACTIVE'); 
         }
     } catch (err) {
         console.error("License Check Error:", err);
-        setStatus('ACTIVE'); // Fail open for connectivity issues
+        // Fail open for connectivity issues (Offline Mode Support)
+        setStatus('ACTIVE'); 
     }
   };
 
@@ -69,10 +79,11 @@ const LicenseLock = ({ children }) => {
         if (res.ok) {
             const data = await res.json();
             alert(`Activation Successful! Valid until: ${data.expiry_date}`);
-            checkLicense(); // Refresh status immediately
+            await checkLicense(); // Refresh status immediately
             setInputKey('');
         } else {
-            setError("Invalid License Key. Please check and try again.");
+            const errData = await res.json();
+            setError(errData.error || "Invalid License Key. Please check and try again.");
         }
     } catch (err) {
         setError("Network error. Unable to verify key.");
@@ -153,7 +164,7 @@ const LicenseLock = ({ children }) => {
     <>
         {children}
         
-        {/* Grace Period Warning Banner */}
+        {/* Grace Period Warning Banner (Visible if days <= 7 but not expired) */}
         {status === 'WARNING' && (
             <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg animate-in slide-in-from-bottom-full">
                 <div className="flex items-center gap-3 container mx-auto max-w-7xl">

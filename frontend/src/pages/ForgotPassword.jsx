@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Mail, Loader2, ArrowLeft, KeyRound, 
-  CheckCircle, AlertCircle, Timer, HelpCircle, Phone,
-  Plus, Trash 
+  CheckCircle, AlertCircle, Timer, HelpCircle 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -14,22 +13,37 @@ const ForgotPassword = () => {
   const [message, setMessage] = useState(null);
   const [cooldown, setCooldown] = useState(0);
 
-  // Handle Countdown Timer
+  // --- TIMER LOGIC ---
   useEffect(() => {
-    let timer;
+    let interval;
     if (cooldown > 0) {
-      timer = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+      interval = setInterval(() => {
+        setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
     }
-    return () => clearInterval(timer);
+    return () => clearInterval(interval);
   }, [cooldown]);
 
+  // --- SUBMIT HANDLER ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
 
+    // Basic regex validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        setStatus('error');
+        setMessage("Please enter a valid email address.");
+        return;
+    }
+
     setLoading(true);
     setMessage(null);
-    setStatus('idle');
+    
+    // If we are already in success mode (Resending), don't reset to idle
+    if (status !== 'success') {
+        setStatus('idle');
+    }
 
     try {
         const res = await fetch(`${API_URL}/api/password_reset/`, {
@@ -38,14 +52,18 @@ const ForgotPassword = () => {
             body: JSON.stringify({ email })
         });
         
-        // We generally show success even if email doesn't exist for security (to prevent enumeration)
-        // But if your API returns specific errors, handle them here.
-        if (res.ok) {
+        // Security Best Practice: Always show success to prevent email enumeration
+        // unless the server returns a specific "Too Many Requests" (429) error.
+        if (res.ok || res.status === 404) {
             setStatus('success');
-            setCooldown(60); // Start 60s cooldown
+            setCooldown(60); // Reset 60s cooldown
+            setMessage(null);
+        } else if (res.status === 429) {
+            setStatus('error');
+            setMessage("Too many attempts. Please wait a moment.");
         } else {
             setStatus('error');
-            setMessage("Unable to process request. Please try again later.");
+            setMessage("Unable to process request. Please try again.");
         }
     } catch (err) { 
         console.error(err);
@@ -59,6 +77,7 @@ const ForgotPassword = () => {
   const handleRetry = () => {
       setStatus('idle');
       setEmail('');
+      setMessage(null);
   };
 
   return (
@@ -68,10 +87,10 @@ const ForgotPassword = () => {
         <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-100 rounded-full blur-[100px] opacity-50"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-purple-100 rounded-full blur-[100px] opacity-50"></div>
 
-        <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-100 relative z-10">
+        <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-100 relative z-10 animate-in fade-in zoom-in duration-500">
             
             {/* Navigation */}
-            <Link to="/login" className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-8 hover:text-slate-800 transition-colors group">
+            <Link to="/login" className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-8 hover:text-slate-800 transition-colors group w-fit">
                 <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform"/> Back to Login
             </Link>
             
@@ -82,7 +101,7 @@ const ForgotPassword = () => {
 
             {/* CONDITIONAL UI: SUCCESS STATE */}
             {status === 'success' ? (
-                <div className="animate-in fade-in zoom-in duration-300">
+                <div className="animate-in fade-in slide-in-from-right-8 duration-300">
                     <div className="flex items-center gap-2 text-emerald-500 mb-2">
                         <CheckCircle size={20}/>
                         <span className="text-xs font-black uppercase tracking-widest">Email Sent</span>
@@ -109,7 +128,7 @@ const ForgotPassword = () => {
                         <button 
                             onClick={handleSubmit} 
                             disabled={cooldown > 0 || loading}
-                            className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center"
+                            className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-lg shadow-slate-300"
                         >
                             {loading ? <Loader2 className="animate-spin" size={16}/> : "Resend Email"}
                         </button>
@@ -123,12 +142,13 @@ const ForgotPassword = () => {
                 </div>
             ) : (
                 /* CONDITIONAL UI: FORM STATE */
-                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="animate-in fade-in slide-in-from-left-8 duration-300">
                     <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-2">Reset Password</h2>
                     <p className="text-slate-400 text-sm mb-8">Enter your registered email address and we'll send you a link to reset your password.</p>
 
+                    {/* Error Banner */}
                     {status === 'error' && (
-                        <div className="mb-6 p-4 bg-red-50 text-red-500 rounded-2xl text-xs font-bold flex items-center gap-2 border border-red-100">
+                        <div className="mb-6 p-4 bg-red-50 text-red-500 rounded-2xl text-xs font-bold flex items-center gap-2 border border-red-100 animate-in shake">
                             <AlertCircle size={16}/> {message}
                         </div>
                     )}
@@ -140,9 +160,10 @@ const ForgotPassword = () => {
                                 <Mail className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
                                 <input 
                                     required 
+                                    autoFocus
                                     type="email" 
                                     placeholder="name@company.com" 
-                                    className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-200 transition-all"
+                                    className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-200 transition-all text-slate-800 placeholder:text-slate-300"
                                     value={email} 
                                     onChange={e => setEmail(e.target.value)} 
                                 />

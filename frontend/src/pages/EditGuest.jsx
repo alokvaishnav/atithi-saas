@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   User, Mail, Phone, MapPin, Save, ArrowLeft, Loader2, 
-  Calendar, Globe, CreditCard, Star, FileText, Trash2 
+  Calendar, Globe, CreditCard, Star, FileText, Trash2, AlertCircle 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -10,49 +10,94 @@ const EditGuest = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   
+  // Initial State
   const [formData, setFormData] = useState({
     full_name: '', 
     email: '', 
     phone: '', 
     address: '', 
     id_proof_number: '',
-    id_proof_type: 'AADHAR', // Default
+    id_proof_type: 'AADHAR', 
     dob: '',
     nationality: '',
-    preferences: '', // Notes like "Allergic to nuts"
+    preferences: '', 
     is_vip: false
   });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null); // Added for UI feedback
+  
   const token = localStorage.getItem('access_token');
 
-  // Fetch Guest Data
+  // --- 1. FETCH GUEST DATA ---
   useEffect(() => {
     const fetchGuest = async () => {
       try {
         const res = await fetch(`${API_URL}/api/guests/${id}/`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+
+        if (res.status === 401) {
+            alert("Session expired. Please login again.");
+            navigate('/login');
+            return;
+        }
+
         if (res.ok) {
             const data = await res.json();
-            // Merge fetched data with default state to prevent uncontrolled inputs
-            setFormData(prev => ({ ...prev, ...data }));
+            
+            // Fix: Format Date for Input (YYYY-MM-DD) if API returns ISO string
+            let formattedDob = data.dob || '';
+            if (formattedDob && formattedDob.includes('T')) {
+                formattedDob = formattedDob.split('T')[0];
+            }
+
+            setFormData(prev => ({ 
+                ...prev, 
+                ...data,
+                dob: formattedDob, // Override with clean date
+                // Ensure nulls become empty strings to avoid React warnings
+                email: data.email || '',
+                address: data.address || '',
+                preferences: data.preferences || '',
+                nationality: data.nationality || '',
+                id_proof_number: data.id_proof_number || ''
+            }));
+        } else {
+            setError("Guest not found or access denied.");
         }
       } catch (err) { 
         console.error(err); 
+        setError("Network error. Unable to load profile.");
       } finally { 
         setLoading(false); 
       }
     };
     fetchGuest();
-  }, [id, token]);
+  }, [id, token, navigate]);
 
-  // Handle Update
+  // --- 2. HANDLE UPDATE ---
   const handleUpdate = async (e) => {
     e.preventDefault();
     setSaving(true);
+    
+    // Create a clean payload to send only editable fields
+    // This prevents sending 'id' or 'created_at' back to the server
+    const payload = {
+        full_name: formData.full_name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        id_proof_number: formData.id_proof_number,
+        id_proof_type: formData.id_proof_type,
+        dob: formData.dob || null, // Send null if empty
+        nationality: formData.nationality,
+        preferences: formData.preferences,
+        is_vip: formData.is_vip
+    };
+
     try {
         const res = await fetch(`${API_URL}/api/guests/${id}/`, {
             method: 'PATCH',
@@ -60,22 +105,32 @@ const EditGuest = () => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}` 
             },
-            body: JSON.stringify(formData)
+            body: JSON.stringify(payload)
         });
+
+        if (res.status === 401) {
+            navigate('/login');
+            return;
+        }
+
         if (res.ok) {
             alert("Guest Profile Updated Successfully! ✅");
             navigate('/guests');
         } else {
-            alert("Failed to update. Please check the fields.");
+            const errData = await res.json();
+            // Show specific error from backend if available
+            const errMsg = Object.values(errData).flat().join(', ') || "Failed to update.";
+            alert(`Update Failed: ${errMsg}`);
         }
     } catch (err) { 
         console.error(err); 
+        alert("Network error occurred.");
     } finally {
         setSaving(false);
     }
   };
 
-  // Handle Delete
+  // --- 3. HANDLE DELETE ---
   const handleDelete = async () => {
       if (!window.confirm("⚠️ WARNING: This will permanently delete this guest and their history. Are you sure?")) return;
       
@@ -85,19 +140,34 @@ const EditGuest = () => {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
         if (res.ok) {
             navigate('/guests');
+        } else {
+            alert("Could not delete guest. They might have active bookings.");
         }
       } catch (err) {
           console.error(err);
-          setDeleting(false);
+          alert("Network error occurred.");
+      } finally {
+        setDeleting(false);
       }
   };
 
+  // --- 4. LOADING STATE ---
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest gap-4">
         <Loader2 className="animate-spin text-blue-600" size={32}/> 
         Loading Profile...
+    </div>
+  );
+
+  // --- 5. ERROR STATE ---
+  if (error) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 text-red-400 font-bold gap-4">
+        <AlertCircle size={40}/>
+        <p>{error}</p>
+        <button onClick={() => navigate('/guests')} className="text-blue-500 underline">Back to Directory</button>
     </div>
   );
 
@@ -113,7 +183,7 @@ const EditGuest = () => {
             <button 
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex items-center gap-2 text-red-400 hover:text-red-600 font-bold text-xs uppercase tracking-widest bg-red-50 hover:bg-red-100 px-4 py-2 rounded-xl transition-all"
+                className="flex items-center gap-2 text-red-400 hover:text-red-600 font-bold text-xs uppercase tracking-widest bg-red-50 hover:bg-red-100 px-4 py-2 rounded-xl transition-all border border-red-100"
             >
                 {deleting ? <Loader2 className="animate-spin" size={14}/> : <Trash2 size={14}/>} Delete Guest
             </button>
@@ -140,9 +210,9 @@ const EditGuest = () => {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="md:col-span-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Full Name</label>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Full Name <span className="text-red-400">*</span></label>
                             <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 border border-transparent focus:border-blue-200 transition-all text-slate-800 placeholder:text-slate-300"
-                                value={formData.full_name || ''} onChange={e => setFormData({...formData, full_name: e.target.value})} />
+                                value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} />
                         </div>
                         
                         <div>
@@ -150,16 +220,16 @@ const EditGuest = () => {
                             <div className="relative">
                                 <Mail className="absolute left-4 top-3.5 text-slate-400" size={16}/>
                                 <input type="email" className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder:text-slate-300"
-                                    value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                                    value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                             </div>
                         </div>
 
                         <div>
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Phone Number</label>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Phone Number <span className="text-red-400">*</span></label>
                             <div className="relative">
                                 <Phone className="absolute left-4 top-3.5 text-slate-400" size={16}/>
                                 <input required className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder:text-slate-300"
-                                    value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                                    value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                             </div>
                         </div>
 
@@ -168,7 +238,7 @@ const EditGuest = () => {
                             <div className="relative">
                                 <Calendar className="absolute left-4 top-3.5 text-slate-400" size={16}/>
                                 <input type="date" className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-600"
-                                    value={formData.dob || ''} onChange={e => setFormData({...formData, dob: e.target.value})} />
+                                    value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} />
                             </div>
                         </div>
 
@@ -178,7 +248,7 @@ const EditGuest = () => {
                                 <Globe className="absolute left-4 top-3.5 text-slate-400" size={16}/>
                                 <input className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 text-slate-800 placeholder:text-slate-300"
                                     placeholder="e.g. Indian"
-                                    value={formData.nationality || ''} onChange={e => setFormData({...formData, nationality: e.target.value})} />
+                                    value={formData.nationality} onChange={e => setFormData({...formData, nationality: e.target.value})} />
                             </div>
                         </div>
                     </div>
@@ -195,7 +265,7 @@ const EditGuest = () => {
                          <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">ID Type</label>
                             <select className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500 text-slate-700"
-                                value={formData.id_proof_type || 'AADHAR'} onChange={e => setFormData({...formData, id_proof_type: e.target.value})}>
+                                value={formData.id_proof_type} onChange={e => setFormData({...formData, id_proof_type: e.target.value})}>
                                 <option value="AADHAR">Aadhar Card</option>
                                 <option value="PASSPORT">Passport</option>
                                 <option value="DRIVING_LICENSE">Driving License</option>
@@ -207,7 +277,7 @@ const EditGuest = () => {
                         <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">ID Number</label>
                             <input className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 placeholder:text-slate-300"
-                                value={formData.id_proof_number || ''} onChange={e => setFormData({...formData, id_proof_number: e.target.value})} />
+                                value={formData.id_proof_number} onChange={e => setFormData({...formData, id_proof_number: e.target.value})} />
                         </div>
 
                         <div className="md:col-span-2">
@@ -215,7 +285,7 @@ const EditGuest = () => {
                             <div className="relative">
                                 <MapPin className="absolute left-4 top-3.5 text-slate-400" size={16}/>
                                 <input className="w-full pl-10 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-purple-500 text-slate-800 placeholder:text-slate-300"
-                                    value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} />
+                                    value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
                             </div>
                         </div>
                     </div>
@@ -245,7 +315,7 @@ const EditGuest = () => {
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Preferences / Notes</label>
                             <textarea rows="3" className="w-full p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-orange-500 resize-none text-slate-800 placeholder:text-slate-300"
                                 placeholder="E.g. Allergies, Room preferences, Special requests..."
-                                value={formData.preferences || ''} onChange={e => setFormData({...formData, preferences: e.target.value})} />
+                                value={formData.preferences} onChange={e => setFormData({...formData, preferences: e.target.value})} />
                         </div>
                     </div>
                 </div>

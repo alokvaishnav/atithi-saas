@@ -2,12 +2,20 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 import json
+from datetime import timedelta
 
-# --- 1. HOTEL SETTINGS (Global Configuration for Tenants) ---
+# ==============================================================================
+# 1. HOTEL SETTINGS (Global Configuration for Tenants)
+# ==============================================================================
+
 class HotelSettings(models.Model):
-    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='hotel_settings')
+    owner = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE, 
+        related_name='hotel_settings'
+    )
     
-    # Branding
+    # --- Branding ---
     hotel_name = models.CharField(max_length=255, default="My Hotel")
     description = models.TextField(blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -16,15 +24,15 @@ class HotelSettings(models.Model):
     website = models.URLField(blank=True, null=True)
     logo = models.ImageField(upload_to='hotel_logos/', blank=True, null=True)
     
-    # Financials
+    # --- Financials ---
     currency_symbol = models.CharField(max_length=10, default="₹")
     tax_gst_number = models.CharField(max_length=50, blank=True, null=True)
     
-    # Operations
+    # --- Operations ---
     check_in_time = models.TimeField(default="12:00")
     check_out_time = models.TimeField(default="11:00")
     
-    # Automation - Email (SMTP for this specific hotel)
+    # --- Automation: Email (SMTP for this specific hotel) ---
     smtp_server = models.CharField(max_length=255, blank=True, null=True)
     smtp_port = models.CharField(max_length=10, default="587")
     smtp_username = models.CharField(max_length=255, blank=True, null=True)
@@ -32,19 +40,21 @@ class HotelSettings(models.Model):
     auto_send_confirmation = models.BooleanField(default=False)
     auto_send_invoice = models.BooleanField(default=False)
 
-    # Automation - WhatsApp (Meta/Twilio for this specific hotel)
+    # --- Automation: WhatsApp (Meta/Twilio for this specific hotel) ---
     whatsapp_provider = models.CharField(max_length=20, default='META', choices=[('META', 'Meta Cloud'), ('TWILIO', 'Twilio')])
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_auth_token = models.CharField(max_length=255, blank=True, null=True)
 
-    # License System
+    # --- License System ---
     license_key = models.CharField(max_length=255, blank=True, null=True)
     license_expiry = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"Settings for {self.hotel_name}"
 
-# --- 2. CORE MODELS ---
+# ==============================================================================
+# 2. CORE MODELS (Rooms, Guests, Bookings)
+# ==============================================================================
 
 class Room(models.Model):
     ROOM_TYPES = [
@@ -69,13 +79,17 @@ class Room(models.Model):
     capacity = models.IntegerField(default=2)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
+    
+    # Stores amenities as a JSON string (e.g. "['WiFi', 'AC']")
     amenities = models.TextField(default="[]", blank=True)
     
     # Channel Manager (iCal)
     ical_link = models.URLField(max_length=500, blank=True, null=True, help_text="Paste OTA Calendar Link")
 
     class Meta:
+        # Ensures a hotel cannot have two rooms with the same number
         unique_together = ('owner', 'room_number')
+        ordering = ['room_number']
 
     def __str__(self):
         return f"{self.room_number} ({self.get_status_display()})"
@@ -98,6 +112,12 @@ class Guest(models.Model):
     type = models.CharField(max_length=20, default='REGULAR')
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Prevents duplicate guests (same phone) for the same hotel
+        unique_together = ('owner', 'phone')
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.full_name
@@ -123,6 +143,8 @@ class Booking(models.Model):
     ]
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    
+    # Related names are critical for Serializers
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True, blank=True, related_name='bookings')
     guest = models.ForeignKey(Guest, on_delete=models.CASCADE, related_name='bookings')
     
@@ -131,8 +153,7 @@ class Booking(models.Model):
     checked_in_at = models.DateTimeField(blank=True, null=True)
     checked_out_at = models.DateTimeField(blank=True, null=True)
     
-    # Kept both to match your existing DB migration history
-    number_of_adults = models.IntegerField(default=1) 
+    # Guest Counts
     adults = models.IntegerField(default=1)
     children = models.IntegerField(default=0)
     
@@ -144,6 +165,19 @@ class Booking(models.Model):
     
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        # Auto-Calculate Total Amount if not set (Safety Fallback)
+        if self.room and self.total_amount == 0 and self.check_in_date and self.check_out_date:
+            delta = self.check_out_date - self.check_in_date
+            # Ensure at least 1 night is charged even if same-day dates are entered
+            nights = delta.days if delta.days > 0 else 1
+            self.total_amount = self.room.price_per_night * nights
+            
+        super(Booking, self).save(*args, **kwargs)
 
     def __str__(self):
         return f"Booking {self.id} - {self.guest.full_name}"
@@ -162,7 +196,9 @@ class BookingCharge(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateField(auto_now_add=True)
 
-# --- 3. INVENTORY & POS ---
+# ==============================================================================
+# 3. INVENTORY & POS
+# ==============================================================================
 
 class InventoryItem(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -194,12 +230,14 @@ class Order(models.Model):
     """POS Orders linked to Booking or Direct"""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     booking = models.ForeignKey(Booking, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
-    items = models.TextField() # JSON string
+    items = models.TextField() # JSON string of items ordered
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=50, default='COMPLETED') 
     created_at = models.DateTimeField(auto_now_add=True)
 
-# --- 4. OPERATIONS & LOGS ---
+# ==============================================================================
+# 4. OPERATIONS & LOGS
+# ==============================================================================
 
 class Expense(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -227,14 +265,26 @@ class HousekeepingTask(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
 class ActivityLog(models.Model):
+    """
+    Tracks all major system actions for Audit Trails.
+    Renamed 'details' to 'description' to match View logic.
+    Added 'category' to support filtering (Admin, System, Booking, etc.)
+    """
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     action = models.CharField(max_length=100) 
-    details = models.TextField()
+    category = models.CharField(max_length=50, default='GENERAL') # Critical for Admin Filters
+    description = models.TextField() 
     timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-timestamp']
     
     def __str__(self): return f"{self.action} - {self.timestamp}"
 
-# --- 5. SAAS PLATFORM SETTINGS (SUPER ADMIN ONLY) ---
+# ==============================================================================
+# 5. SAAS PLATFORM SETTINGS (SUPER ADMIN ONLY)
+# ==============================================================================
+
 class PlatformSettings(models.Model):
     """
     Settings for the SaaS Owner (You).
@@ -272,19 +322,25 @@ class PlatformSettings(models.Model):
     )
 
     def save(self, *args, **kwargs):
-        # Force Singleton (Always ID 1)
+        # Force Singleton (Always ID 1) - Ensures only one settings row exists
         self.pk = 1
         super(PlatformSettings, self).save(*args, **kwargs)
 
     def __str__(self):
         return "Global Platform Configuration"
 
-# --- 6. GLOBAL ANNOUNCEMENTS (SUPER ADMIN BROADCAST) ---
+# ==============================================================================
+# 6. GLOBAL ANNOUNCEMENTS (SUPER ADMIN BROADCAST)
+# ==============================================================================
+
 class GlobalAnnouncement(models.Model):
     title = models.CharField(max_length=200)
     message = models.TextField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return self.title

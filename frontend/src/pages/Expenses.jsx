@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { 
   Wallet, Plus, TrendingDown, Calendar, 
-  Trash2, Loader2, X, AlertCircle 
+  Trash2, Loader2, X, AlertCircle, RefreshCcw 
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
@@ -12,8 +12,9 @@ const Expenses = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null); // New: UI Error State
 
-  // 🛡️ SECURITY: Only Owners and Managers can Delete expenses (Audit Safety)
+  // 🛡️ SECURITY: Only Owners and Managers can Delete expenses
   const canDelete = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
 
   const today = new Date().toISOString().split('T')[0];
@@ -31,17 +32,24 @@ const Expenses = () => {
     if (!token) return;
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_URL}/api/expenses/`, { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
+      
       if (res.ok) {
           const data = await res.json();
-          // Safety check: ensure data is array
-          setExpenses(Array.isArray(data) ? data : []);
+          // Safety check & Sort by Date Descending (Newest First)
+          const sortedData = Array.isArray(data) 
+            ? data.sort((a, b) => new Date(b.date) - new Date(a.date)) 
+            : [];
+          setExpenses(sortedData);
+      } else {
+          setError("Failed to fetch expenses.");
       }
     } catch (err) { 
         console.error(err); 
-        setExpenses([]); 
+        setError("Network error. Please try again.");
     } finally { 
         setLoading(false); 
     }
@@ -65,20 +73,26 @@ const Expenses = () => {
       
       if (res.ok) {
         setShowModal(false);
+        // Reset form to defaults
         setFormData({ title: '', amount: '', category: 'UTILITIES', date: today, notes: '' });
-        fetchExpenses();
+        fetchExpenses(); // Refresh list
       } else {
-        alert("Failed to save expense. Please try again.");
+        const errData = await res.json();
+        alert(`Failed to save: ${JSON.stringify(errData)}`);
       }
-    } catch (err) { console.error(err); } 
-    finally { setSubmitting(false); }
+    } catch (err) { 
+        console.error(err);
+        alert("Network error occurred.");
+    } finally { 
+        setSubmitting(false); 
+    }
   };
 
   // --- DELETE EXPENSE ---
   const handleDelete = async (id) => {
     if(!window.confirm("⚠️ Are you sure? This will permanently remove this expense record.")) return;
     
-    // Optimistic Update
+    // Optimistic Update: Remove from UI immediately
     const originalExpenses = [...expenses];
     setExpenses(prev => prev.filter(e => e.id !== id));
 
@@ -93,14 +107,17 @@ const Expenses = () => {
     } catch (err) { 
         console.error(err);
         setExpenses(originalExpenses); // Revert on error
-        alert("Could not delete expense.");
+        alert("Could not delete expense. Server error.");
     }
   };
 
-  // Calculate Total
-  const totalExpense = expenses.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+  // Optimization: Memoize total calculation
+  const totalExpense = useMemo(() => {
+    return expenses.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+  }, [expenses]);
 
-  if (loading) return (
+  // --- LOADING STATE ---
+  if (loading && expenses.length === 0 && !error) return (
     <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
         <Loader2 className="animate-spin text-blue-600" size={40}/>
         <p className="text-xs font-bold uppercase tracking-widest">Loading Financials...</p>
@@ -125,18 +142,38 @@ const Expenses = () => {
                     </div>
                     <div>
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Outflow</p>
-                        <p className="text-2xl font-black text-slate-900 leading-none">₹{totalExpense.toLocaleString()}</p>
+                        <p className="text-2xl font-black text-slate-900 leading-none">
+                            ₹{totalExpense.toLocaleString('en-IN')}
+                        </p>
                     </div>
                 </div>
 
-                <button 
-                    onClick={() => setShowModal(true)} 
-                    className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-600 flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-300"
-                >
-                    <Plus size={16}/> Log Expense
-                </button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={fetchExpenses}
+                        className="bg-white text-slate-600 p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-all"
+                        title="Refresh List"
+                    >
+                        <RefreshCcw size={20} className={loading ? "animate-spin" : ""}/>
+                    </button>
+
+                    <button 
+                        onClick={() => setShowModal(true)} 
+                        className="flex-1 bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-600 flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-300"
+                    >
+                        <Plus size={16}/> Log Expense
+                    </button>
+                </div>
             </div>
         </div>
+
+        {/* ERROR BANNER */}
+        {error && (
+            <div className="bg-red-50 text-red-500 p-4 rounded-xl mb-6 flex items-center gap-2 border border-red-100">
+                <AlertCircle size={20}/> 
+                <span className="font-bold text-sm">{error}</span>
+            </div>
+        )}
 
         {/* EXPENSE TABLE */}
         <div className="bg-white rounded-[30px] border border-slate-200 shadow-sm overflow-hidden">
@@ -170,7 +207,7 @@ const Expenses = () => {
                                     </span>
                                 </td>
                                 <td className="p-5 text-right font-black text-red-500 text-lg">
-                                    -₹{parseFloat(expense.amount).toLocaleString()}
+                                    -₹{parseFloat(expense.amount).toLocaleString('en-IN')}
                                 </td>
                                 <td className="p-5 text-right">
                                     {/* 🛡️ DELETE BUTTON (Restricted) */}
@@ -186,7 +223,7 @@ const Expenses = () => {
                                 </td>
                             </tr>
                         ))}
-                        {expenses.length === 0 && (
+                        {expenses.length === 0 && !loading && (
                             <tr>
                                 <td colSpan="5" className="p-12 text-center">
                                     <div className="flex flex-col items-center gap-3 text-slate-400">

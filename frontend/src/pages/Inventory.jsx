@@ -1,17 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   Package, Search, Plus, AlertTriangle, 
   ArrowUp, ArrowDown, Loader2, Trash2, X,
-  Box, CheckCircle 
+  Box, CheckCircle, RefreshCcw, Filter, AlertCircle
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 
 const Inventory = () => {
   const { token, role, user } = useAuth();
+  const navigate = useNavigate();
+
+  // --- STATE ---
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // New: Error Handling
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('LOW_STOCK'); // NAME, STOCK_ASC, STOCK_DESC, LOW_STOCK
+  
+  // Modal States
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
@@ -27,27 +35,35 @@ const Inventory = () => {
   });
 
   // --- FETCH DATA ---
-  const fetchInventory = async () => {
+  const fetchInventory = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_URL}/api/inventory/`, { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
+
+      if (res.status === 401) {
+          navigate('/login');
+          return;
+      }
+
       if (res.ok) {
         const data = await res.json();
-        // Safety check: Ensure data is an array
         setItems(Array.isArray(data) ? data : []);
+      } else {
+        setError("Failed to load inventory.");
       }
     } catch (err) { 
       console.error(err); 
-      setItems([]);
+      setError("Network connection failed.");
     } finally { 
       setLoading(false); 
     }
-  };
+  }, [token, navigate]);
 
-  useEffect(() => { fetchInventory(); }, [token]);
+  useEffect(() => { fetchInventory(); }, [fetchInventory]);
 
   // --- ACTIONS ---
   
@@ -56,9 +72,10 @@ const Inventory = () => {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    const newStock = Math.max(0, parseInt(item.current_stock) + change);
+    const newStock = Math.max(0, parseInt(item.current_stock || 0) + change);
 
-    // Optimistic Update (Update UI immediately)
+    // Optimistic Update
+    const originalItems = [...items];
     setItems(prevItems => prevItems.map(i => i.id === id ? { ...i, current_stock: newStock } : i));
 
     try {
@@ -70,7 +87,8 @@ const Inventory = () => {
       if(!res.ok) throw new Error("Update failed");
     } catch (err) { 
       console.error(err);
-      fetchInventory(); // Revert to server state on error
+      setItems(originalItems); // Revert on error
+      alert("Failed to update stock. Check connection.");
     }
   };
 
@@ -79,10 +97,16 @@ const Inventory = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
+      const payload = {
+          ...formData,
+          current_stock: parseInt(formData.current_stock),
+          min_stock_alert: parseInt(formData.min_stock_alert)
+      };
+
       const res = await fetch(`${API_URL}/api/inventory/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       
       if (res.ok) {
@@ -95,6 +119,7 @@ const Inventory = () => {
       }
     } catch (err) { 
       console.error(err); 
+      alert("Network Error");
     } finally {
       setSubmitting(false);
     }
@@ -121,15 +146,33 @@ const Inventory = () => {
     }
   };
 
-  // Search Filter
-  const filteredItems = items.filter(i => 
-    i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    i.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // --- FILTER & SORT LOGIC ---
+  const getProcessedItems = () => {
+      let result = items.filter(i => 
+        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        i.category.toLowerCase().includes(searchTerm.toLowerCase())
+      );
 
+      return result.sort((a, b) => {
+          switch (sortBy) {
+              case 'LOW_STOCK':
+                  // Sort by closeness to alert level (ascending)
+                  return (a.current_stock - a.min_stock_alert) - (b.current_stock - b.min_stock_alert);
+              case 'NAME':
+                  return a.name.localeCompare(b.name);
+              case 'STOCK_DESC':
+                  return b.current_stock - a.current_stock;
+              default:
+                  return 0;
+          }
+      });
+  };
+
+  const processedItems = getProcessedItems();
   const lowStockCount = items.filter(i => i.current_stock <= i.min_stock_alert).length;
 
-  if (loading) return (
+  // --- LOADING STATE ---
+  if (loading && items.length === 0) return (
     <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
         <Loader2 className="animate-spin text-blue-600" size={40}/>
         <p className="text-xs font-bold uppercase tracking-widest">Loading Inventory...</p>
@@ -158,7 +201,16 @@ const Inventory = () => {
            </div>
         </div>
 
-        <div className="flex gap-3 w-full md:w-auto">
+        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+            {/* Refresh */}
+            <button 
+                onClick={fetchInventory} 
+                className="bg-white p-3 rounded-xl border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm w-fit"
+                title="Refresh Inventory"
+            >
+                <RefreshCcw size={18} className={loading ? "animate-spin" : ""}/>
+            </button>
+
             {/* Search Bar */}
             <div className="relative flex-1 md:w-64">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -171,6 +223,20 @@ const Inventory = () => {
                 />
             </div>
             
+            {/* Sort Dropdown */}
+            <div className="relative">
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <select 
+                    className="w-full md:w-auto pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 outline-none font-bold text-sm text-slate-700 appearance-none bg-white cursor-pointer shadow-sm"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                >
+                    <option value="LOW_STOCK">Sort: Low Stock</option>
+                    <option value="NAME">Sort: Name (A-Z)</option>
+                    <option value="STOCK_DESC">Sort: High Stock</option>
+                </select>
+            </div>
+
             <button 
                 onClick={() => setShowModal(true)} 
                 className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 flex items-center justify-center gap-2 transition-all shadow-lg shadow-slate-300"
@@ -180,15 +246,23 @@ const Inventory = () => {
         </div>
       </div>
 
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchInventory} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
+
       {/* GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredItems.map(item => (
+        {processedItems.map(item => (
             <div key={item.id} className="bg-white p-6 rounded-[24px] border border-slate-100 shadow-sm relative overflow-hidden group hover:border-blue-200 hover:shadow-md transition-all">
                 
                 {/* Low Stock Badge */}
                 {item.current_stock <= item.min_stock_alert && (
                     <div className="absolute top-0 right-0 bg-red-500 text-white px-3 py-1 rounded-bl-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm z-10">
-                        <AlertTriangle size={10}/> Low
+                        <AlertTriangle size={10}/> Low Stock
                     </div>
                 )}
                 
@@ -208,7 +282,7 @@ const Inventory = () => {
                     )}
                 </div>
 
-                <h3 className="text-lg font-black text-slate-800 leading-tight mb-1 truncate">{item.name}</h3>
+                <h3 className="text-lg font-black text-slate-800 leading-tight mb-1 truncate" title={item.name}>{item.name}</h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">{item.category}</p>
                 
                 <div className="flex justify-between items-end border-t border-slate-50 pt-4">
@@ -238,7 +312,7 @@ const Inventory = () => {
             </div>
         ))}
         
-        {filteredItems.length === 0 && (
+        {processedItems.length === 0 && !loading && !error && (
             <div className="col-span-full py-20 text-center flex flex-col items-center justify-center text-slate-400">
                 <Package size={48} className="mb-4 opacity-20"/>
                 <p className="font-bold uppercase tracking-widest text-xs">No inventory items found.</p>

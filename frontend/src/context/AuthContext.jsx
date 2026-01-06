@@ -47,7 +47,11 @@ export const AuthProvider = ({ children }) => {
                 const activeRole = parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF');
                 setRole(activeRole);
                 
-                setHotelName(parsedUser.hotel_name || 'Atithi HMS');
+                // 🟢 EXTRACT HOTEL NAME (Handle nested settings or flat key)
+                const settingsName = parsedUser.hotel_settings?.hotel_name;
+                const flatName = parsedUser.hotel_name;
+                setHotelName(settingsName || flatName || 'Atithi HMS');
+                
                 setIsAuthenticated(true);
             }
         } catch (error) {
@@ -81,22 +85,28 @@ export const AuthProvider = ({ children }) => {
             // B. Logic for Role Identity
             const detectedRole = data.is_superuser ? 'OWNER' : (data.role || 'STAFF');
             
-            // C. Construct & Save User Profile Data
+            // C. Extract Hotel Settings (Logo, Name, etc.)
+            // The backend UserSerializer now returns a 'hotel_settings' object.
+            const settings = data.hotel_settings || {};
+            const displayHotelName = settings.hotel_name || data.hotel_name || 'Atithi HMS';
+
+            // D. Construct & Save User Profile Data
             const userData = {
                 username: data.username,
                 id: data.id,
                 is_superuser: data.is_superuser,
                 role: detectedRole,
-                hotel_name: data.hotel_name || 'Atithi HMS'
+                hotel_name: displayHotelName,
+                hotel_settings: settings // Store the full settings object for the Layout to use
             };
 
             // Save as one blob to prevent sync issues
             localStorage.setItem('user_data', JSON.stringify(userData));
 
-            // D. Update React State
+            // E. Update React State
             setToken(data.access);
             setRole(detectedRole);
-            setHotelName(userData.hotel_name);
+            setHotelName(displayHotelName);
             setUser(userData);
             setIsAuthenticated(true);
             
@@ -127,7 +137,12 @@ export const AuthProvider = ({ children }) => {
       
       // Update local storage to persist change
       if (user) {
-          const updatedUser = { ...user, hotel_name: name };
+          const updatedUser = { 
+              ...user, 
+              hotel_name: name,
+              // Update nested settings too so refresh keeps the name
+              hotel_settings: { ...user.hotel_settings, hotel_name: name }
+          };
           setUser(updatedUser);
           localStorage.setItem('user_data', JSON.stringify(updatedUser));
       }

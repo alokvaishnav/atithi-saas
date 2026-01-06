@@ -1,16 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   User, Mail, Shield, Plus, Trash2, 
   Loader2, X, KeyRound, CheckCircle, Ban,
-  Trash 
+  Trash, AlertCircle
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
 const Staff = () => {
   const { token, role, user: currentUser } = useAuth(); 
+  const navigate = useNavigate();
+
+  // --- STATE ---
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // New: Error state
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
@@ -25,22 +30,35 @@ const Staff = () => {
   });
 
   // --- FETCH STAFF ---
-  const fetchStaff = async () => {
+  const fetchStaff = useCallback(async () => {
     if (!token || !canManage) return;
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const res = await fetch(`${API_URL}/api/staff/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+
+      if (res.status === 401) {
+          navigate('/login');
+          return;
+      }
+
       if (res.ok) {
           const data = await res.json();
           setStaff(data);
+      } else {
+          setError("Failed to load staff list.");
       }
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
-  };
+    } catch (err) { 
+        console.error(err); 
+        setError("Network connection failed.");
+    } finally { 
+        setLoading(false); 
+    }
+  }, [token, canManage, navigate]);
 
-  useEffect(() => { fetchStaff(); }, [token]);
+  useEffect(() => { fetchStaff(); }, [fetchStaff]);
 
   // --- CREATE STAFF ---
   const handleCreate = async (e) => {
@@ -114,10 +132,15 @@ const Staff = () => {
       );
   }
 
-  if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
+  if (loading && staff.length === 0) return (
+    <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
+        <Loader2 className="animate-spin text-blue-600" size={40}/>
+        <p className="text-xs font-bold uppercase tracking-widest">Loading Directory...</p>
+    </div>
+  );
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans animate-in fade-in duration-500">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
@@ -130,6 +153,14 @@ const Staff = () => {
         </button>
       </div>
 
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchStaff} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
+
       {/* STAFF GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {staff.map(member => (
@@ -140,7 +171,7 @@ const Staff = () => {
                         member.role === 'MANAGER' ? 'bg-purple-600' :
                         member.role === 'OWNER' ? 'bg-slate-900' : 'bg-blue-500'
                     }`}>
-                        {member.first_name?.[0] || member.username?.[0]?.toUpperCase()}
+                        {member.first_name?.[0] || member.username?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div>
                         <h3 className="font-black text-slate-800 text-lg leading-none mb-1">
@@ -188,46 +219,46 @@ const Staff = () => {
       {/* CREATE MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <form onSubmit={handleCreate} className="bg-white p-8 rounded-[30px] w-full max-w-md space-y-4 animate-in zoom-in duration-200">
+            <form onSubmit={handleCreate} className="bg-white p-8 rounded-[30px] w-full max-w-md space-y-4 animate-in zoom-in duration-200 shadow-2xl">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-black text-slate-800 uppercase italic">New Staff Member</h3>
-                    <button type="button" onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20}/></button>
+                    <button type="button" onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">First Name</label>
-                        <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                        <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all" 
                             value={formData.first_name} onChange={e => setFormData({...formData, first_name: e.target.value})} />
                     </div>
                     <div>
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Last Name</label>
-                        <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                        <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all" 
                             value={formData.last_name} onChange={e => setFormData({...formData, last_name: e.target.value})} />
                     </div>
                 </div>
 
                 <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Username</label>
-                    <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                    <input required className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all" 
                         value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
                 </div>
 
                 <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
-                    <input required type="email" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                    <input required type="email" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all" 
                         value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                 </div>
 
                 <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1"><KeyRound size={12}/> Password</label>
-                    <input required type="password" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                    <input required type="password" className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all" 
                         value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
                 </div>
                 
                 <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2 ml-1">Role Permissions</label>
-                    <select className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" 
+                    <select className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none transition-all" 
                         value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                         <option value="RECEPTIONIST">Receptionist</option>
                         <option value="MANAGER">Manager</option>
@@ -237,7 +268,7 @@ const Staff = () => {
                 </div>
 
                 <div className="pt-2">
-                    <button type="submit" disabled={submitting} className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
+                    <button type="submit" disabled={submitting} className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-70 disabled:cursor-not-allowed">
                         {submitting ? <Loader2 className="animate-spin" size={20}/> : "Create Account"}
                     </button>
                 </div>

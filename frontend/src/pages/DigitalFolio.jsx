@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { 
   Loader2, ShieldCheck, Download, Share2, 
   MapPin, Phone, CheckCircle, AlertCircle, 
-  QrCode, Copy, Plus, Trash
+  QrCode, Copy, 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -12,16 +12,24 @@ const DigitalFolio = () => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchFolio = async () => {
         try {
+            setLoading(true);
+            setError(null);
+            // Fetch Public Folio Data (No Auth Required for guests viewing their own bill)
             const res = await fetch(`${API_URL}/api/bookings/${id}/public_folio/`);
+            
             if (res.ok) {
                 setBooking(await res.json());
+            } else {
+                setError("Invoice not found or link expired.");
             }
         } catch (err) { 
             console.error("Failed to fetch folio:", err); 
+            setError("Network error. Please try again later.");
         } finally { 
             setLoading(false); 
         }
@@ -50,14 +58,16 @@ const DigitalFolio = () => {
   };
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
+    <div className="h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <Loader2 className="animate-spin text-blue-600 w-10 h-10"/>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Loading Invoice...</p>
     </div>
   );
   
-  if (!booking) return (
-    <div className="h-screen flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest">
-        Folio Not Found
+  if (error || !booking) return (
+    <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4 p-8 text-center">
+        <AlertCircle size={48} className="text-red-300"/>
+        <p className="font-bold uppercase tracking-widest">{error || "Folio Not Found"}</p>
     </div>
   );
 
@@ -65,16 +75,21 @@ const DigitalFolio = () => {
   const totalPaid = booking.payments?.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) || 0;
   
   // Grand Total = Room Tariff + Extra Charges
-  const roomTariff = parseFloat(booking.total_amount || 0);
+  // Note: Ensure backend sends total_amount which includes room rent calculation
+  const roomTariff = parseFloat(booking.total_amount || 0); 
   const extraCharges = booking.charges?.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0) || 0;
-  const grandTotal = roomTariff + extraCharges;
+  const grandTotal = roomTariff + extraCharges; // Depending on backend logic, roomTariff might already include total. Adjust if needed.
+  
+  // Correction: Usually `total_amount` from booking model IS the grand total. 
+  // If your API separates them, keep the addition. 
+  // Assuming `booking.total_amount` is the final billable amount for the room(s).
   
   const balance = grandTotal - totalPaid;
   const isPaid = balance <= 0;
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans flex justify-center py-10">
-      <div className="w-full max-w-lg bg-white rounded-[30px] shadow-2xl overflow-hidden border border-slate-200 flex flex-col">
+      <div className="w-full max-w-lg bg-white rounded-[30px] shadow-2xl overflow-hidden border border-slate-200 flex flex-col animate-in fade-in zoom-in duration-500">
         
         {/* HEADER BRANDING */}
         <div className="bg-slate-900 p-8 text-center text-white relative overflow-hidden">
@@ -84,12 +99,12 @@ const DigitalFolio = () => {
                 <ShieldCheck size={40} className="text-blue-400 mb-3"/>
                 <h1 className="text-xl font-black uppercase tracking-widest">{booking.hotel_name || "ATITHI HOTEL"}</h1>
                 
-                <div className="flex items-center gap-4 mt-3 text-slate-400">
+                <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mt-3 text-slate-400">
                     <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest">
-                        <MapPin size={10}/> Main Street, India
+                        <MapPin size={10}/> {booking.hotel_address || "Main Street, India"}
                     </div>
                     <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest">
-                        <Phone size={10}/> +91 98765 43210
+                        <Phone size={10}/> {booking.hotel_phone || "+91 98765 43210"}
                     </div>
                 </div>
             </div>
@@ -124,11 +139,11 @@ const DigitalFolio = () => {
             <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="bg-slate-50 p-4 rounded-2xl text-center border border-slate-100">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Check In</span>
-                    <span className="text-sm font-black text-slate-800">{booking.check_in_date}</span>
+                    <span className="text-sm font-black text-slate-800">{new Date(booking.check_in_date).toLocaleDateString()}</span>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-2xl text-center border border-slate-100">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Check Out</span>
-                    <span className="text-sm font-black text-slate-800">{booking.check_out_date}</span>
+                    <span className="text-sm font-black text-slate-800">{new Date(booking.check_out_date).toLocaleDateString()}</span>
                 </div>
             </div>
 

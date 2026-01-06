@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Printer, CreditCard, Send, CheckCircle, 
-  ArrowLeft, FileText, Download, Plus, Trash2, Loader2, LogOut, ShieldAlert,
-  Trash 
+  ArrowLeft, Download, Plus, Trash2, Loader2, LogOut, 
+  AlertCircle
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useReactToPrint } from 'react-to-print';
@@ -17,8 +17,8 @@ const Folio = () => {
   // Data State
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false); 
   
   // 🛡️ SECURITY: Only Admins can Void Transactions
   const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
@@ -32,20 +32,27 @@ const Folio = () => {
 
   // --- FETCH DATA ---
   const fetchData = async () => {
-    if (!token) return; // Safety check
+    if (!token) return; 
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_URL}/api/bookings/${id}/folio/`, { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
       
+      if (res.status === 401) {
+          navigate('/login');
+          return;
+      }
+
       if (res.ok) {
         setBooking(await res.json());
       } else {
-          console.error("Failed to fetch booking");
+        setError("Could not load folio data.");
       }
     } catch (err) { 
       console.error(err); 
+      setError("Network connection failed.");
     } finally { 
       setLoading(false); 
     }
@@ -54,12 +61,13 @@ const Folio = () => {
   useEffect(() => { fetchData(); }, [id, token]);
 
   // --- CALCULATIONS ---
+  // Safety checks to prevent NaN errors
   const items = booking?.charges || [];
-  
-  // Totals
-  const grandTotal = booking ? parseFloat(booking.total_amount) : 0;
-  const totalPaid = booking ? parseFloat(booking.paid_amount) : 0; 
-  const balance = booking ? parseFloat(booking.balance) : 0;
+  const grandTotal = booking ? parseFloat(booking.total_amount || 0) : 0;
+  const totalPaid = booking ? parseFloat(booking.paid_amount || 0) : 0; 
+  const balance = booking ? parseFloat(booking.balance || 0) : 0;
+  const subTotal = booking ? parseFloat(booking.subtotal || grandTotal) : 0;
+  const tax = booking ? parseFloat(booking.tax || 0) : 0;
 
   // --- ACTIONS ---
 
@@ -80,13 +88,13 @@ const Folio = () => {
         });
         
         if (res.ok) {
-            alert("Payment Recorded");
+            alert("Payment Recorded ✅");
             setPayAmount('');
             setPayMode('CASH');
-            setShowPaymentModal(false);
             fetchData(); 
         } else {
-            alert("Failed to record payment");
+            const data = await res.json();
+            alert(`Failed: ${data.message || "Could not record payment"}`);
         }
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
@@ -128,7 +136,11 @@ const Folio = () => {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${token}` }
           });
-          if (res.ok) fetchData();
+          if (res.ok) {
+            fetchData();
+          } else {
+            alert("Could not void transaction.");
+          }
       } catch(err) { console.error(err); }
   };
 
@@ -163,12 +175,23 @@ const Folio = () => {
     documentTitle: `Invoice_${booking?.booking_id || id}`,
   });
 
-  if (loading || !booking) return <div className="h-screen flex justify-center items-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
+  // --- LOADING & ERROR STATES ---
+  if (loading) return <div className="h-screen flex justify-center items-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
+  
+  if (error) return (
+    <div className="h-screen flex flex-col justify-center items-center gap-4 text-red-500">
+        <AlertCircle size={40}/>
+        <p className="font-bold">{error}</p>
+        <button onClick={() => navigate(-1)} className="text-slate-500 hover:underline">Go Back</button>
+    </div>
+  );
+
+  if (!booking) return null;
 
   return (
-    <div className="p-8 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
-      {/* HEADER ACTIONS */}
+      {/* HEADER ACTIONS (Hidden when printing) */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 print:hidden">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors">
             <ArrowLeft size={20}/> Back
@@ -234,16 +257,16 @@ const Folio = () => {
                     <tr>
                         <td className="py-4 font-bold text-slate-700">
                             Room Rent ({booking.nights} Nights)
-                            <span className="text-xs text-slate-400 font-normal ml-2">(@ ₹{booking.room_price}/night)</span>
+                            <span className="text-xs text-slate-400 font-normal ml-2">(@ ₹{parseFloat(booking.room_price || 0).toLocaleString()}/night)</span>
                         </td>
                         <td className="py-4 font-bold text-slate-700 text-right">
-                            ₹{(booking.nights * booking.room_price).toLocaleString()}
+                            ₹{(parseFloat(booking.nights || 1) * parseFloat(booking.room_price || 0)).toLocaleString()}
                         </td>
                     </tr>
                     
                     {/* Extra Charges Rows */}
                     {items.map((item, index) => (
-                        <tr key={index}>
+                        <tr key={item.id || index}>
                             <td className="py-4 text-sm text-slate-600">
                                 {item.description}
                                 {item.quantity > 1 && <span className="text-xs text-slate-400 ml-1">(x{item.quantity})</span>}
@@ -259,11 +282,11 @@ const Folio = () => {
                 <div className="mb-8 border-t border-slate-100 pt-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Payment History</p>
                     {booking.payments.map((p, i) => (
-                        <div key={i} className="flex justify-between text-xs text-slate-500 mb-1">
+                        <div key={p.id || i} className="flex justify-between text-xs text-slate-500 mb-1">
                             <span>{new Date(p.date).toLocaleDateString()} - {p.method}</span>
                             <span className="flex items-center gap-2">
                                 - ₹{parseFloat(p.amount).toLocaleString()}
-                                {/* 🛡️ VOID BUTTON (Admin Only) */}
+                                {/* 🛡️ VOID BUTTON (Admin Only & Hidden in Print) */}
                                 {isAdmin && (
                                     <button onClick={() => handleVoidPayment(p.id)} className="text-red-300 hover:text-red-500 print:hidden" title="Void Transaction">
                                         <Trash2 size={12}/>
@@ -280,12 +303,12 @@ const Folio = () => {
                 <div className="w-64 space-y-3">
                     <div className="flex justify-between text-sm font-bold text-slate-500">
                         <span>Subtotal</span>
-                        <span>₹{parseFloat(booking.subtotal || grandTotal).toLocaleString()}</span>
+                        <span>₹{subTotal.toLocaleString()}</span>
                     </div>
-                    {booking.tax > 0 && (
+                    {tax > 0 && (
                         <div className="flex justify-between text-sm font-bold text-slate-500">
                             <span>Tax</span>
-                            <span>₹{parseFloat(booking.tax).toLocaleString()}</span>
+                            <span>₹{tax.toLocaleString()}</span>
                         </div>
                     )}
                     <div className="w-full h-px bg-slate-200 my-2"></div>

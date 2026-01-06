@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Lock, Loader2, Eye, EyeOff, CheckCircle, 
-  AlertCircle, ShieldCheck, ArrowRight,
-  Plus, Trash
+  AlertCircle, ShieldCheck, ArrowRight
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -48,7 +47,7 @@ const ResetPassword = () => {
         return;
     }
     if (strength < 2) {
-        setStatus({ ...status, error: "Password is too weak." });
+        setStatus({ ...status, error: "Password is too weak. Please add numbers or symbols." });
         return;
     }
 
@@ -74,7 +73,7 @@ const ResetPassword = () => {
         }
     } catch (err) { 
         console.error(err); 
-        setStatus({ loading: false, error: "Network error occurred.", success: false });
+        setStatus({ loading: false, error: "Network error occurred. Please try again.", success: false });
     }
   };
 
@@ -85,12 +84,12 @@ const ResetPassword = () => {
         <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-100 rounded-full blur-[80px] opacity-60"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-emerald-100 rounded-full blur-[80px] opacity-60"></div>
 
-        <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-100 relative z-10">
+        <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-100 relative z-10 animate-in fade-in zoom-in duration-300">
             
             {status.success ? (
                 /* SUCCESS STATE VIEW */
-                <div className="text-center animate-in zoom-in duration-300">
-                    <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <div className="text-center">
+                    <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
                         <CheckCircle size={40} className="text-emerald-500" />
                     </div>
                     <h2 className="text-2xl font-black text-slate-800 uppercase italic mb-2">Password Updated!</h2>
@@ -99,16 +98,16 @@ const ResetPassword = () => {
                     </p>
                     <button 
                         onClick={() => navigate('/login')}
-                        className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
                     >
                         Login Now <ArrowRight size={16}/>
                     </button>
                 </div>
             ) : (
                 /* FORM STATE VIEW */
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div>
                     <div className="flex justify-center mb-6">
-                        <div className="p-4 bg-blue-50 rounded-2xl text-blue-600">
+                        <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 ring-4 ring-blue-50/50">
                             <ShieldCheck size={32}/>
                         </div>
                     </div>
@@ -132,7 +131,7 @@ const ResetPassword = () => {
                                     required 
                                     type={showPassword ? "text" : "password"} 
                                     placeholder="New Password" 
-                                    className="w-full pl-12 pr-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                    className="w-full pl-12 pr-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
                                     value={formData.password} 
                                     onChange={e => setFormData({...formData, password: e.target.value})} 
                                 />
@@ -158,7 +157,7 @@ const ResetPassword = () => {
                                 required 
                                 type="password" 
                                 placeholder="Confirm Password" 
-                                className={`w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 transition-all ${
+                                className={`w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 transition-all text-slate-800 placeholder:text-slate-300 ${
                                     formData.confirmPassword && formData.password !== formData.confirmPassword 
                                     ? 'focus:ring-red-500 border-red-200' 
                                     : 'focus:ring-blue-500'
@@ -171,7 +170,7 @@ const ResetPassword = () => {
                         <button 
                             type="submit" 
                             disabled={status.loading} 
-                            className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-slate-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center"
+                            className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-emerald-600 transition-all shadow-lg shadow-slate-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                         >
                             {status.loading ? <Loader2 className="animate-spin" size={16}/> : "Update Password"}
                         </button>

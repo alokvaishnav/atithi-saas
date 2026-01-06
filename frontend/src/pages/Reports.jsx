@@ -1,30 +1,36 @@
 import { useEffect, useState } from 'react';
 import { 
   BarChart3, Download, TrendingUp, Calendar, FileText, 
-  Loader2, DollarSign, TrendingDown, PieChart, Zap, 
-  History, Activity, ArrowUpRight, Filter, ShieldAlert,
-  Plus, Trash, CheckCircle
+  Loader2, TrendingDown, PieChart, Zap, 
+  History, Activity, ArrowUpRight, ShieldAlert,
+  CheckCircle, Clock, AlertCircle
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
+import { useNavigate } from 'react-router-dom';
 
 const Reports = () => {
   const { token, role, user } = useAuth(); 
+  const navigate = useNavigate();
+  
+  // --- STATE ---
   const [data, setData] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // New: Error State
   const [dateRange, setDateRange] = useState('MONTH'); 
 
   // 🛡️ SECURITY: Strict Access Control
-  // Only Owners, Managers, and Accountants can see financial data
   const isAdmin = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role) || user?.is_superuser;
 
+  // --- FETCH DATA ---
   const fetchReports = async () => {
     // Stop if no token or not authorized
     if (!token || !isAdmin) return;
 
     try {
       setLoading(true);
+      setError(null);
       const headers = { 'Authorization': `Bearer ${token}` };
       
       // Concurrent fetching for performance
@@ -33,24 +39,36 @@ const Reports = () => {
         fetch(`${API_URL}/api/logs/`, { headers })
       ]);
       
+      // Auth Check
+      if (resAnalytics.status === 401 || resLogs.status === 401) {
+          navigate('/login');
+          return;
+      }
+
       if (resAnalytics.ok) setData(await resAnalytics.json());
+      else throw new Error("Failed to fetch analytics");
+
       if (resLogs.ok) setLogs(await resLogs.json());
+      else throw new Error("Failed to fetch logs");
 
     } catch (err) { 
         console.error("Report Intelligence Sync Error:", err);
+        setError("Unable to load financial data. Please check connection.");
     } finally { 
         setLoading(false); 
     }
   };
 
-  useEffect(() => { fetchReports(); }, [token, dateRange]); // 🟢 Depends on token & range
+  useEffect(() => { fetchReports(); }, [token, dateRange, navigate, isAdmin]); 
 
   // --- EXPORT ENGINES ---
   const downloadDailyPDF = () => {
+    if(!token) return;
     window.open(`${API_URL}/api/reports/daily-pdf/?token=${token}`, '_blank');
   };
 
   const exportCSV = (type) => {
+    if(!token) return;
     window.open(`${API_URL}/api/reports/export/?type=${type}&token=${token}`, '_blank');
   };
 
@@ -71,7 +89,8 @@ const Reports = () => {
       );
   }
 
-  if (loading) return (
+  // --- LOADING STATE ---
+  if (loading && !data) return (
     <div className="p-20 flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-4">
         <Loader2 className="animate-spin text-blue-600" size={50}/>
         <p className="font-black text-slate-400 uppercase tracking-[0.3em] text-xs">Aggregating Financial Intelligence...</p>
@@ -112,6 +131,14 @@ const Reports = () => {
             </button>
         </div>
       </div>
+
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchReports} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
 
       {/* 2. KPI PERFORMANCE GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">

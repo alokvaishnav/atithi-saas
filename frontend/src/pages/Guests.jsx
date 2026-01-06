@@ -3,7 +3,7 @@ import {
   User, Mail, Phone, Star, Search, 
   MapPin, Loader2, MoreHorizontal, Plus,
   Download, Ban, Briefcase, CreditCard, X, Save,
-  ShieldCheck, Trash2, Edit
+  ShieldCheck, Trash2, Edit, RefreshCcw, AlertCircle
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
@@ -12,8 +12,12 @@ import { useNavigate } from 'react-router-dom';
 const Guests = () => {
   const { token, role, user } = useAuth();
   const navigate = useNavigate();
+  
+  // --- STATE MANAGEMENT ---
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // New: Error State
+  const [submitting, setSubmitting] = useState(false); // New: Form Loading State
   const [searchTerm, setSearchTerm] = useState('');
   
   // 🛡️ SECURITY: Only Owners and Managers can Delete or Blacklist
@@ -33,12 +37,27 @@ const Guests = () => {
     if (!token) return;
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_URL}/api/guests/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) setGuests(await res.json());
-    } catch (err) { console.error(err); } 
-    finally { setLoading(false); }
+      
+      if (res.status === 401) {
+          navigate('/login');
+          return;
+      }
+
+      if (res.ok) {
+          setGuests(await res.json());
+      } else {
+          setError("Failed to load guest directory.");
+      }
+    } catch (err) { 
+        console.error(err); 
+        setError("Network error. Please check your connection.");
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   useEffect(() => { fetchGuests(); }, [token]);
@@ -105,6 +124,7 @@ const Guests = () => {
 
   const handleCreate = async (e) => {
       e.preventDefault();
+      setSubmitting(true);
       try {
         const res = await fetch(`${API_URL}/api/guests/`, {
             method: 'POST',
@@ -116,8 +136,15 @@ const Guests = () => {
             setShowAddModal(false);
             setNewGuestData({ full_name: '', email: '', phone: '', id_proof_number: '', address: '', type: 'REGULAR' });
             fetchGuests(); 
+        } else {
+            alert("Failed to create profile. Check if email/phone already exists.");
         }
-      } catch(err) { console.error(err); }
+      } catch(err) { 
+          console.error(err);
+          alert("Network Error"); 
+      } finally {
+          setSubmitting(false);
+      }
   };
 
   // --- CALCULATIONS & FILTER ---
@@ -131,7 +158,8 @@ const Guests = () => {
   const corporateCount = guests.filter(g => g.type === 'CORPORATE').length;
   const totalLTV = guests.reduce((sum, g) => sum + (parseFloat(g.total_spent) || 0), 0);
 
-  if (loading) return (
+  // --- LOADING & ERROR STATES ---
+  if (loading && guests.length === 0) return (
     <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
         <Loader2 className="animate-spin text-blue-600" size={40}/>
         <p className="text-xs font-bold uppercase tracking-widest">Loading Directory...</p>
@@ -149,6 +177,13 @@ const Guests = () => {
         </div>
         
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
+            <button 
+                onClick={fetchGuests}
+                className="bg-white border border-slate-200 text-slate-600 p-3 rounded-xl hover:bg-slate-50 hover:text-blue-600 transition-all shadow-sm"
+                title="Refresh List"
+            >
+                <RefreshCcw size={16} className={loading ? "animate-spin" : ""}/>
+            </button>
             <button className="bg-white border border-slate-200 text-slate-600 px-4 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center justify-center gap-2 shadow-sm flex-1 md:flex-none">
                 <Download size={16}/> Export CSV
             </button>
@@ -157,6 +192,13 @@ const Guests = () => {
             </button>
         </div>
       </div>
+
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 text-red-500 rounded-2xl text-xs font-bold flex items-center gap-2 border border-red-100">
+            <AlertCircle size={16}/> {error}
+        </div>
+      )}
 
       {/* STATS BAR */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -316,8 +358,13 @@ const Guests = () => {
                 </div>
 
                 <div className="pt-4">
-                    <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg">
-                        <Save size={16}/> Save Profile
+                    <button 
+                        type="submit" 
+                        disabled={submitting}
+                        className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {submitting ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} 
+                        {submitting ? "Creating..." : "Save Profile"}
                     </button>
                 </div>
             </form>

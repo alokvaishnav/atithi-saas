@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { 
-  ShieldAlert, LogOut, Loader2, Menu, User, Hotel, 
-  Plus, Trash, CheckCircle 
+  ShieldAlert, Menu, Hotel 
 } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -46,7 +45,7 @@ import Accounting from './pages/Accounting';
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
-import GlobalSettings from './pages/SuperAdmin/GlobalSettings'; // <--- NEW IMPORT
+import GlobalSettings from './pages/SuperAdmin/GlobalSettings'; 
 
 // 🦴 LOADING SKELETON (UX Improvement)
 const AppSkeleton = () => (
@@ -114,8 +113,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 // 🏗️ THE APP LAYOUT (Authenticated Shell)
 const AppLayout = () => {
-    const { role, logout, hotelName, user } = useAuth(); 
+    const { user, hotelName } = useAuth(); 
     const [sidebarOpen, setSidebarOpen] = useState(false);
+
+    // 🟢 Derived Branding Logic
+    const hotelSettings = user?.hotel_settings || {};
+    const displayLogo = hotelSettings.logo; 
 
     return (
       <LicenseLock>
@@ -133,24 +136,30 @@ const AppLayout = () => {
                     <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl">
                         <Menu size={24} />
                     </button>
+                    
+                    {/* Dynamic Logo / Hotel Name */}
                     <div className="flex items-center gap-2">
-                        <div className="bg-blue-600 p-1.5 rounded-lg">
-                            <Hotel size={14} className="text-white" />
-                        </div>
+                        {displayLogo ? (
+                           <img src={displayLogo} alt="Logo" className="w-8 h-8 object-contain rounded-md" />
+                        ) : (
+                           <div className="bg-blue-600 p-1.5 rounded-lg">
+                               <Hotel size={14} className="text-white" />
+                           </div>
+                        )}
                         <span className="font-black text-slate-800 uppercase tracking-widest text-sm truncate max-w-[150px]">
                             {hotelName || "Atithi"}
                         </span>
                     </div>
                 </div>
+                
+                {/* User Avatar */}
                 <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md">
                     {user?.username?.charAt(0).toUpperCase()}
                 </div>
             </header>
 
-            {/* Desktop Header */}
-            <div className="hidden md:flex justify-end p-4 absolute top-0 right-0 z-20 pointer-events-none">
-                 {/* This area usually handled inside pages like Dashboard, but we ensure global styles here */}
-            </div>
+            {/* Desktop Header Placeholder (if needed for global search/actions) */}
+            <div className="hidden md:flex justify-end p-4 absolute top-0 right-0 z-20 pointer-events-none"></div>
 
             {/* SCROLLABLE PAGE AREA */}
             <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
@@ -264,14 +273,14 @@ const AppContent = () => {
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
         {/* 🌏 PUBLIC HOTEL WEBSITE (The Booking Engine) */}
-        {/* CRITICAL FIX: Moved outside AppLayout so guests can see it without logging in */}
+        {/* CRITICAL: Must be outside AppLayout so guests can access without login */}
         <Route path="/hotel/:username" element={<BookingSite />} />
 
         {/* EXTERNAL GUEST FACING (No Auth Required) */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
         {/* 🧹 HOUSEKEEPING MOBILE APP (Protected but Full Screen) */}
-        {/* CRITICAL FIX: Moved outside AppLayout so it takes full mobile screen */}
+        {/* CRITICAL: Outside AppLayout so it takes full mobile screen */}
         <Route path="/hk-mobile" element={
           <ProtectedRoute allowedRoles={['OWNER', 'MANAGER', 'HOUSEKEEPING']}>
             <HousekeepingMobile />

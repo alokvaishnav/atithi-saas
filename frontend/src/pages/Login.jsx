@@ -18,28 +18,25 @@ const Login = () => {
   useEffect(() => {
     if (location.state?.msg) {
         setSuccessMsg(location.state.msg);
-        // Clear history state so message doesn't persist on refresh
+        // Clear history state immediately so message doesn't persist on refresh
         window.history.replaceState({}, document.title);
     }
   }, [location]);
 
-  // 2️⃣ CLEANUP: Clear any stale session data
+  // 2️⃣ CLEANUP: Clear any stale session data on mount
   useEffect(() => {
     const keysToRemove = [
-        'access_token', 
-        'refresh_token', 
-        'user_data', 
-        'user_role', 
-        'username', 
-        'hotel_name', 
-        'user_id', 
-        'is_superuser'
+        'access_token', 'refresh_token', 'user_data', 
+        'user_role', 'username', 'hotel_name', 
+        'user_id', 'is_superuser'
     ];
     keysToRemove.forEach(key => localStorage.removeItem(key));
   }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    if (!username || !password) return;
+
     setLoading(true);
     setError(null);
 
@@ -67,10 +64,10 @@ const Login = () => {
     <div className="flex h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
       
       {/* Dynamic Background */}
-      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600 rounded-full blur-[120px] opacity-10 animate-pulse"></div>
-      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-purple-600 rounded-full blur-[120px] opacity-10 animate-pulse delay-700"></div>
+      <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] animate-pulse pointer-events-none"></div>
+      <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse delay-700 pointer-events-none"></div>
       
-      <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-4 border-slate-100 relative z-10">
+      <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md border-4 border-slate-100 relative z-10 animate-in fade-in zoom-in duration-300">
         
         <div className="flex justify-center mb-6">
           <div className="bg-blue-50 p-4 rounded-3xl text-blue-600 shadow-inner ring-4 ring-blue-50/50">
@@ -95,7 +92,7 @@ const Login = () => {
 
         {/* Error Message Banner */}
         {error && (
-            <div className="mb-6 bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold animate-in slide-in-from-top-2">
+            <div className="mb-6 bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold animate-in slide-in-from-top-2 shake">
                 <AlertCircle size={18} className="shrink-0"/>
                 {error}
             </div>
@@ -105,9 +102,12 @@ const Login = () => {
           <div className="relative group">
             <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
             <input
+              autoFocus
               type="text"
+              name="username"
+              autoComplete="username"
               placeholder="Operator ID / Username"
-              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400 focus:bg-white"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -118,8 +118,10 @@ const Login = () => {
             <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
             <input
               type="password"
+              name="password"
+              autoComplete="current-password"
               placeholder="Access Key / Password"
-              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400 focus:bg-white"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

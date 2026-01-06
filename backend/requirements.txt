@@ -1,9 +1,23 @@
+# --- Core Framework ---
 Django>=5.0
 djangorestframework>=3.14
-djangorestframework-simplejwt>=5.3
 django-cors-headers>=4.3
-gunicorn>=21.2
-reportlab>=4.0
-icalendar>=5.0
-requests>=2.31
-Pillow>=10.0
+
+# --- Authentication ---
+djangorestframework-simplejwt>=5.3
+
+# --- Documentation & Filtering (Added based on your code) ---
+drf-yasg>=1.21.7        # Required for Swagger/Redoc API Docs
+django-filter>=23.5     # Required for Search & Filter backends
+
+# --- Utils & Features ---
+reportlab>=4.0          # PDF Generation
+icalendar>=5.0          # Channel Manager (.ics)
+requests>=2.31          # External API calls (WhatsApp/SMS)
+Pillow>=10.0            # Image processing (Hotel Logos/Avatars)
+
+# --- Production Server ---
+gunicorn>=21.2          # WSGI Server for deployment
+
+# --- Database (Optional: Uncomment if using PostgreSQL in prod) ---
+# psycopg2-binary>=2.9

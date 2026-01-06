@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Printer, ArrowLeft, Loader2, MapPin, Phone, Mail, Building2 } from 'lucide-react';
+import { Printer, ArrowLeft, Loader2, MapPin, Phone, Mail, Building2, AlertCircle } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { API_URL } from '../config';
 
@@ -8,34 +8,65 @@ const PrintGRC = () => {
   const { bookingId } = useParams();
   const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const printRef = useRef();
   const token = localStorage.getItem('access_token');
 
   useEffect(() => {
     const fetchBooking = async () => {
+        if (!token) {
+            navigate('/login');
+            return;
+        }
         try {
+            setLoading(true);
+            setError(null);
             const res = await fetch(`${API_URL}/api/bookings/${bookingId}/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) setBooking(await res.json());
+
+            if (res.status === 401) {
+                navigate('/login');
+                return;
+            }
+
+            if (res.ok) {
+                setBooking(await res.json());
+            } else {
+                setError("Failed to load booking details.");
+            }
         } catch (err) {
             console.error("Error fetching GRC:", err);
+            setError("Network connection failed.");
+        } finally {
+            setLoading(false);
         }
     };
     fetchBooking();
-  }, [bookingId, token]);
+  }, [bookingId, token, navigate]);
 
   const handlePrint = useReactToPrint({
-    contentRef: printRef, // Updated for newer react-to-print versions
+    content: () => printRef.current,
     documentTitle: `GRC_${bookingId}_${booking?.guest_details?.full_name || 'Guest'}`,
   });
 
-  if (!booking) return (
+  if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
         <Loader2 className="animate-spin text-slate-400" size={32}/> 
         <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Generating GRC Form...</span>
     </div>
   );
+
+  if (error) return (
+    <div className="h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 text-red-500">
+        <AlertCircle size={32}/>
+        <p className="font-bold">{error}</p>
+        <button onClick={() => navigate(-1)} className="text-slate-500 hover:underline text-sm">Go Back</button>
+    </div>
+  );
+
+  if (!booking) return null;
 
   return (
     <div className="p-8 bg-slate-100 min-h-screen font-sans">
@@ -54,12 +85,12 @@ const PrintGRC = () => {
       </div>
 
       {/* PRINTABLE AREA (A4 Width approx) */}
-      <div className="bg-white p-[10mm] max-w-[210mm] mx-auto shadow-2xl border border-slate-200 print:shadow-none print:border-none" ref={printRef}>
+      <div className="bg-white p-[10mm] max-w-[210mm] mx-auto shadow-2xl border border-slate-200 print:shadow-none print:border-none print:m-0" ref={printRef}>
         
         {/* 1. HEADER */}
         <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-6">
             <div className="flex gap-4">
-                <div className="w-16 h-16 bg-slate-900 text-white flex items-center justify-center rounded-lg print:border print:border-slate-900">
+                <div className="w-16 h-16 bg-slate-900 text-white flex items-center justify-center rounded-lg print:border print:border-slate-900 print:text-slate-900">
                     <Building2 size={32}/>
                 </div>
                 <div>
@@ -191,7 +222,7 @@ const PrintGRC = () => {
                 </div>
                 <div>
                     <span className="block text-[9px] font-bold uppercase text-slate-500 mb-1">Room Tariff</span>
-                    <span className="text-sm font-bold">₹{booking.total_amount} / Night</span>
+                    <span className="text-sm font-bold">₹{parseFloat(booking.total_amount || 0).toLocaleString()} / Night</span>
                 </div>
                 <div>
                     <span className="block text-[9px] font-bold uppercase text-slate-500 mb-1">Advance Paid</span>

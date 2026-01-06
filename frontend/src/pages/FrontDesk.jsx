@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { 
   CheckCircle, LogIn, LogOut, User, 
-  Briefcase, Grid, AlertTriangle, Calendar,
-  Search, Loader2, BedDouble, Clock, ShieldAlert,
+  Briefcase, AlertTriangle, Clock, ShieldAlert,
   ConciergeBell, FileText, Calculator, ChevronRight, Zap,
-  Plus, Trash
+  Loader2, BedDouble, Search, RefreshCcw, AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config'; 
@@ -12,40 +11,64 @@ import { useAuth } from '../context/AuthContext';
 
 const FrontDesk = () => {
   const { token } = useAuth(); 
+  const navigate = useNavigate();
   
   // --- CORE STATES ---
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // Added Error State
   const [activeTab, setActiveTab] = useState('MATRIX'); 
   const [searchTerm, setSearchTerm] = useState('');
 
   // --- MISSION CONTROL STATES ---
-  const [gstBase, setGstBase] = useState(0);
+  const [gstBase, setGstBase] = useState('');
   
-  const navigate = useNavigate();
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Fix: Get Local Date string (YYYY-MM-DD) instead of UTC to avoid timezone issues
+  const getLocalDate = () => {
+      const d = new Date();
+      const offset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - offset).toISOString().split('T')[0];
+  };
+  const todayStr = getLocalDate();
 
   // --- MASTER FETCH DATA ---
   const fetchData = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
+      setError(null);
       const headers = { 'Authorization': `Bearer ${token}` };
+      
       const [roomRes, bookingRes] = await Promise.all([
           fetch(`${API_URL}/api/rooms/`, { headers }),
           fetch(`${API_URL}/api/bookings/`, { headers })
       ]);
       
-      if (roomRes.ok) setRooms(await roomRes.json());
-      if (bookingRes.ok) setBookings(await bookingRes.json());
+      // Auth Check
+      if (roomRes.status === 401 || bookingRes.status === 401) {
+          navigate('/login');
+          return;
+      }
+
+      if (roomRes.ok && bookingRes.ok) {
+          const roomsData = await roomRes.json();
+          const bookingsData = await bookingRes.json();
+          
+          // Sort rooms by room_number just in case API sends them random
+          setRooms(roomsData.sort((a,b) => a.room_number - b.room_number));
+          setBookings(bookingsData);
+      } else {
+          setError("Failed to sync data with server.");
+      }
       
     } catch (err) { 
         console.error("Reception Sync Error:", err); 
+        setError("Network connection failed.");
     } finally { 
         setLoading(false); 
     }
-  }, [token]);
+  }, [token, navigate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -60,7 +83,11 @@ const FrontDesk = () => {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ status: newStatus })
         });
-        if(res.ok) fetchData();
+        if(res.ok) {
+            fetchData();
+        } else {
+            alert("Action failed. Please try again.");
+        }
     } catch (err) { console.error(err); }
   };
 
@@ -76,10 +103,8 @@ const FrontDesk = () => {
     } catch (err) { console.error(err); }
   };
 
-  // --- PDF GENERATOR (FIXED AUTH) ---
+  // --- PDF GENERATOR ---
   const generateNightAudit = () => {
-    // We attach the token to the URL so the backend View can validate the request manually
-    // This bypasses the browser's limitation on sending Headers with window.open
     if (!token) {
         alert("Session invalid. Please login again.");
         return;
@@ -88,26 +113,35 @@ const FrontDesk = () => {
     window.open(pdfUrl, '_blank');
   };
 
-  // --- DERIVED DATA ---
+  // --- DERIVED DATA & LOGIC ---
   const activeBookingsMap = {};
-  bookings.filter(b => b.status === 'CHECKED_IN').forEach(b => {
+  (bookings || []).filter(b => b.status === 'CHECKED_IN').forEach(b => {
       // Logic handles both full room objects or just IDs if backend serializers differ
       const roomId = b.room_details?.id || b.room; 
       if(roomId) activeBookingsMap[roomId] = b;
   });
 
-  const arrivals = bookings.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED');
-  const departures = bookings.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN');
-  const inHouse = bookings.filter(b => b.status === 'CHECKED_IN');
+  // Sort lists by room number for easier reading
+  const sortList = (list) => list.sort((a, b) => {
+      const rA = a.room_details?.room_number || 0;
+      const rB = b.room_details?.room_number || 0;
+      return rA - rB;
+  });
+
+  const arrivals = sortList(bookings.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED'));
+  const departures = sortList(bookings.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN'));
+  const inHouse = sortList(bookings.filter(b => b.status === 'CHECKED_IN'));
 
   const getFilteredList = (list) => {
       return list.filter(b => 
           b.guest_details?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          b.room_details?.room_number?.toString().includes(searchTerm)
+          b.room_details?.room_number?.toString().includes(searchTerm) ||
+          b.booking_id?.toString().includes(searchTerm)
       );
   };
 
-  if (loading) return (
+  // --- LOADING STATE ---
+  if (loading && rooms.length === 0) return (
     <div className="p-20 text-center flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-6">
         <Loader2 className="animate-spin text-blue-600" size={60}/> 
         <span className="font-black text-slate-400 uppercase tracking-[0.3em] text-xs animate-pulse">Initializing Mission Control...</span>
@@ -128,7 +162,16 @@ const FrontDesk = () => {
           </p>
         </div>
         
-        <div className="flex flex-wrap gap-4 w-full xl:w-auto">
+        <div className="flex flex-wrap gap-4 w-full xl:w-auto items-center">
+             {/* Refresh Button */}
+            <button 
+                onClick={fetchData} 
+                className="bg-white p-4 rounded-2xl border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 shadow-sm transition-all"
+                title="Refresh Data"
+            >
+                <RefreshCcw size={18} className={loading ? "animate-spin" : ""}/>
+            </button>
+
             <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 text-xs font-black text-slate-600 flex items-center gap-3 shadow-sm hover:shadow-md transition-all">
                 <LogIn size={18} className="text-blue-500"/> Arrivals: {arrivals.length}
             </div>
@@ -140,6 +183,14 @@ const FrontDesk = () => {
             </div>
         </div>
       </div>
+
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchData} className="underline ml-auto">Retry</button>
+        </div>
+      )}
 
       {/* 2. MISSION CONTROL PANELS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
@@ -158,13 +209,16 @@ const FrontDesk = () => {
                       type="number" 
                       placeholder="Enter Base Amount..." 
                       className="w-full p-5 bg-slate-50 rounded-2xl font-black text-slate-900 outline-none border-2 border-transparent focus:border-blue-500 transition-all shadow-inner"
-                      onChange={(e) => setGstBase(Number(e.target.value))}
+                      value={gstBase}
+                      onChange={(e) => setGstBase(e.target.value)}
                     />
                 </div>
                 <div className="flex gap-4 w-full sm:w-auto">
                     <div className="bg-blue-600 p-5 rounded-2xl text-center flex-1 sm:min-w-[140px] shadow-lg shadow-blue-200 group-hover:scale-105 transition-transform">
                         <p className="text-[8px] font-black text-blue-100 uppercase tracking-widest mb-1">Final Bill</p>
-                        <p className="text-xl font-black text-white tracking-tighter italic">₹{(gstBase * 1.12).toFixed(2)}</p>
+                        <p className="text-xl font-black text-white tracking-tighter italic">
+                             ₹{gstBase ? (Number(gstBase) * 1.12).toFixed(2) : "0.00"}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -177,7 +231,7 @@ const FrontDesk = () => {
                     <FileText size={18} className="text-blue-400"/> Daily Night Audit
                 </h3>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-                    Generate government compliant <br/> Financial audit reports for today.
+                    Generate government compliant <br/> Financial audit reports for today ({todayStr}).
                 </p>
              </div>
              <button 
@@ -210,8 +264,8 @@ const FrontDesk = () => {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                 <input 
                     type="text" 
-                    placeholder="Search by Guest or Room #..." 
-                    className="w-full pl-12 pr-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-blue-600 bg-white outline-none font-bold text-sm shadow-sm" 
+                    placeholder="Search Guest, Room, ID..." 
+                    className="w-full pl-12 pr-6 py-4 rounded-2xl border-2 border-slate-100 focus:border-blue-600 bg-white outline-none font-bold text-sm shadow-sm transition-all" 
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)} 
                 />
@@ -267,10 +321,10 @@ const FrontDesk = () => {
                             
                             {activeBooking ? (
                                 <p className="text-xs font-black truncate border-t border-white/20 pt-3 flex items-center gap-2">
-                                    <Zap size={10}/> {activeBooking.guest_details?.full_name}
+                                    <Zap size={10}/> {activeBooking.guest_details?.full_name || 'Guest'}
                                 </p>
                             ) : (
-                                <p className="text-[9px] font-black text-slate-400 border-t border-slate-100 pt-3">CLEAN & VACANT</p>
+                                <p className="text-[9px] font-black opacity-50 border-t border-current pt-3">CLEAN & VACANT</p>
                             )}
                         </div>
                     </div>
@@ -297,10 +351,10 @@ const FrontDesk = () => {
                   <td className="p-8">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 font-black group-hover:bg-blue-600 group-hover:text-white transition-all">
-                            {b.guest_details?.full_name?.charAt(0)}
+                            {b.guest_details?.full_name?.charAt(0) || 'G'}
                         </div>
                         <div>
-                            <p className="font-black text-slate-900 text-base italic uppercase">{b.guest_details?.full_name}</p>
+                            <p className="font-black text-slate-900 text-base italic uppercase">{b.guest_details?.full_name || 'Unknown Guest'}</p>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Ref: BK-00{b.id}</p>
                         </div>
                       </div>

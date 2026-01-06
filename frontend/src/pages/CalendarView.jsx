@@ -7,7 +7,10 @@ import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
-import { Loader2, ChevronLeft, ChevronRight, Calendar as CalIcon, Save } from 'lucide-react';
+import { 
+  Loader2, ChevronLeft, ChevronRight, Calendar as CalIcon, 
+  Save, AlertCircle, RefreshCcw 
+} from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -21,49 +24,29 @@ const DnDCalendar = withDragAndDrop(Calendar);
 const CalendarView = () => {
   const { token } = useAuth();
   const navigate = useNavigate();
+  
+  // --- STATE ---
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // --- CUSTOM TOOLBAR ---
-  const CustomToolbar = (toolbar) => {
-    const goToBack = () => toolbar.onNavigate('PREV');
-    const goToNext = () => toolbar.onNavigate('NEXT');
-    const goToCurrent = () => toolbar.onNavigate('TODAY');
-
-    const label = () => {
-      const date = moment(toolbar.date);
-      return (
-        <span className="text-xl font-black text-slate-800 uppercase tracking-tighter">
-          {date.format('MMMM')} <span className="text-blue-600">{date.format('YYYY')}</span>
-        </span>
-      );
-    };
-
-    return (
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm gap-4">
-        <div className="flex items-center gap-4">
-            {label()}
-        </div>
-        <div className="flex items-center gap-2">
-            <button onClick={goToBack} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><ChevronLeft size={20}/></button>
-            <button onClick={goToCurrent} className="px-4 py-2 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-blue-600 transition-colors flex items-center gap-2">
-                <CalIcon size={14}/> Today
-            </button>
-            <button onClick={goToNext} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><ChevronRight size={20}/></button>
-        </div>
-      </div>
-    );
-  };
+  const [error, setError] = useState(null); // New: Error state
 
   // --- FETCH DATA ---
   const fetchBookings = useCallback(async () => {
     if (!token) return;
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
       const [resBookings, resRooms] = await Promise.all([
-          fetch(`${API_URL}/api/bookings/`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API_URL}/api/rooms/`, { headers: { Authorization: `Bearer ${token}` } })
+          fetch(`${API_URL}/api/bookings/`, { headers }),
+          fetch(`${API_URL}/api/rooms/`, { headers })
       ]);
+
+      // Auth Check
+      if (resBookings.status === 401 || resRooms.status === 401) {
+          navigate('/login');
+          return;
+      }
 
       if (resBookings.ok && resRooms.ok) {
         const bookingsData = await resBookings.json();
@@ -92,19 +75,58 @@ const CalendarView = () => {
               };
           });
         setEvents(formattedEvents);
+      } else {
+          setError("Failed to sync calendar data.");
       }
     } catch (err) { 
         console.error(err); 
+        setError("Network connection failed.");
     } finally { 
         setLoading(false); 
     }
-  }, [token]);
+  }, [token, navigate]);
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
+  // --- CUSTOM TOOLBAR ---
+  const CustomToolbar = (toolbar) => {
+    const goToBack = () => toolbar.onNavigate('PREV');
+    const goToNext = () => toolbar.onNavigate('NEXT');
+    const goToCurrent = () => toolbar.onNavigate('TODAY');
+
+    const label = () => {
+      const date = moment(toolbar.date);
+      return (
+        <span className="text-xl font-black text-slate-800 uppercase tracking-tighter">
+          {date.format('MMMM')} <span className="text-blue-600">{date.format('YYYY')}</span>
+        </span>
+      );
+    };
+
+    return (
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm gap-4">
+        <div className="flex items-center gap-4">
+            {label()}
+        </div>
+        <div className="flex items-center gap-2">
+            <button onClick={fetchBookings} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-blue-600" title="Refresh">
+                <RefreshCcw size={18} className={loading ? "animate-spin" : ""}/>
+            </button>
+            <div className="h-6 w-px bg-slate-200 mx-2"></div>
+            <button onClick={goToBack} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><ChevronLeft size={20}/></button>
+            <button onClick={goToCurrent} className="px-4 py-2 bg-slate-900 text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-blue-600 transition-colors flex items-center gap-2">
+                <CalIcon size={14}/> Today
+            </button>
+            <button onClick={goToNext} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><ChevronRight size={20}/></button>
+        </div>
+      </div>
+    );
+  };
+
   // --- DRAG AND DROP HANDLER ---
   const onEventDrop = async ({ event, start, end }) => {
-    // 1. Optimistic UI Update (Update screen immediately)
+    // 1. Optimistic UI Update
+    const originalEvents = [...events];
     const updatedEvents = events.map(existingEvent => {
       return existingEvent.id === event.id
         ? { ...existingEvent, start, end }
@@ -112,7 +134,7 @@ const CalendarView = () => {
     });
     setEvents(updatedEvents);
 
-    // 2. Formatting dates for API (YYYY-MM-DD) safely
+    // 2. Formatting dates for API (YYYY-MM-DD)
     const formatDate = (d) => moment(d).format('YYYY-MM-DD');
 
     // 3. Backend Update
@@ -130,12 +152,12 @@ const CalendarView = () => {
         });
 
         if (!res.ok) {
-            alert("Failed to move booking. Reverting...");
-            fetchBookings(); // Revert on failure
+            throw new Error("Update failed");
         }
     } catch (error) {
         console.error("Move failed", error);
-        fetchBookings();
+        alert("Failed to move booking. Reverting changes.");
+        setEvents(originalEvents); // Revert on failure
     }
   };
 
@@ -173,7 +195,7 @@ const CalendarView = () => {
     };
   };
 
-  if (loading) return (
+  if (loading && events.length === 0) return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
         <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
         <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Loading Timeline...</p>
@@ -182,6 +204,15 @@ const CalendarView = () => {
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans flex flex-col">
+      
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchBookings} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
+
       <div className="flex-1 bg-white p-6 rounded-[40px] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         
         {/* Helper Note */}
@@ -198,7 +229,7 @@ const CalendarView = () => {
           endAccessor="end"
           
           // Layout & Behavior
-          style={{ height: 'calc(100vh - 180px)', fontFamily: 'inherit' }}
+          style={{ height: 'calc(100vh - 220px)', fontFamily: 'inherit' }}
           views={['month', 'week', 'day', 'agenda']}
           defaultView='month'
           popup={true}

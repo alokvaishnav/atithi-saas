@@ -5,16 +5,26 @@ from datetime import timedelta
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ==============================================================================
+# 1. SECURITY SETTINGS
+# ==============================================================================
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-local-dev-key-CHANGE-IN-PROD'
+# Use environment variable if available, otherwise fallback to dev key
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-local-dev-key-CHANGE-IN-PROD')
 
 # SECURITY WARNING: don't run with debug turned on in production!
+# Set to False in production for security
 DEBUG = True
 
 # ALLOWED_HOSTS: Add your AWS IP and any domains you use
+# Including '*' is convenient for dev but insecure for prod.
 ALLOWED_HOSTS = ['*', '16.171.144.127', 'localhost', '127.0.0.1']
 
-# Application definition
+# ==============================================================================
+# 2. INSTALLED APPS
+# ==============================================================================
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -27,6 +37,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'django_filters', # Required for search/filter functionalities
     
     # Local Apps
     'core',   # Auth & Users
@@ -44,6 +55,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Ensure this matches your actual project folder name
 ROOT_URLCONF = 'atithi_api.urls'
 
 TEMPLATES = [
@@ -64,7 +76,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'atithi_api.wsgi.application'
 
-# Database
+# ==============================================================================
+# 3. DATABASE
+# ==============================================================================
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 DATABASES = {
     'default': {
@@ -72,6 +86,10 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# ==============================================================================
+# 4. AUTH & PASSWORD
+# ==============================================================================
 
 # Custom User Model
 AUTH_USER_MODEL = 'core.CustomUser'
@@ -92,7 +110,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
+# ==============================================================================
+# 5. INTERNATIONALIZATION & FILES
+# ==============================================================================
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata' # Set to your local timezone for correct reports
 USE_I18N = True
@@ -107,10 +128,18 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# File Upload Limits (For high-res logos)
+# Set to 10MB to prevent server crashes on large uploads
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# REST Framework Config
+# ==============================================================================
+# 6. REST FRAMEWORK & JWT
+# ==============================================================================
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -118,6 +147,13 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    # Better Error Handling
+    'EXCEPTION_HANDLER': 'rest_framework.views.exception_handler',
+    # Pagination default
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    # Filtering
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
 }
 
 # JWT Settings
@@ -129,16 +165,28 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# ==============================================================================
+# 7. CORS (CROSS-ORIGIN RESOURCE SHARING)
+# ==============================================================================
+
 # CORS Settings (Allow React Frontend & Public Access)
 CORS_ALLOW_ALL_ORIGINS = True  # Required for public booking pages
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
 
-# File Upload Limits (For high-res logos)
-# Set to 10MB to prevent server crashes on large uploads
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 
-FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760 
-
-# --- EMAIL CONFIGURATION (SMTP) ---
+# ==============================================================================
+# 8. EMAIL CONFIGURATION (SMTP)
+# ==============================================================================
 # Required for Booking Confirmations & Welcome Emails
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com' # Change to your provider (Outlook/Zoho/AWS SES) if needed
@@ -147,6 +195,42 @@ EMAIL_USE_TLS = True
 
 # Note: In your SaaS, these default credentials are used only for system notifications
 # or as a fallback if the Hotel Owner hasn't set their own SMTP.
-# Replace these with your actual "App Password" (not login password)
-EMAIL_HOST_USER = 'your-system-email@gmail.com' 
-EMAIL_HOST_PASSWORD = 'your-app-password'
+# Ideally, fetch these from env variables.
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'your-system-email@gmail.com') 
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'your-app-password')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# ==============================================================================
+# 9. LOGGING CONFIGURATION
+# ==============================================================================
+# Helps debug Automation/SMTP/WhatsApp issues in production
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'hotel': {  # Your app name
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'core': {   # Auth app
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}

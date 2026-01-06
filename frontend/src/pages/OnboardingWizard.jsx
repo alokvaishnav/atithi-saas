@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { Hotel, CheckCircle, ArrowRight, Building, MapPin, Coins, BedDouble, Loader2 } from 'lucide-react';
+import { 
+  Hotel, CheckCircle, ArrowRight, Building, 
+  MapPin, Coins, Loader2, AlertCircle 
+} from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -7,8 +10,11 @@ import { useNavigate } from 'react-router-dom';
 const OnboardingWizard = () => {
   const { token, updateGlobalProfile } = useAuth();
   const navigate = useNavigate();
+  
+  // --- STATE ---
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   
   const [formData, setFormData] = useState({ 
     hotelName: '', 
@@ -18,13 +24,34 @@ const OnboardingWizard = () => {
     currency: '₹'
   });
 
+  // --- LOGIC ---
   const handleNext = async () => {
+    setError(null);
+
+    // Validation Step 1
+    if (step === 1 && !formData.hotelName.trim()) {
+        setError("Please enter a valid hotel name.");
+        return;
+    }
+
+    // Validation Step 2
+    if (step === 2) {
+        if (parseInt(formData.totalFloors) < 1) {
+            setError("Property must have at least 1 floor.");
+            return;
+        }
+        if (parseInt(formData.basePrice) < 0) {
+            setError("Price cannot be negative.");
+            return;
+        }
+    }
+
     if (step === 3) {
       // --- FINAL SUBMIT LOGIC ---
       setLoading(true);
       try {
         // 1. Save Hotel Settings
-        await fetch(`${API_URL}/api/settings/`, {
+        const settingsRes = await fetch(`${API_URL}/api/settings/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ 
@@ -34,21 +61,24 @@ const OnboardingWizard = () => {
             })
         });
 
-        // 2. Generate Dummy Rooms (e.g., 4 rooms per floor)
+        if (!settingsRes.ok) throw new Error("Failed to save hotel settings.");
+
+        // 2. Generate Dummy Rooms (4 rooms per floor)
         const floors = parseInt(formData.totalFloors) || 1;
         const price = parseInt(formData.basePrice) || 2000;
         
-        // Loop through floors and create 4 rooms for each
         const roomPromises = [];
         for (let f = 1; f <= floors; f++) {
             for (let r = 1; r <= 4; r++) {
-                const roomNum = `${f}0${r}`; // e.g., 101, 102, 201...
+                // Logic: Floor 1 Room 1 -> 101, Floor 10 Room 1 -> 1001
+                const roomNum = f * 100 + r; 
+                
                 roomPromises.push(
                     fetch(`${API_URL}/api/rooms/`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({
-                            room_number: roomNum,
+                            room_number: roomNum.toString(),
                             room_type: r === 4 ? 'SUITE' : 'SINGLE', // Make the last room a Suite
                             price_per_night: r === 4 ? price * 1.5 : price,
                             floor: f,
@@ -59,6 +89,8 @@ const OnboardingWizard = () => {
                 );
             }
         }
+        
+        // Execute all room creations in parallel
         await Promise.all(roomPromises);
 
         // 3. Update Context & Redirect
@@ -67,7 +99,7 @@ const OnboardingWizard = () => {
 
       } catch (err) { 
           console.error(err);
-          alert("Setup failed. Please try again.");
+          setError("Setup failed. Please check your connection and try again.");
       } finally {
           setLoading(false);
       }
@@ -93,6 +125,14 @@ const OnboardingWizard = () => {
                 />
             </div>
         </div>
+
+        {/* Error Banner */}
+        {error && (
+            <div className="mb-6 bg-red-50 border border-red-100 text-red-500 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold animate-in slide-in-from-top-2">
+                <AlertCircle size={20} className="shrink-0"/>
+                {error}
+            </div>
+        )}
 
         {/* Step 1: Branding */}
         {step === 1 && (
@@ -145,7 +185,7 @@ const OnboardingWizard = () => {
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest group-hover:text-blue-500">Total Floors</label>
                         <div className="flex items-center mt-2">
                             <Building size={24} className="text-slate-300 mr-2"/>
-                            <input id="floors-input" type="number" className="w-full bg-transparent outline-none font-black text-3xl text-slate-800" placeholder="1"
+                            <input id="floors-input" type="number" min="1" className="w-full bg-transparent outline-none font-black text-3xl text-slate-800" placeholder="1"
                                 value={formData.totalFloors}
                                 onChange={e => setFormData({...formData, totalFloors: e.target.value})}
                             />
@@ -155,7 +195,7 @@ const OnboardingWizard = () => {
                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest group-hover:text-blue-500">Avg Room Price</label>
                         <div className="flex items-center mt-2">
                             <span className="text-2xl font-black text-slate-300 mr-1">{formData.currency}</span>
-                            <input id="price-input" type="number" className="w-full bg-transparent outline-none font-black text-3xl text-slate-800" placeholder="2000"
+                            <input id="price-input" type="number" min="0" className="w-full bg-transparent outline-none font-black text-3xl text-slate-800" placeholder="2000"
                                 value={formData.basePrice}
                                 onChange={e => setFormData({...formData, basePrice: e.target.value})}
                             />
@@ -182,12 +222,12 @@ const OnboardingWizard = () => {
         {/* Footer Actions */}
         <div className="mt-12 flex justify-between items-center">
             {step > 1 ? (
-                <button onClick={() => setStep(step - 1)} className="text-slate-400 font-bold text-sm hover:text-slate-600">Back</button>
+                <button onClick={() => setStep(step - 1)} className="text-slate-400 font-bold text-sm hover:text-slate-600 px-4 py-2">Back</button>
             ) : <div></div>}
             
             <button 
                 onClick={handleNext}
-                disabled={!formData.hotelName || loading}
+                disabled={loading}
                 className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest flex items-center gap-3 hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group"
             >
                 {loading ? <Loader2 className="animate-spin"/> : (

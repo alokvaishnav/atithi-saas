@@ -1,49 +1,61 @@
 import axios from 'axios';
 
-// ✅ CONNECT TO YOUR AWS SERVER
-// This is the Public IP of your Django Backend
-export const API_URL = "http://16.171.144.127";
-
-// ℹ️ If you are testing on your local laptop, use this instead:
-// export const API_URL = "http://127.0.0.1:8000";
+// ✅ CONNECT TO YOUR SERVER
+// 1. Try to find VITE_API_URL in .env file
+// 2. If not found, use your hardcoded AWS IP
+// 🟢 EXPORT IS REQUIRED: Used by components doing manual 'fetch()' calls
+export const API_URL = import.meta.env?.VITE_API_URL || "http://16.171.144.127";
 
 // Create the Axios Instance
 const api = axios.create({
-    baseURL: API_URL,
+    // 🟢 CRITICAL: We append '/api' here for Axios, but keep API_URL as root for manual fetch.
+    baseURL: `${API_URL}/api`,
+    timeout: 15000, // 15 seconds timeout (prevents infinite hanging)
     headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
     },
 });
 
-// 🔒 REQUEST INTERCEPTOR: Automatically attach the Token to every request
+// 🔒 REQUEST INTERCEPTOR: Automatically attach the Token
 api.interceptors.request.use(
     (config) => {
-        // Check if we have a token saved in the browser
         const token = localStorage.getItem('access_token');
-        
-        // If yes, attach it to the header like a VIP pass
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
-    (error) => {
-        // If something goes wrong before the request is sent
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-// 🛡️ RESPONSE INTERCEPTOR: Handle Expired Sessions
-// If the server says "401 Unauthorized" (Token Expired), we auto-logout the user.
+// 🛡️ RESPONSE INTERCEPTOR: Handle Errors & Session Expiry
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
-        if (error.response && error.response.status === 401) {
-            // Token expired or invalid
-            console.warn("Session expired. Redirecting to login...");
-            localStorage.clear(); // Clear old data
-            window.location.href = '/login'; // Force redirect
+    async (error) => {
+        const originalRequest = error.config;
+
+        // 1. Handle 401 Unauthorized (Token Expired)
+        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true;
+
+            console.warn("⚠️ Session expired. Logging out...");
+            
+            // Clear all auth data
+            localStorage.clear();
+            
+            // Redirect to login ONLY if we aren't already there (prevents loops)
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
         }
+
+        // 2. Handle Network Errors (Server Down / Offline)
+        if (!error.response) {
+            console.error("🚨 Network Error: Unable to reach the server at " + API_URL);
+            // Optional: You could trigger a global toast/alert here
+        }
+
         return Promise.reject(error);
     }
 );

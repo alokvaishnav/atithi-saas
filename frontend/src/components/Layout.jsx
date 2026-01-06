@@ -8,14 +8,21 @@ import { useAuth } from '../context/AuthContext';
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // 🟢 Use Global Auth Data for Dynamic Header
-  const { hotelName, user } = useAuth();
+  // 🟢 Get User Data from Auth Context
+  // The 'user' object now contains 'hotel_settings' from our updated Django Serializer
+  const { user } = useAuth();
+
+  // 🟢 Derived Branding (Dynamic Fallbacks)
+  // If the user has uploaded a logo, we use it. Otherwise, we show the default Hotel icon.
+  const hotelSettings = user?.hotel_settings || {};
+  const displayHotelName = hotelSettings.hotel_name || "Atithi Hotel";
+  const displayLogo = hotelSettings.logo; 
 
   return (
     <LicenseLock>
       <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900">
         
-        {/* SIDEBAR (Responsive) */}
+        {/* SIDEBAR (Passes branding info to Sidebar if needed) */}
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
         {/* MAIN CONTENT WRAPPER */}
@@ -33,13 +40,24 @@ const Layout = () => {
                       <Menu size={24} />
                   </button>
                   
-                  {/* Hotel Branding */}
+                  {/* Hotel Branding (Dynamic) */}
                   <div className="flex items-center gap-2">
-                      <div className="bg-blue-600 p-1.5 rounded-lg shadow-sm">
-                          <Hotel size={14} className="text-white" />
-                      </div>
+                      {displayLogo ? (
+                        // If Logo Exists (From Backend)
+                        <img 
+                          src={displayLogo} 
+                          alt="Hotel Logo" 
+                          className="w-8 h-8 object-contain rounded-md"
+                        />
+                      ) : (
+                        // Default Fallback Icon
+                        <div className="bg-blue-600 p-1.5 rounded-lg shadow-sm">
+                            <Hotel size={14} className="text-white" />
+                        </div>
+                      )}
+                      
                       <span className="font-black text-slate-800 uppercase tracking-widest text-sm truncate max-w-[150px]">
-                          {hotelName || "Atithi"}
+                          {displayHotelName}
                       </span>
                   </div>
               </div>

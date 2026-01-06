@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   Save, Building, MapPin, Globe, Phone, 
   Loader2, Image as ImageIcon, Mail, FileText,
   Server, Lock, MessageCircle, Eye, EyeOff, CheckCircle,
-  Upload, Clock, Coins, Info, Copy, ExternalLink, Smartphone
+  Upload, Clock, Coins, Info, Copy, ExternalLink, Smartphone,
+  AlertCircle
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
+import { useNavigate } from 'react-router-dom';
 
 const Settings = () => {
   const { token, user, updateGlobalProfile } = useAuth(); 
+  const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
     // General & Branding
@@ -43,6 +46,7 @@ const Settings = () => {
   
   const [logoPreview, setLogoPreview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // New: Error state
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('GENERAL');
   const [showPassword, setShowPassword] = useState(false);
@@ -52,39 +56,47 @@ const Settings = () => {
   const hkLink = `${window.location.origin}/hk-mobile`;
 
   // --- FETCH SETTINGS ---
-  useEffect(() => {
-    const fetchSettings = async () => {
-      if (!token) return; 
-      
-      try {
-        const res = await fetch(`${API_URL}/api/settings/`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-            const data = await res.json();
-            
-            // Handle Array vs Object response
-            const settings = Array.isArray(data) ? data[0] : data;
-            
-            if (settings) {
-                setFormData(prev => ({
-                    ...prev,
-                    ...settings,
-                    // Ensure protected fields don't get overwritten with nulls
-                    smtp_password: settings.smtp_password || '',
-                    whatsapp_auth_token: settings.whatsapp_auth_token || ''
-                }));
-                if (settings.logo) setLogoPreview(settings.logo);
-            }
-        }
-      } catch (err) { 
-        console.error("Error fetching settings:", err); 
-      } finally { 
-        setLoading(false); 
+  const fetchSettings = useCallback(async () => {
+    if (!token) return; 
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const res = await fetch(`${API_URL}/api/settings/`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.status === 401) {
+          navigate('/login');
+          return;
       }
-    };
-    fetchSettings();
-  }, [token]);
+
+      if (res.ok) {
+        const data = await res.json();
+        const settings = Array.isArray(data) ? data[0] : data;
+        
+        if (settings) {
+            setFormData(prev => ({
+                ...prev,
+                ...settings,
+                // Ensure protected fields don't get overwritten with nulls if backend hides them
+                smtp_password: settings.smtp_password || '',
+                whatsapp_auth_token: settings.whatsapp_auth_token || ''
+            }));
+            if (settings.logo) setLogoPreview(settings.logo);
+        }
+      } else {
+          setError("Failed to load settings.");
+      }
+    } catch (err) { 
+      console.error("Error fetching settings:", err); 
+      setError("Network connection failed.");
+    } finally { 
+      setLoading(false); 
+    }
+  }, [token, navigate]);
+
+  useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
   // --- HANDLE INPUT CHANGES ---
   const handleChange = (e) => {
@@ -123,7 +135,6 @@ const Settings = () => {
             }
         });
 
-        // Use POST to update (Standard for this Django setup)
         const res = await fetch(`${API_URL}/api/settings/`, {
             method: 'POST', 
             headers: { 
@@ -139,7 +150,7 @@ const Settings = () => {
             }
             alert("Configuration Saved Successfully! ✅");
         } else {
-            alert("Failed to save settings.");
+            alert("Failed to save settings. Please check inputs.");
         }
     } catch (err) { 
         console.error(err);
@@ -176,6 +187,14 @@ const Settings = () => {
                 {saving ? "Saving..." : "Save Configuration"}
             </button>
         </div>
+
+        {/* ERROR BANNER */}
+        {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+                <AlertCircle size={20}/> {error}
+                <button onClick={fetchSettings} className="underline ml-auto hover:text-red-800">Retry</button>
+            </div>
+        )}
 
         {/* TABS NAVIGATION */}
         <div className="flex gap-2 mb-6 bg-white p-2 rounded-2xl border border-slate-200 w-fit overflow-x-auto">

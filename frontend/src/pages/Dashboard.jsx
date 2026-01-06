@@ -4,10 +4,9 @@ import {
   CheckCircle, AlertCircle, 
   Sparkles, TrendingUp, Wallet, BarChart3, Clock, TrendingDown,
   ArrowUpRight, ShieldCheck, Brush, History, Activity, ListFilter,
-  Plus, Trash, Megaphone
+  Plus, Trash, Megaphone, RefreshCcw
 } from 'lucide-react'; 
 import { useNavigate } from 'react-router-dom'; 
-import axios from 'axios'; // Ensure axios is imported for cleaner API calls
 import { API_URL } from '../config'; 
 import { useAuth } from '../context/AuthContext'; 
 
@@ -19,10 +18,11 @@ const Dashboard = () => {
   const [trendData, setTrendData] = useState([]);
   const [tasks, setTasks] = useState([]);        
   const [logs, setLogs] = useState([]); 
-  const [announcements, setAnnouncements] = useState([]); // NEW: Global Announcements
+  const [announcements, setAnnouncements] = useState([]); 
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null); // New: Error state
 
   const navigate = useNavigate(); 
   
@@ -61,6 +61,7 @@ const Dashboard = () => {
     try {
       if (showLoader) setLoading(true);
       else setRefreshing(true);
+      setError(null);
       
       const headers = { 'Authorization': `Bearer ${token}` };
       
@@ -71,16 +72,21 @@ const Dashboard = () => {
       ];
 
       // 2. Restricted Data (Conditional)
-      const fetchLogs = canSeeLogs ? fetch(`${API_URL}/api/logs/`, { headers }) : Promise.resolve(null);
-      const fetchAnalytics = canSeeFinance ? fetch(`${API_URL}/api/analytics/`, { headers }) : Promise.resolve(null);
+      if (canSeeLogs) requests.push(fetch(`${API_URL}/api/logs/`, { headers }));
+      if (canSeeFinance) requests.push(fetch(`${API_URL}/api/analytics/`, { headers }));
 
-      const [resRooms, resBookings, resLogs, resAnalytics] = await Promise.all([
-          ...requests, 
-          fetchLogs, 
-          fetchAnalytics
-      ]);
+      const responses = await Promise.all(requests);
 
-      if (resRooms?.ok && resBookings?.ok) {
+      // Check for Session Expiry
+      if (responses.some(r => r.status === 401)) {
+          navigate('/login');
+          return;
+      }
+
+      // Process Base Data
+      const [resRooms, resBookings] = responses;
+      
+      if (resRooms.ok && resBookings.ok) {
         const roomsData = await resRooms.json();
         const bookingsData = await resBookings.json();
         
@@ -89,41 +95,51 @@ const Dashboard = () => {
         
         // Always run client side calc for Tasks & Liability
         calculateClientSideStats(roomsData, bookingsData);
-        
-        // Handle Logs
-        if (resLogs && resLogs.ok) setLogs(await resLogs.json());
-        
-        // Handle Analytics (Financials + Announcements + Trend)
-        if (resAnalytics && resAnalytics.ok) {
-            const analyticsData = await resAnalytics.json();
-            
-            // 1. Set Announcements
-            setAnnouncements(analyticsData.announcements || []);
+      } else {
+          throw new Error("Failed to load core data");
+      }
 
-            // 2. Set Financials (Prefer Backend Data)
-            if (analyticsData.stats) {
-                setFinancials(prev => ({
-                    ...prev, // Keep liability from client calc
-                    revenue: analyticsData.stats.revenue || 0,
-                    expenses: analyticsData.stats.total_expenses || 0,
-                    profit: analyticsData.stats.net_profit || 0,
-                }));
-            }
+      // Process Optional Data (Logs & Analytics)
+      // Note: Indices depend on permissions, so we check carefully
+      let logData = [];
+      let analyticsData = null;
 
-            // 3. Set Trend
-            if (analyticsData.trend) {
-                setTrendData(analyticsData.trend);
-            }
-        }
+      // If logs were requested, they are next in the array
+      let currentIndex = 2;
+      if (canSeeLogs && responses[currentIndex]) {
+          if (responses[currentIndex].ok) logData = await responses[currentIndex].json();
+          currentIndex++;
+      }
+      setLogs(logData);
+
+      // If analytics were requested
+      if (canSeeFinance && responses[currentIndex]) {
+          if (responses[currentIndex].ok) analyticsData = await responses[currentIndex].json();
+      }
+
+      if (analyticsData) {
+          setAnnouncements(analyticsData.announcements || []);
+          if (analyticsData.stats) {
+              setFinancials(prev => ({
+                  ...prev, 
+                  revenue: analyticsData.stats.revenue || 0,
+                  expenses: analyticsData.stats.total_expenses || 0,
+                  profit: analyticsData.stats.net_profit || 0,
+              }));
+          }
+          if (analyticsData.trend) {
+              setTrendData(analyticsData.trend);
+          }
       }
 
     } catch (err) { 
       console.error("Dashboard Sync Error:", err);
+      setError("Failed to sync dashboard. Please check your connection.");
     } finally { 
       if (showLoader) setLoading(false); 
       setRefreshing(false);
     }
-  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats]);
+  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats, navigate]);
 
   useEffect(() => { 
     fetchData(true); 
@@ -131,8 +147,15 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // --- OPERATIONAL METRICS (Visible to All) ---
-  const todayStr = new Date().toISOString().split('T')[0];
+  // --- OPERATIONAL METRICS ---
+  // Fix: Use local date to prevent timezone issues showing tomorrow's bookings as today
+  const getLocalDate = () => {
+      const d = new Date();
+      const offset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - offset).toISOString().split('T')[0];
+  };
+  const todayStr = getLocalDate();
+
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
 
@@ -151,7 +174,6 @@ const Dashboard = () => {
   const maintenance = safeRooms.filter(r => r.status === 'MAINTENANCE').length;
   
   const occupancyRate = totalRoomsCount > 0 ? ((occupiedRooms / totalRoomsCount) * 100).toFixed(0) : 0;
-  // Calculate health score dynamically
   const healthScore = totalRoomsCount > 0 ? (((cleanVacant + occupiedRooms) / totalRoomsCount) * 100).toFixed(0) : 0;
 
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
@@ -184,7 +206,16 @@ const Dashboard = () => {
           </p>
         </div>
         
-        <div className="flex gap-4 w-full md:w-auto">
+        <div className="flex gap-4 w-full md:w-auto items-center">
+            {/* Manual Refresh Button */}
+            <button 
+                onClick={() => fetchData(true)} 
+                className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+                title="Refresh Data"
+            >
+                <RefreshCcw size={18} className={refreshing ? "animate-spin" : ""}/>
+            </button>
+
             <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 shadow-sm text-right flex-1 md:flex-none">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Health</p>
                 <p className="text-xl font-black text-emerald-500">{healthScore}%</p>
@@ -196,7 +227,15 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* 📢 GLOBAL ANNOUNCEMENTS (NEW SECTION) */}
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm animate-in slide-in-from-top-2">
+            <AlertCircle size={20}/> {error}
+            <button onClick={() => fetchData(true)} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
+
+      {/* 📢 GLOBAL ANNOUNCEMENTS */}
       {announcements.length > 0 && (
         <div className="mb-10 space-y-4">
           {announcements.map((ann, index) => (
@@ -216,7 +255,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* 🚨 TASKS ROW (Visible to All) */}
+      {/* 🚨 TASKS ROW */}
       {tasks.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-10">
             <div 
@@ -275,7 +314,7 @@ const Dashboard = () => {
           </div>
       )}
 
-      {/* 📈 OPERATIONAL KPI GRID (Visible to All) */}
+      {/* 📈 OPERATIONAL KPI GRID */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-10">
         {[
           { label: "DIRTY VACANT", val: dirtyVacant, icon: Sparkles, color: "text-orange-500", bg: "border-orange-200", desc: "Needs Cleaning" },
@@ -294,7 +333,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* 🏢 INVENTORY HEALTH (Visible to All) */}
+      {/* 🏢 INVENTORY HEALTH */}
       <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-200 shadow-sm mb-10 group">
         <div className="flex justify-between items-center mb-8">
           <div>

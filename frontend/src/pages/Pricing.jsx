@@ -74,7 +74,7 @@ const Pricing = () => {
                     billingCycle === 'YEARLY' ? 'bg-slate-900 text-white shadow' : 'text-slate-400 hover:text-slate-600'
                 }`}
             >
-                Yearly <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded">-17% OFF</span>
+                Yearly <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded animate-pulse">-17% OFF</span>
             </button>
         </div>
       </div>

@@ -16,6 +16,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
+  // Access global user state and profile update functions
   const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
   // State for SaaS Platform Branding (Support Info)
@@ -35,8 +36,10 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 1. FETCH HOTEL BRANDING (Tenant Name)
   useEffect(() => {
     const fetchHotelBranding = async () => {
+      // Safety Check: Don't fetch if no token is present
       if (!token) return;
-      // Only fetch if role allows (Owners/Managers)
+      
+      // Only fetch if role allows (Owners/Managers) or user is a superuser
       if (role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
 
       try {
@@ -45,17 +48,19 @@ const Sidebar = ({ isOpen, onClose }) => {
         });
         
         const data = res.data;
-        // Handle both object and array responses
+        // Handle both object and array responses (DRF sometimes returns list for ModelViewSet)
         const settings = Array.isArray(data) ? data[0] : data;
         
         if (settings && settings.hotel_name) {
             updateGlobalProfile(settings.hotel_name.toUpperCase());
         }
       } catch (err) {
-        console.log("Using cached/default hotel branding");
+        // Silent fail: Using cached/default hotel branding from Context
+        // console.log("Using cached/default hotel branding");
       }
     };
     
+    // Only fetch if name is missing or is the default generic name
     if (!hotelName || hotelName === 'ATITHI HMS') {
         fetchHotelBranding();
     }
@@ -66,7 +71,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
-            // Note: Ensure your backend allows GET access to this endpoint for authenticated users
+            // Note: Backend endpoint must allow GET for authenticated users
             const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -78,8 +83,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 });
             }
         } catch (error) {
-            // Fallback silently if unauthorized
-            console.log("Using default platform info");
+            // Fallback to defaults silently if unauthorized or API fails
         }
     };
     fetchPlatformSettings();

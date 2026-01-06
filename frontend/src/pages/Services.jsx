@@ -1,15 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   Plus, Coffee, Utensils, Trash2, Search, 
-  Loader2, X, Car, Shirt, Sparkles, Tag 
+  Loader2, X, Car, Shirt, Sparkles, Tag,
+  AlertCircle
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext';
 
 const Services = () => {
   const { token, role, user } = useAuth();
+  const navigate = useNavigate();
+
+  // --- STATE ---
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // New: Error State
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,27 +32,37 @@ const Services = () => {
   });
 
   // --- FETCH DATA ---
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_URL}/api/services/`, { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
+
+      // Check for session expiry
+      if (res.status === 401) {
+          navigate('/login');
+          return;
+      }
+
       if (res.ok) {
         const data = await res.json();
         // Safety check: ensure data is an array
         setServices(Array.isArray(data) ? data : []);
+      } else {
+        setError("Failed to load service catalog.");
       }
     } catch (err) {
       console.error("Fetch error:", err);
-      setServices([]);
+      setError("Network connection failed.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, navigate]);
 
-  useEffect(() => { fetchServices(); }, [token]);
+  useEffect(() => { fetchServices(); }, [fetchServices]);
 
   // --- CREATE SERVICE ---
   const handleSubmit = async (e) => {
@@ -68,6 +84,7 @@ const Services = () => {
       }
     } catch (err) {
       console.error(err);
+      alert("Network Error");
     } finally {
       setSubmitting(false);
     }
@@ -113,7 +130,8 @@ const Services = () => {
     return matchesSearch && item.category === filter;
   });
 
-  if (loading) return (
+  // --- LOADING & ERROR STATES ---
+  if (loading && services.length === 0) return (
     <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
         <Loader2 className="animate-spin text-blue-600" size={40}/>
         <p className="text-xs font-bold uppercase tracking-widest">Loading Catalog...</p>
@@ -150,6 +168,14 @@ const Services = () => {
             </button>
         </div>
       </div>
+
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchServices} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
 
       {/* CATEGORY TABS */}
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
@@ -205,7 +231,7 @@ const Services = () => {
             </div>
         ))}
 
-        {filteredServices.length === 0 && (
+        {filteredServices.length === 0 && !loading && !error && (
             <div className="col-span-full py-20 text-center flex flex-col items-center justify-center text-slate-400">
                 <Utensils size={48} className="mb-4 opacity-20" />
                 <p className="font-bold uppercase tracking-widest text-xs">No items found matching your filters.</p>

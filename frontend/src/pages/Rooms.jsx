@@ -1,18 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { 
   Plus, Search, BedDouble, Trash2, Edit3, 
   CheckCircle, Loader2, MoreVertical, X, Wrench, 
   AlertCircle, User, Brush, Wifi, Tv, Wind, Coffee,
-  Layers, Users, BarChart3, Calendar
+  Layers, Users, BarChart3, Calendar, RefreshCcw
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
+import { useNavigate } from 'react-router-dom';
 
 const Rooms = () => {
   const { token, role, user } = useAuth(); 
+  const navigate = useNavigate();
+
+  // --- STATE ---
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null); // New: Error State
   
   // Filters
   const [statusFilter, setStatusFilter] = useState('ALL'); 
@@ -36,7 +41,7 @@ const Rooms = () => {
     capacity: '2',
     status: 'AVAILABLE',
     amenities: [],
-    ical_link: '' // NEW FIELD
+    ical_link: ''
   });
 
   const AMENITY_OPTIONS = [
@@ -47,25 +52,39 @@ const Rooms = () => {
   ];
 
   // --- FETCH ROOMS ---
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     if (!token) return;
     try {
       setLoading(true);
+      setError(null);
       const res = await fetch(`${API_URL}/api/rooms/`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+
+      if (res.status === 401) {
+          navigate('/login');
+          return;
+      }
+
       if (res.ok) {
         const data = await res.json();
+        // Numeric sort logic: 1, 2, 10, 101 instead of 1, 10, 101, 2
         const sorted = data.sort((a, b) => 
             a.room_number.toString().localeCompare(b.room_number.toString(), undefined, { numeric: true, sensitivity: 'base' })
         );
         setRooms(sorted);
+      } else {
+        setError("Failed to load rooms.");
       }
-    } catch (err) { console.error("Fetch Error:", err); } 
-    finally { setLoading(false); }
-  };
+    } catch (err) { 
+        console.error("Fetch Error:", err);
+        setError("Network connection failed.");
+    } finally { 
+        setLoading(false); 
+    }
+  }, [token, navigate]);
 
-  useEffect(() => { fetchRooms(); }, [token]);
+  useEffect(() => { fetchRooms(); }, [fetchRooms]);
 
   // --- STATS CALCULATION ---
   const stats = {
@@ -115,15 +134,17 @@ const Rooms = () => {
   const handleDelete = async (id) => {
     if(!window.confirm("Are you sure you want to permanently delete this room?")) return;
     try {
-        await fetch(`${API_URL}/api/rooms/${id}/`, {
+        const res = await fetch(`${API_URL}/api/rooms/${id}/`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        fetchRooms();
+        if (res.ok) fetchRooms();
+        else alert("Cannot delete room. It might have active bookings.");
     } catch(err) { console.error(err); }
   };
 
   const handleStatusChange = async (roomId, newStatus) => {
+    // Optimistic Update
     setRooms(rooms.map(r => r.id === roomId ? { ...r, status: newStatus } : r));
     try {
         await fetch(`${API_URL}/api/rooms/${roomId}/`, {
@@ -131,7 +152,7 @@ const Rooms = () => {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ status: newStatus })
         });
-    } catch(err) { fetchRooms(); }
+    } catch(err) { fetchRooms(); } // Revert on error
   };
 
   const openEdit = (room) => {
@@ -192,7 +213,12 @@ const Rooms = () => {
     return matchesSearch && matchesStatus && matchesFloor;
   });
 
-  if (loading) return <div className="p-20 text-center"><Loader2 className="animate-spin inline text-blue-600" size={32}/> <span className="ml-2 font-bold text-slate-400">Loading Inventory...</span></div>;
+  if (loading && rooms.length === 0) return (
+    <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
+        <Loader2 className="animate-spin text-blue-600" size={40}/>
+        <p className="text-xs font-bold uppercase tracking-widest">Loading Inventory...</p>
+    </div>
+  );
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
@@ -225,6 +251,11 @@ const Rooms = () => {
         </div>
         
         <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto">
+          {/* Refresh */}
+          <button onClick={fetchRooms} className="bg-white p-3 rounded-xl border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm w-fit">
+              <RefreshCcw size={18} className={loading ? "animate-spin" : ""}/>
+          </button>
+
           {/* Floor Filter */}
           <div className="relative">
               <Layers className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
@@ -260,6 +291,14 @@ const Rooms = () => {
           )}
         </div>
       </div>
+
+      {/* ERROR BANNER */}
+      {error && (
+        <div className="mb-8 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl flex items-center gap-3 text-sm font-bold shadow-sm">
+            <AlertCircle size={20}/> {error}
+            <button onClick={fetchRooms} className="underline ml-auto hover:text-red-800">Retry</button>
+        </div>
+      )}
 
       {/* 3. STATUS TABS */}
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">

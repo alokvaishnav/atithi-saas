@@ -3,15 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, Building, User, Lock, Mail, ArrowRight, 
   Eye, EyeOff, CheckCircle, AlertCircle, ShieldCheck,
-  CreditCard // Icon for Name fields
+  CreditCard 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
 const Register = () => {
   const [formData, setFormData] = useState({
     hotel_name: '', 
-    first_name: '', // Added for Welcome Email
-    last_name: '',  // Added for Welcome Email
+    first_name: '', 
+    last_name: '', 
     username: '', 
     email: '', 
     password: '', 
@@ -58,7 +58,7 @@ const Register = () => {
         return;
     }
     if (passwordStrength < 3) {
-        setError("Password is too weak. Include numbers and symbols.");
+        setError("Password is too weak. Please use a stronger password.");
         return;
     }
 
@@ -80,17 +80,25 @@ const Register = () => {
             body: JSON.stringify(payload)
         });
 
+        const data = await res.json();
+
         if (res.ok) {
-            // Success Animation/Redirect
-            // Pass a state message to login page so it can show a success banner
-            navigate('/login', { state: { msg: 'Registration Successful! Please check your email.' } });
+            // Success: Redirect to Login with message
+            navigate('/login', { state: { msg: 'Registration Successful! Please check your email to verify.' } });
         } else {
-            const err = await res.json();
-            // Handle specific API error messages + Generic backend errors
-            const msg = err.username ? err.username[0] : 
-                       (err.email ? err.email[0] : 
-                       (err.error || "Registration failed. Please check your details."));
-            setError(msg);
+            // Error Handling: Extract first error message from Django DRF response
+            // Responses can be { field: ["error"] } or { error: "msg" }
+            const firstErrorKey = Object.keys(data)[0];
+            const errorMessage = Array.isArray(data[firstErrorKey]) 
+                ? data[firstErrorKey][0] 
+                : data[firstErrorKey] || "Registration failed.";
+            
+            // Format nice message for field errors
+            const displayError = firstErrorKey === 'error' || firstErrorKey === 'detail' 
+                ? errorMessage 
+                : `${firstErrorKey.charAt(0).toUpperCase() + firstErrorKey.slice(1)}: ${errorMessage}`;
+
+            setError(displayError);
         }
     } catch (err) { 
         console.error(err);
@@ -104,17 +112,17 @@ const Register = () => {
     <div className="flex min-h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
       
       {/* Background Ambience */}
-      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600 rounded-full blur-[120px] opacity-20 animate-pulse"></div>
-      <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600 rounded-full blur-[120px] opacity-10"></div>
+      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600 rounded-full blur-[120px] opacity-20 animate-pulse pointer-events-none"></div>
+      <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600 rounded-full blur-[120px] opacity-10 pointer-events-none"></div>
       
       {/* Grid Pattern Overlay */}
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
 
-      <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl w-full max-w-lg relative z-10 border-4 border-slate-100/10 backdrop-blur-sm">
+      <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl w-full max-w-lg relative z-10 border-4 border-slate-100/10 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
         
         {/* Header */}
         <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-50 rounded-xl mb-4 text-blue-600">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-50 rounded-xl mb-4 text-blue-600 ring-4 ring-blue-50/50">
                 <ShieldCheck size={24} />
             </div>
             <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Join Atithi</h2>
@@ -123,7 +131,7 @@ const Register = () => {
 
         {/* Error Message */}
         {error && (
-            <div className="mb-6 p-4 bg-red-50 text-red-500 rounded-2xl text-xs font-bold flex items-center gap-2 border border-red-100 animate-in slide-in-from-top-2">
+            <div className="mb-6 p-4 bg-red-50 text-red-500 rounded-2xl text-xs font-bold flex items-center gap-2 border border-red-100 animate-in slide-in-from-top-2 shake">
                 <AlertCircle size={16}/> {error}
             </div>
         )}
@@ -135,8 +143,14 @@ const Register = () => {
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Property Name</label>
                 <div className="relative group">
                     <Building className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                    <input required placeholder="e.g. Grand Hotel" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                        value={formData.hotel_name} onChange={e => setFormData({...formData, hotel_name: e.target.value})} />
+                    <input 
+                        required 
+                        autoFocus
+                        placeholder="e.g. Grand Hotel" 
+                        className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
+                        value={formData.hotel_name} 
+                        onChange={e => setFormData({...formData, hotel_name: e.target.value})} 
+                    />
                 </div>
             </div>
 
@@ -146,7 +160,7 @@ const Register = () => {
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">First Name</label>
                     <div className="relative group">
                         <User className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                        <input required placeholder="John" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        <input required placeholder="John" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
                             value={formData.first_name} onChange={e => setFormData({...formData, first_name: e.target.value})} />
                     </div>
                 </div>
@@ -154,7 +168,7 @@ const Register = () => {
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Last Name</label>
                     <div className="relative group">
                         <User className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                        <input required placeholder="Doe" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        <input required placeholder="Doe" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
                             value={formData.last_name} onChange={e => setFormData({...formData, last_name: e.target.value})} />
                     </div>
                 </div>
@@ -166,7 +180,7 @@ const Register = () => {
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Username</label>
                     <div className="relative group">
                         <CreditCard className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                        <input required placeholder="admin_user" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        <input required placeholder="admin_user" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
                             value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
                     </div>
                 </div>
@@ -175,7 +189,7 @@ const Register = () => {
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Email</label>
                     <div className="relative group">
                         <Mail className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18}/>
-                        <input required type="email" placeholder="name@hotel.com" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        <input required type="email" placeholder="name@hotel.com" className="w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
                             value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                     </div>
                 </div>
@@ -190,11 +204,11 @@ const Register = () => {
                         required 
                         type={showPassword ? "text" : "password"} 
                         placeholder="Create Password" 
-                        className="w-full pl-12 pr-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                        className="w-full pl-12 pr-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-800 placeholder:text-slate-300"
                         value={formData.password} 
                         onChange={e => setFormData({...formData, password: e.target.value})} 
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600">
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 transition-colors">
                         {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
                     </button>
                 </div>
@@ -203,7 +217,7 @@ const Register = () => {
                 {formData.password && (
                     <div className="flex gap-1 mt-2 px-1">
                         {[...Array(5)].map((_, i) => (
-                            <div key={i} className={`h-1 rounded-full flex-1 transition-all duration-300 ${i < passwordStrength ? getStrengthColor() : 'bg-slate-200'}`}></div>
+                            <div key={i} className={`h-1 rounded-full flex-1 transition-all duration-500 ${i < passwordStrength ? getStrengthColor() : 'bg-slate-200'}`}></div>
                         ))}
                     </div>
                 )}
@@ -218,12 +232,12 @@ const Register = () => {
                         required 
                         type="password" 
                         placeholder="Repeat Password" 
-                        className={`w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 transition-all ${formData.confirmPassword && formData.password !== formData.confirmPassword ? 'focus:ring-red-500 border-red-200' : 'focus:ring-blue-500'}`}
+                        className={`w-full pl-12 p-3 bg-slate-50 rounded-xl font-bold outline-none focus:ring-2 transition-all text-slate-800 placeholder:text-slate-300 ${formData.confirmPassword && formData.password !== formData.confirmPassword ? 'focus:ring-red-500 border-red-200' : 'focus:ring-blue-500'}`}
                         value={formData.confirmPassword} 
                         onChange={e => setFormData({...formData, confirmPassword: e.target.value})} 
                     />
                     {formData.confirmPassword && formData.password === formData.confirmPassword && (
-                        <CheckCircle className="absolute right-4 top-3.5 text-emerald-500" size={18}/>
+                        <CheckCircle className="absolute right-4 top-3.5 text-emerald-500 animate-in zoom-in" size={18}/>
                     )}
                 </div>
             </div>
@@ -238,7 +252,7 @@ const Register = () => {
                     onChange={e => setAgreeTerms(e.target.checked)}
                 />
                 <label htmlFor="terms" className="text-xs font-bold text-slate-500 cursor-pointer select-none">
-                    I agree to the <span className="text-slate-800 underline">Terms of Service</span> & <span className="text-slate-800 underline">Privacy Policy</span>
+                    I agree to the <span className="text-slate-800 underline hover:text-blue-600">Terms of Service</span> & <span className="text-slate-800 underline hover:text-blue-600">Privacy Policy</span>
                 </label>
             </div>
 
@@ -246,15 +260,15 @@ const Register = () => {
             <button 
                 type="submit" 
                 disabled={loading} 
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex justify-center items-center gap-2 shadow-lg shadow-slate-900/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all flex justify-center items-center gap-2 shadow-lg shadow-slate-900/20 disabled:opacity-70 disabled:cursor-not-allowed active:scale-95"
             >
-                {loading ? <Loader2 className="animate-spin"/> : <>Create Account <ArrowRight size={18}/></>}
+                {loading ? <Loader2 className="animate-spin" size={20}/> : <>Create Account <ArrowRight size={18}/></>}
             </button>
         </form>
 
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Already have an account?</p>
-            <Link to="/login" className="text-blue-600 font-black uppercase text-xs tracking-widest hover:underline">Login Here</Link>
+            <Link to="/login" className="text-blue-600 font-black uppercase text-xs tracking-widest hover:underline hover:text-blue-800 transition-colors">Login Here</Link>
         </div>
       </div>
     </div>
