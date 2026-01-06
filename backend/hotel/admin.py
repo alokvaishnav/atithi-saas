@@ -86,17 +86,17 @@ class HousekeepingAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'completed_at')
 
 class ActivityLogAdmin(admin.ModelAdmin):
-    list_display = ('action', 'owner', 'timestamp', 'short_details')
+    list_display = ('action', 'owner', 'timestamp', 'short_description')
     list_filter = ('action', 'timestamp')
-    search_fields = ('owner__username', 'details')
-    readonly_fields = ('timestamp', 'owner', 'action', 'details') # Logs should be read-only
+    search_fields = ('owner__username', 'description')
+    readonly_fields = ('timestamp', 'owner', 'action', 'description') # Logs should be read-only
     date_hierarchy = 'timestamp'
 
-    def short_details(self, obj):
-        if obj.details:
-            return obj.details[:50] + "..." if len(obj.details) > 50 else obj.details
+    def short_description(self, obj):
+        if obj.description:
+            return obj.description[:50] + "..." if len(obj.description) > 50 else obj.description
         return "-"
-    short_details.short_description = "Details"
+    short_description.short_description = "description"
 
 # --- 3. PLATFORM ADMIN (SUPER ADMIN) ---
 
