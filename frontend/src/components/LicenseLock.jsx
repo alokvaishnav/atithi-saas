@@ -18,11 +18,9 @@ const LicenseLock = ({ children }) => {
 
   // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // 🟢 CRITICAL SAFETY CHECK
-    // This prevents the "400 Bad Request" error by ensuring we never send 
-    // a "Bearer null" or "Bearer undefined" header to the server.
+    // 🟢 SAFETY CHECK 1: Don't run if no token
     if (!token || token === 'null' || token === 'undefined') {
-        setStatus('ACTIVE'); // Allow access (login page will handle auth)
+        setStatus('ACTIVE'); 
         return;
     }
     
@@ -35,6 +33,15 @@ const LicenseLock = ({ children }) => {
                 }
             });
 
+            // 🟢 SAFETY CHECK 2: Auto-fix Corrupted Tokens
+            // If server says 400 (Bad Request) or 401 (Unauthorized), 
+            // the token is trash. Log out to clean it up.
+            if (res.status === 400 || res.status === 401) {
+                console.error("Token is corrupted. Auto-cleaning...");
+                logout(); // <--- THIS FIXES YOUR ERROR LOOP
+                return;
+            }
+
             if (res.ok) {
                 const data = await res.json();
                 setDaysLeft(data.days_left);
@@ -42,25 +49,24 @@ const LicenseLock = ({ children }) => {
                 if (data.is_expired) {
                     setStatus('EXPIRED');
                 } else if (data.days_left <= 7) {
-                    setStatus('WARNING'); // Grace period
+                    setStatus('WARNING'); 
                 } else {
                     setStatus('ACTIVE');
                 }
             } else {
-                // Fallback: If server checks fail (e.g., 500 or 401), fail OPEN
-                // This ensures users aren't locked out by server glitches.
+                // For 500 errors (Server Down), default to ACTIVE so you aren't locked out.
                 console.warn("License check failed, defaulting to active.");
                 setStatus('ACTIVE'); 
             }
         } catch (err) {
             console.error("License Check Error:", err);
-            // Fail open for connectivity issues (Offline Mode Support)
+            // Fail open for connectivity issues
             setStatus('ACTIVE'); 
         }
     };
     
     checkLicense();
-  }, [token]);
+  }, [token, logout]);
 
   // 2. Handle New Key Submission
   const handleActivate = async (e) => {
@@ -81,7 +87,6 @@ const LicenseLock = ({ children }) => {
         if (res.ok) {
             const data = await res.json();
             alert(`Activation Successful! Valid until: ${data.expiry_date}`);
-            // Force a reload to ensure new license state is applied globally
             window.location.reload();
         } else {
             const errData = await res.json();
@@ -96,8 +101,8 @@ const LicenseLock = ({ children }) => {
 
   // --- RENDER STATES ---
 
-  // A. Loading Screen (Only if we have a valid token)
-  if (status === 'LOADING' && token && token !== 'null' && token !== 'undefined') return (
+  // A. Loading Screen
+  if (status === 'LOADING' && token && token !== 'null') return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
@@ -151,7 +156,7 @@ const LicenseLock = ({ children }) => {
 
             <div className="mt-8 pt-8 border-t border-white/5 flex justify-center gap-6">
                  <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
-                    <LogOut size={14}/> Log Out
+                    <LogOutIcon size={14}/> Log Out
                  </button>
                  <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
                     <RefreshCw size={14}/> Refresh Status
@@ -165,8 +170,6 @@ const LicenseLock = ({ children }) => {
   return (
     <>
         {children}
-        
-        {/* Grace Period Warning Banner */}
         {status === 'WARNING' && (
             <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg animate-in slide-in-from-bottom-full">
                 <div className="flex items-center gap-3 container mx-auto max-w-7xl">
@@ -186,5 +189,10 @@ const LicenseLock = ({ children }) => {
     </>
   );
 };
+
+// Helper Component for Logout Icon
+const LogOutIcon = ({size}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+);
 
 export default LicenseLock;
