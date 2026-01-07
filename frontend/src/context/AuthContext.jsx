@@ -30,7 +30,9 @@ export const AuthProvider = ({ children }) => {
 
   // 3️⃣ Centralized Logout
   const logout = useCallback(() => {
-    localStorage.clear();
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_data');
+    localStorage.removeItem('refresh_token');
     setUser(null);
     setRole(null);
     setToken(null);
@@ -45,7 +47,6 @@ export const AuthProvider = ({ children }) => {
         try {
             const rawToken = localStorage.getItem('access_token');
             const storedUserData = localStorage.getItem('user_data');
-
             const validToken = cleanToken(rawToken);
 
             if (isValidJwtStructure(validToken) && storedUserData) {
@@ -54,9 +55,8 @@ export const AuthProvider = ({ children }) => {
                 setToken(validToken);
                 setUser(parsedUser);
                 
-                // 🟢 ADVANCED ROLE LOGIC (Restoration)
-                // If is_superuser is true, ALWAYS force role to OWNER/SUPERADMIN
-                // This prevents "Staff" defaults for global admins.
+                // 🟢 ADVANCED ROLE RESTORATION
+                // Prioritize OWNER if is_superuser is true
                 let activeRole = parsedUser.role || 'STAFF';
                 if (parsedUser.is_superuser) activeRole = 'OWNER';
                 
@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }) => {
                 setIsAuthenticated(true);
             } else {
                 if (rawToken || storedUserData) {
-                    console.warn("AuthContext: Session invalid. Cleaning up.");
+                    // console.warn("AuthContext: Session invalid. Cleaning up.");
                     localStorage.clear();
                 }
             }
@@ -84,7 +84,39 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // 5️⃣ Login Function
+  // 🟢 5️⃣ CAPABILITY CHECK (The "Secret Handshake")
+  // This function silently pings a Super-Admin only endpoint.
+  // If it succeeds, it proves the user is a CEO/Superuser, even if the login API missed the flag.
+  const checkPrivileges = async (accessToken, initialUserData) => {
+      try {
+          const res = await fetch(`${API_URL}/api/super-admin/platform-settings/`, {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+
+          if (res.ok) {
+              console.log("🔐 Capability Check: SaaS Admin Detected. Upgrading privileges.");
+              
+              const upgradedUser = {
+                  ...initialUserData,
+                  is_superuser: true,
+                  role: 'OWNER',
+                  hotel_name: 'SaaS Core' 
+              };
+
+              // Persist the upgrade
+              localStorage.setItem('user_data', JSON.stringify(upgradedUser));
+              setUser(upgradedUser);
+              setRole('OWNER');
+              setHotelName('SaaS Core');
+              return upgradedUser;
+          }
+      } catch (e) {
+          // Normal user, do nothing
+      }
+      return initialUserData;
+  };
+
+  // 6️⃣ Login Function
   const login = async (username, password) => {
     try {
         const res = await fetch(`${API_URL}/api/login/`, {
@@ -106,36 +138,35 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('access_token', validToken);
             localStorage.setItem('refresh_token', data.refresh);
             
-            // 🟢 C. ADVANCED ROLE RESOLUTION
-            // Priority:
-            // 1. If is_superuser is TRUE -> Role is 'OWNER' (Overrides everything)
-            // 2. If explicit role is 'ADMIN' -> Role is 'ADMIN'
-            // 3. Fallback -> 'STAFF'
-            let detectedRole = data.role;
-            if (data.is_superuser) {
-                detectedRole = 'OWNER'; 
-            } else if (!detectedRole) {
-                detectedRole = 'STAFF';
-            }
-            
+            // C. Initial Role Logic
+            let detectedRole = data.role === 'ADMIN' ? 'ADMIN' : (data.role || 'STAFF');
+            // If backend explicitly says superuser, trust it immediately
+            if (data.is_superuser) detectedRole = 'OWNER';
+
             const settings = data.hotel_settings || {};
             const displayHotelName = settings.hotel_name || data.hotel_name || 'Atithi HMS';
 
-            const userData = {
+            let userData = {
                 username: data.username,
                 id: data.id,
-                is_superuser: data.is_superuser, 
-                role: detectedRole, // Save the resolved role
+                is_superuser: data.is_superuser || false,
+                role: detectedRole,
                 hotel_name: displayHotelName,
                 hotel_settings: settings 
             };
 
-            localStorage.setItem('user_data', JSON.stringify(userData));
+            // 🟢 D. RUN CAPABILITY CHECK
+            // If the backend didn't explicitly say "superuser", we verify permissions manually.
+            // This catches cases where role defaults to ADMIN but user is actually SUPERUSER.
+            if (!data.is_superuser) {
+                userData = await checkPrivileges(validToken, userData);
+            }
 
-            // D. Update State
+            // E. Final Save & Update State
+            localStorage.setItem('user_data', JSON.stringify(userData));
             setToken(validToken);
-            setRole(detectedRole);
-            setHotelName(displayHotelName);
+            setRole(userData.role);
+            setHotelName(userData.hotel_name);
             setUser(userData);
             setIsAuthenticated(true);
             

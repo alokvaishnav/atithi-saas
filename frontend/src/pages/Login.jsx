@@ -45,8 +45,22 @@ const Login = () => {
       const result = await login(username, password);
 
       if (result.success) {
-         // Login successful, redirect to Dashboard
-         navigate('/dashboard'); 
+         // 🟢 SMART NAVIGATION LOGIC
+         // Immediately check who logged in to decide destination
+         try {
+             const storedUser = JSON.parse(localStorage.getItem('user_data'));
+             
+             // If CEO/Superuser/Owner -> Go to Global HQ
+             if (storedUser?.is_superuser || storedUser?.role === 'OWNER') {
+                 navigate('/super-admin', { replace: true });
+             } else {
+                 // If Hotel Staff -> Go to Hotel Dashboard
+                 navigate('/dashboard', { replace: true });
+             }
+         } catch (err) {
+             // Fallback if data parsing fails
+             navigate('/dashboard', { replace: true });
+         }
       } else {
          // Login failed
          setError(result.msg || 'Login Failed. Please check your credentials.');

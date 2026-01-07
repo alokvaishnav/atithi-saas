@@ -67,7 +67,8 @@ const Dashboard = () => {
 
   // --- SMART DATA FETCHING ---
   const fetchData = useCallback(async (showLoader = false) => {
-    if (!token || user?.is_superuser) return; // Stop if CEO
+    // Stop if CEO or no token
+    if (!token || user?.is_superuser) return; 
     
     try {
       if (showLoader) setLoading(true);

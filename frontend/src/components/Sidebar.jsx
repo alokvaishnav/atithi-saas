@@ -4,7 +4,7 @@ import {
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
   BookOpen, ChevronRight, Settings, Package, X, 
-  Server, Globe
+  Server
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -16,7 +16,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
-  const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
+  // Added 'loading' to prevent flashing wrong content while checking user
+  const { hotelName, role, user, token, logout, updateGlobalProfile, loading } = useAuth(); 
 
   // State for SaaS Platform Branding
   const [platformInfo, setPlatformInfo] = useState({
@@ -26,8 +27,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   });
 
   // 🟢 LOGIC: Identify if user is THE SaaS CEO (Superuser)
-  // This distinction is crucial. CEOs see Global HQ. Owners see their Hotel.
-  const isSaaSAdmin = user?.is_superuser;
+  // We check is_superuser OR if the system explicitly named the hotel 'SaaS Core' (from AuthContext)
+  const isSaaSAdmin = user?.is_superuser || user?.hotel_name === 'SaaS Core';
 
   // MOBILE AUTO-CLOSE
   useEffect(() => {
@@ -39,21 +40,20 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 🟢 AUTO-REDIRECT FOR CEO
   // If SaaS Admin lands on the Hotel Dashboard, kick them to Global HQ immediately.
   useEffect(() => {
-    if (isSaaSAdmin && location.pathname === '/dashboard') {
-        navigate('/super-admin');
+    if (!loading && isSaaSAdmin && location.pathname === '/dashboard') {
+        navigate('/super-admin', { replace: true });
     }
-  }, [isSaaSAdmin, location.pathname, navigate]);
+  }, [isSaaSAdmin, location.pathname, navigate, loading]);
 
   // 1. FETCH HOTEL BRANDING (Tenant Name)
   // Skip this for SaaS Admin because they don't belong to a specific hotel.
   useEffect(() => {
-    if (isSaaSAdmin) return; 
+    if (isSaaSAdmin || loading) return; 
 
     const fetchHotelBranding = async () => {
       if (!token) return;
       
       const canAccessSettings = ['ADMIN', 'OWNER', 'MANAGER'].includes(role);
-      
       if (!canAccessSettings) return;
 
       try {
@@ -72,10 +72,11 @@ const Sidebar = ({ isOpen, onClose }) => {
       }
     };
     
+    // Only fetch if name is default
     if (!hotelName || hotelName === 'ATITHI HMS' || hotelName === 'Atithi HMS') {
         fetchHotelBranding();
     }
-  }, [token, role, user, hotelName, updateGlobalProfile, isSaaSAdmin]); 
+  }, [token, role, user, hotelName, updateGlobalProfile, isSaaSAdmin, loading]); 
 
   // 2. FETCH PLATFORM BRANDING
   useEffect(() => {
