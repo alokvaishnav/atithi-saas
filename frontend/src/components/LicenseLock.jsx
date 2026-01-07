@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
-import { 
-  Lock, Loader2, ShieldAlert, KeyRound, 
-  AlertTriangle, RefreshCw, LogOut
-} from 'lucide-react';
+import { Lock, Loader2, ShieldAlert, KeyRound, AlertTriangle, RefreshCw, LogOut } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
@@ -13,22 +10,13 @@ const LicenseLock = ({ children }) => {
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
 
-  // 🔐 Use Context
   const { token, logout } = useAuth(); 
 
   useEffect(() => {
-    // 🟢 CRITICAL VALIDATION
-    // 1. Check if token exists
-    // 2. Check if it's the string "null" or "undefined"
-    // 3. Check if it looks like a JWT (starts with "ey" and is long)
-    const isTokenValid = token && 
-                         token !== 'null' && 
-                         token !== 'undefined' && 
-                         token.length > 20 && 
-                         token.startsWith('ey');
-
-    if (!isTokenValid) {
-        setStatus('ACTIVE'); // Default to active (AuthContext handles login redirect)
+    // 🟢 PASS-THROUGH: If AuthContext hasn't given us a token yet,
+    // we simply mark as ACTIVE so the Login page can be shown by the Router.
+    if (!token) {
+        setStatus('ACTIVE');
         return;
     }
     
@@ -41,9 +29,9 @@ const LicenseLock = ({ children }) => {
                 }
             });
 
-            // If token is expired/invalid (401), log out to clean up session
+            // 🟢 Handle 401 (Unauthorized) - Expired Token
             if (res.status === 401) {
-                console.warn("Session expired during license check.");
+                console.warn("Token expired. Logging out.");
                 logout();
                 return;
             }
@@ -53,11 +41,12 @@ const LicenseLock = ({ children }) => {
                 setDaysLeft(data.days_left);
                 setStatus(data.is_expired ? 'EXPIRED' : (data.days_left <= 7 ? 'WARNING' : 'ACTIVE'));
             } else {
-                // If server error (500) or Bad Request (400), Fail Open
+                // If 400/500, we Fail Open (let the user in)
+                console.warn("License Check Failed (Server Error), defaulting to ACTIVE.");
                 setStatus('ACTIVE'); 
             }
         } catch (err) {
-            // Network error -> Fail Open
+            console.error("License Network Error:", err);
             setStatus('ACTIVE'); 
         }
     };
@@ -97,27 +86,23 @@ const LicenseLock = ({ children }) => {
   };
 
   // --- RENDER ---
-
-  // Loading (Only if we are actually checking a valid token)
-  if (status === 'LOADING' && token && token.length > 20) return (
+  if (status === 'LOADING' && token) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying License...</p>
     </div>
   );
 
-  // Expired Lock Screen
   if (status === 'EXPIRED') return (
-    <div className="h-screen bg-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
-        <div className="bg-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-700 relative z-10 text-center">
+    <div className="h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
+        <div className="bg-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-700 text-center">
             <Lock size={40} className="text-red-500 mx-auto mb-6"/>
             <h1 className="text-2xl font-black uppercase tracking-widest text-white mb-2">System Locked</h1>
             <p className="text-slate-400 text-sm mb-8">License Expired.</p>
-
             <form onSubmit={handleActivate} className="space-y-4">
                 <input 
                     type="text" required placeholder="XXXX-XXXX-XXXX-XXXX" 
-                    className="w-full pl-4 p-3 bg-slate-900 text-white rounded-xl font-mono border border-slate-700 outline-none"
+                    className="w-full pl-4 p-3 bg-slate-900 text-white rounded-xl font-mono outline-none border border-slate-700"
                     value={inputKey} onChange={e => setInputKey(e.target.value)}
                 />
                 {error && <div className="text-red-400 text-xs font-bold">{error}</div>}
@@ -134,7 +119,6 @@ const LicenseLock = ({ children }) => {
     </div>
   );
 
-  // Active App
   return (
     <>
         {children}

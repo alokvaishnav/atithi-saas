@@ -1,8 +1,7 @@
 import { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom'; 
+import { useNavigate } from 'react-router-dom'; 
 import { API_URL } from '../config';
 
-// Create the Context
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -15,11 +14,22 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // 1️⃣ Centralized Logout
+  // 1️⃣ HELPER: Validate JWT Format
+  // A valid JWT must have 3 parts separated by dots (header.payload.signature)
+  const isValidToken = (str) => {
+      return str && 
+             typeof str === 'string' && 
+             str.split('.').length === 3 && 
+             !str.includes('"') && 
+             !str.includes('null') &&
+             !str.includes('undefined');
+  };
+
+  // 2️⃣ Centralized Logout
   const logout = useCallback(() => {
-    localStorage.clear(); // Wipe everything
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_data');
     setUser(null);
     setRole(null);
     setToken(null);
@@ -28,52 +38,52 @@ export const AuthProvider = ({ children }) => {
     navigate('/login'); 
   }, [navigate]);
 
-  // 2️⃣ App Initialization: Restore Session from Storage
+  // 3️⃣ App Initialization
   useEffect(() => {
     const initAuth = () => {
         try {
-            // We use a single JSON object for safer storage
             const storedToken = localStorage.getItem('access_token');
             const storedUserData = localStorage.getItem('user_data');
 
-            // 🟢 ROBUST CHECK: Ensure token is valid and not string "null"/"undefined"
-            if (storedToken && storedToken !== 'null' && storedToken !== 'undefined' && storedUserData) {
+            // 🟢 CRITICAL FIX: Only load if token is structurally valid
+            if (isValidToken(storedToken) && storedUserData) {
                 const parsedUser = JSON.parse(storedUserData);
                 
                 setToken(storedToken);
                 setUser(parsedUser);
                 
-                // 🟢 CRITICAL FIX: Ensure Role is Read Correctly
-                // Prioritize ADMIN, then Superuser -> OWNER, fallback to STAFF
+                // Role Logic
                 const activeRole = parsedUser.role === 'ADMIN' 
                     ? 'ADMIN' 
                     : (parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF'));
                 
                 setRole(activeRole);
                 
-                // 🟢 EXTRACT HOTEL NAME (Handle nested settings or flat key)
+                // Hotel Name Logic
                 const settingsName = parsedUser.hotel_settings?.hotel_name;
                 const flatName = parsedUser.hotel_name;
                 setHotelName(settingsName || flatName || 'Atithi HMS');
                 
                 setIsAuthenticated(true);
             } else {
-                // If data is partial or invalid, ensure we start clean
-                setLoading(false);
+                // If data exists but is invalid (corrupted), clear it silently
+                if (storedToken || storedUserData) {
+                    console.warn("Found corrupted session data. Cleaning up.");
+                    localStorage.clear();
+                }
             }
         } catch (error) {
             console.error("Auth Restoration Error:", error);
-            // If data is corrupted, clear it to prevent loops
-            logout(); 
+            localStorage.clear();
         } finally {
             setLoading(false);
         }
     };
 
     initAuth();
-  }, [logout]);
+  }, []);
 
-  // 3️⃣ Login Function: Handles API Call & State Update
+  // 4️⃣ Login Function
   const login = async (username, password) => {
     try {
         const res = await fetch(`${API_URL}/api/login/`, {
@@ -85,34 +95,35 @@ export const AuthProvider = ({ children }) => {
         const data = await res.json();
 
         if (res.ok) {
-            // A. Save Tokens
+            // A. Validate Token Integrity
+            if (!isValidToken(data.access)) {
+                return { success: false, msg: "Server returned invalid token format." };
+            }
+
+            // B. Save Clean Data
             localStorage.setItem('access_token', data.access);
-            localStorage.setItem('refresh_token', data.refresh);
+            // Ignore refresh token for now to simplify
             
-            // B. Logic for Role Identity
-            // FIX: Explicitly check for 'ADMIN' role first
+            // C. Role Logic
             const detectedRole = data.role === 'ADMIN' 
                 ? 'ADMIN' 
                 : (data.is_superuser ? 'OWNER' : (data.role || 'STAFF'));
             
-            // C. Extract Hotel Settings (Logo, Name, etc.)
             const settings = data.hotel_settings || {};
             const displayHotelName = settings.hotel_name || data.hotel_name || 'Atithi HMS';
 
-            // D. Construct & Save User Profile Data
             const userData = {
                 username: data.username,
                 id: data.id,
                 is_superuser: data.is_superuser,
                 role: detectedRole,
                 hotel_name: displayHotelName,
-                hotel_settings: settings // Store the full settings object
+                hotel_settings: settings 
             };
 
-            // Save as one blob to prevent sync issues
             localStorage.setItem('user_data', JSON.stringify(userData));
 
-            // E. Update React State
+            // D. Update State
             setToken(data.access);
             setRole(detectedRole);
             setHotelName(displayHotelName);
@@ -129,26 +140,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 4️⃣ RBAC Helper: Enhanced with Superuser bypass
   const hasRole = (allowedRoles) => {
       if (!role) return false;
-      // ADMIN role and Superusers bypass role checks
       if (role === 'ADMIN' || user?.is_superuser || role === 'OWNER') return true; 
       return allowedRoles.includes(role);
   };
 
-  // 5️⃣ Live Settings Updater
-  // Updates the context and localStorage when user changes settings
   const updateGlobalProfile = (name) => {
-      // Update state
       setHotelName(name);
-      
-      // Update local storage to persist change
       if (user) {
           const updatedUser = { 
               ...user, 
               hotel_name: name,
-              // Update nested settings too so refresh keeps the name
               hotel_settings: { ...user.hotel_settings, hotel_name: name }
           };
           setUser(updatedUser);
@@ -158,16 +161,8 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{ 
-        user, 
-        role, 
-        token,
-        hotelName, 
-        loading, 
-        isAuthenticated, 
-        login, 
-        logout, 
-        hasRole, 
-        updateGlobalProfile 
+        user, role, token, hotelName, loading, 
+        isAuthenticated, login, logout, hasRole, updateGlobalProfile 
     }}>
       {!loading && children}
     </AuthContext.Provider>
