@@ -33,7 +33,7 @@ const GlobalSettings = () => {
   const [systemHealth, setSystemHealth] = useState({ status: 'ONLINE', latency: 0, db: 'CONNECTED' });
   
   // --- CONFIG STATE ---
-  const [activeTab, setActiveTab] = useState('COMMAND'); 
+  const [activeTab, setActiveTab] = useState('COMMAND'); // COMMAND, TENANTS, PLANS, INFRA, CONFIG
   const [platformConfig, setPlatformConfig] = useState({
     app_name: '', company_name: '', support_email: '', support_phone: '',
     smtp_host: '', smtp_port: '587', smtp_user: '', smtp_password: '',
@@ -54,6 +54,7 @@ const GlobalSettings = () => {
   const [editingPlan, setEditingPlan] = useState(null); 
   
   // --- FORMS ---
+  // Default plan is now the first plan in the list
   const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'Standard' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '' });
   const [tenantForm, setTenantForm] = useState({ 
@@ -95,9 +96,9 @@ const GlobalSettings = () => {
         // 🟢 CRITICAL SAFETY FIX: Ensure 'hotels' is always an array
         const safeHotels = Array.isArray(data.hotels) ? data.hotels : [];
         setTenants(safeHotels);
-        
         setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
         setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
+        // Future: If backend sends plans, update them here: setPlans(data.plans);
       } else {
         // Fallback if request fails
         setTenants([]); 
@@ -145,8 +146,8 @@ const GlobalSettings = () => {
                 first_name: formData.name, 
                 last_name: 'Admin', 
                 role: 'OWNER',
-                plan: formData.plan, 
-                max_rooms: maxRoomsLimit
+                plan: formData.plan, // 🟢 Send selected plan
+                max_rooms: maxRoomsLimit // 🟢 Send plan limit
             })
         });
 
@@ -206,6 +207,8 @@ const GlobalSettings = () => {
 
   const handleSavePlan = (e) => {
       e.preventDefault();
+      // NOTE: In a real app, send this to backend (POST /api/plans/). 
+      // For now, we simulate strictly in UI state.
       const featuresArray = planForm.features.split(',').map(f => f.trim()).filter(f => f !== '');
       const newPlanObj = {
           id: editingPlan ? editingPlan.id : Date.now(),
@@ -231,7 +234,7 @@ const GlobalSettings = () => {
   };
 
   const handleDeletePlan = (id) => {
-      if(confirm("Delete this plan?")) {
+      if(confirm("Delete this plan? Existing subscribers will remain on this plan until moved.")) {
           setPlans(plans.filter(p => p.id !== id));
       }
   };
@@ -397,6 +400,7 @@ const GlobalSettings = () => {
             {/* --- TAB: COMMAND CENTER --- */}
             {activeTab === 'COMMAND' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                    {/* Metrics Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <MetricCard title="Total ARR" val={`₹${((stats.platform_revenue || 0)/100000).toFixed(2)}L`} icon={TrendingUp} color="text-emerald-400" />
                         <MetricCard title="Active Nodes" val={stats.total_hotels} icon={Building} color="text-blue-400" />
@@ -405,23 +409,30 @@ const GlobalSettings = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Revenue Chart */}
                         <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
                             <div className="flex justify-between items-center mb-8">
                                 <h3 className="font-black text-white uppercase text-sm tracking-widest flex items-center gap-2"><BarChart3 size={18} className="text-purple-500"/> Revenue Intelligence</h3>
                                 <div className="flex gap-2">
                                     <span className="px-3 py-1 bg-white/5 rounded-lg text-[10px] font-bold text-slate-400">Monthly</span>
+                                    <span className="px-3 py-1 bg-purple-600 rounded-lg text-[10px] font-bold text-white shadow-lg">Annual</span>
                                 </div>
                             </div>
                             <div className="flex items-end justify-between h-48 gap-4">
                                 {[35, 42, 28, 55, 60, 48, 72, 65, 85, 90, 78, 95].map((h, i) => (
                                     <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                                        <div style={{height: `${h}%`}} className="w-full bg-slate-800 rounded-t-lg group-hover:bg-purple-500 transition-all duration-500 relative"></div>
+                                        <div style={{height: `${h}%`}} className="w-full bg-slate-800 rounded-t-lg group-hover:bg-purple-500 transition-all duration-500 relative">
+                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {h}%
+                                            </div>
+                                        </div>
                                         <span className="text-[10px] font-bold text-slate-600 uppercase">M{i+1}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
+                        {/* Recent Alerts */}
                         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
                             <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><AlertTriangle size={18} className="text-yellow-500"/> Critical Alerts</h3>
                             <div className="space-y-4">
@@ -493,7 +504,7 @@ const GlobalSettings = () => {
                 </div>
             )}
 
-            {/* --- TAB: SUBSCRIPTION PLANS --- */}
+            {/* --- TAB: SUBSCRIPTION PLANS (NEW) --- */}
             {activeTab === 'PLANS' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
                     {plans.map(plan => (
@@ -655,8 +666,9 @@ const GlobalSettings = () => {
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Service Plan</label>
                                 <select className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-purple-500"
                                     value={tenantForm.plan} onChange={e => setTenantForm({...tenantForm, plan: e.target.value})}>
+                                    {/* 🟢 DYNAMIC PLANS DROPDOWN */}
                                     {plans.map(p => (
-                                        <option key={p.id} value={p.name}>{p.name} • {p.max_rooms} Rms</option>
+                                        <option key={p.id} value={p.name}>{p.name} • ₹{p.price}</option>
                                     ))}
                                 </select>
                             </div>
@@ -750,7 +762,7 @@ const GlobalSettings = () => {
 };
 
 // --- SUB COMPONENTS ---
-const MetricCard = ({ title, val, icon: Icon, color }) => (
+const MetricCard = ({ title, val, icon: Icon, color, bg, border }) => (
     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden group">
         <div className={`absolute top-4 right-4 p-3 bg-slate-950 rounded-xl ${color}`}><Icon size={20}/></div>
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">{title}</p>

@@ -1,7 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { 
-  ShieldAlert, Menu, Hotel 
-} from 'lucide-react'; 
+import { ShieldAlert, Menu, Hotel } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -16,7 +14,7 @@ import Register from './pages/Register';
 import DigitalFolio from './pages/DigitalFolio';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import BookingSite from './pages/public/BookingSite'; // Public Website
+import BookingSite from './pages/public/BookingSite'; 
 
 // --- CORE OPERATIONS ---
 import Dashboard from './pages/Dashboard';
@@ -35,7 +33,7 @@ import EditGuest from './pages/EditGuest';
 import Services from './pages/Services';
 import Inventory from './pages/Inventory';
 import Housekeeping from './pages/Housekeeping';
-import HousekeepingMobile from './pages/HousekeepingMobile'; // Mobile App
+import HousekeepingMobile from './pages/HousekeepingMobile'; 
 
 // --- ADMIN & FINANCE ---
 import Expenses from './pages/Expenses';
@@ -47,7 +45,7 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 import GlobalSettings from './pages/SuperAdmin/GlobalSettings'; 
 
-// 🦴 LOADING SKELETON (UX Improvement)
+// 🦴 LOADING SKELETON
 const AppSkeleton = () => (
   <div className="flex h-screen bg-slate-50 overflow-hidden">
     <div className="w-72 bg-slate-950 h-full hidden md:flex flex-col p-4 border-r border-slate-800">
@@ -72,20 +70,16 @@ const AppSkeleton = () => (
   </div>
 );
 
-// 🔒 THE PROFESSIONAL GUARD
+// 🔒 THE PROFESSIONAL GUARD (Standard Users)
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { isAuthenticated, role, loading, user } = useAuth(); 
 
   if (loading) return <AppSkeleton />;
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   // Superuser bypasses role checks
   if (user?.is_superuser || role === 'ADMIN') return children;
 
-  // If roles are defined and user doesn't have them
   if (allowedRoles && !allowedRoles.includes(role)) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50 p-6">
@@ -95,7 +89,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           </div>
           <h2 className="text-2xl md:text-3xl font-black text-slate-800 mb-3 tracking-tighter uppercase italic">Access Restricted</h2>
           <p className="text-slate-500 font-medium mb-8 leading-relaxed text-sm md:text-base">
-            The <strong>{role || 'User'}</strong> role is not authorized to access this department.
+            The <strong>{role || 'User'}</strong> role is not authorized here.
           </p>
           <button 
             onClick={() => window.location.href = '/dashboard'}
@@ -107,64 +101,59 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       </div>
     );
   }
-
   return children;
 };
 
-// 🏗️ THE APP LAYOUT (Authenticated Shell)
-// UPDATED: Now uses <Outlet /> instead of nested <Routes> to fix Error #300
+// 🟢 NEW: SUPER ADMIN GUARD (The missing piece!)
+// Ensures only the CEO can access /super-admin
+const SuperAdminRoute = ({ children }) => {
+    const { user, loading, isAuthenticated } = useAuth();
+    
+    if (loading) return <AppSkeleton />;
+    if (!isAuthenticated) return <Navigate to="/login" replace />;
+    
+    // Strict Check: Must be Superuser or Owner
+    if (user?.is_superuser || user?.role === 'OWNER' || user?.role === 'SUPERADMIN') {
+        return children;
+    }
+    
+    // If not authorized, kick back to hotel dashboard
+    return <Navigate to="/dashboard" replace />;
+};
+
+// 🏗️ THE HOTEL APP LAYOUT (Sidebar + Header)
 const AppLayout = () => {
     const { user, hotelName } = useAuth(); 
     const [sidebarOpen, setSidebarOpen] = useState(false);
-
-    // 🟢 Derived Branding Logic
     const hotelSettings = user?.hotel_settings || {};
     const displayLogo = hotelSettings.logo; 
 
     return (
       <LicenseLock>
         <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-          
-          {/* SIDEBAR */}
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-          {/* MAIN CONTENT WRAPPER */}
           <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-            
-            {/* Mobile Header (Visible only on small screens) */}
             <header className="bg-white border-b border-slate-200 p-4 md:hidden flex justify-between items-center z-10 shadow-sm sticky top-0">
                 <div className="flex items-center gap-3">
                     <button onClick={() => setSidebarOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl">
                         <Menu size={24} />
                     </button>
-                    
-                    {/* Dynamic Logo / Hotel Name */}
                     <div className="flex items-center gap-2">
                         {displayLogo ? (
                            <img src={displayLogo} alt="Logo" className="w-8 h-8 object-contain rounded-md" />
                         ) : (
-                           <div className="bg-blue-600 p-1.5 rounded-lg">
-                               <Hotel size={14} className="text-white" />
-                           </div>
+                           <div className="bg-blue-600 p-1.5 rounded-lg"><Hotel size={14} className="text-white" /></div>
                         )}
                         <span className="font-black text-slate-800 uppercase tracking-widest text-sm truncate max-w-[150px]">
                             {hotelName || "Atithi"}
                         </span>
                     </div>
                 </div>
-                
-                {/* User Avatar */}
                 <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md">
                     {user?.username?.charAt(0).toUpperCase()}
                 </div>
             </header>
-
-            {/* Desktop Header Placeholder (if needed for global search/actions) */}
-            <div className="hidden md:flex justify-end p-4 absolute top-0 right-0 z-20 pointer-events-none"></div>
-
-            {/* SCROLLABLE PAGE AREA */}
             <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
-              {/* 🟢 FIXED: Using Outlet renders the child route from AppContent here */}
               <Outlet />
             </div>
           </main>
@@ -181,113 +170,72 @@ const AppContent = () => {
 
   return (
     <Routes>
-        {/* ROOT LOGIC: Redirect based on auth status */}
+        {/* ROOT: Redirect based on auth */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
         
         {/* PUBLIC AUTH ROUTES */}
         <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
         <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} /> 
         
-        {/* PASSWORD RECOVERY */}
+        {/* RECOVERY & PUBLIC SITES */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
-
-        {/* 🌏 PUBLIC HOTEL WEBSITE */}
         <Route path="/hotel/:username" element={<BookingSite />} />
-
-        {/* EXTERNAL GUEST FACING (No Auth Required) */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
-        {/* 🧹 HOUSEKEEPING MOBILE APP (Protected but Full Screen) */}
+        {/* 🟢 CRITICAL FIX: SUPER ADMIN ROUTE (Outside AppLayout) */}
+        {/* This ensures the Global HQ has its OWN layout and isn't trapped in the Hotel Sidebar */}
+        <Route path="/super-admin" element={
+            <SuperAdminRoute>
+                <GlobalSettings />
+            </SuperAdminRoute>
+        } />
+
+        {/* 🟢 HOUSEKEEPING MOBILE (Fullscreen) */}
         <Route path="/hk-mobile" element={
           <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING']}>
             <HousekeepingMobile />
           </ProtectedRoute>
         } />
 
-        {/* 🟢 CATCH ALL: Handled by AppLayout which contains internal Routes */}
-        {/* This structure fixes the React Error #300 by avoiding nested Routes */}
+        {/* 🟢 HOTEL APP ROUTES (Wrapped in AppLayout) */}
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/support" element={<Support />} />
             <Route path="/onboarding" element={<OnboardingWizard />} />
 
-            {/* 🟠 FRONT OFFICE & RESERVATIONS */}
+            {/* FRONT OFFICE */}
             <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />
             <Route path="/rooms" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Rooms /></ProtectedRoute>} />
             <Route path="/guests" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Guests /></ProtectedRoute>} />
             <Route path="/guests/edit/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><EditGuest /></ProtectedRoute>} />
             
+            {/* RESERVATIONS */}
             <Route path="/bookings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Bookings /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><CalendarView /></ProtectedRoute>} />
             <Route path="/folio/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Folio /></ProtectedRoute>} />
             <Route path="/print-grc/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><PrintGRC /></ProtectedRoute>} />
 
-            {/* 🔴 POS & SERVICES */}
+            {/* POS & SERVICES */}
             <Route path="/pos" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><POS /></ProtectedRoute>} />
             <Route path="/services" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
 
-            {/* 👑 SUPER ADMIN (Owner Only) */}
-            <Route path="/super-admin" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'SUPERADMIN']}>
-                <GlobalSettings />
-              </ProtectedRoute>
-            } />
+            {/* MANAGEMENT */}
+            <Route path="/staff" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}><Staff /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER']}><Settings /></ProtectedRoute>} />
+            <Route path="/pricing" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}><Pricing /></ProtectedRoute>} />
 
-            {/* 🔐 STAFF MANAGEMENT */}
-            <Route path="/staff" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}>
-                <Staff />
-              </ProtectedRoute>
-            } />
-
-            {/* ⚙️ SETTINGS */}
-            <Route path="/settings" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER']}>
-                <Settings />
-              </ProtectedRoute>
-            } />
-            <Route path="/pricing" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}>
-                <Pricing />
-              </ProtectedRoute>
-            } />
-
-            {/* 📊 FINANCE & REPORTS */}
-            <Route path="/accounting" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}>
-                <Accounting />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/expenses" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}>
-                <Expenses />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/reports" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT']}>
-                <Reports />
-              </ProtectedRoute>
-            } />
+            {/* FINANCE */}
+            <Route path="/accounting" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}><Accounting /></ProtectedRoute>} />
+            <Route path="/expenses" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}><Expenses /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT']}><Reports /></ProtectedRoute>} />
             
-            {/* 📦 INVENTORY */}
-            <Route path="/inventory" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}>
-                <Inventory />
-              </ProtectedRoute>
-            } />
+            {/* OPERATIONS */}
+            <Route path="/inventory" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Inventory /></ProtectedRoute>} />
+            <Route path="/housekeeping" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}><Housekeeping /></ProtectedRoute>} />
 
-            {/* 🧹 HOUSEKEEPING (Desktop) */}
-            <Route path="/housekeeping" element={
-              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
-                <Housekeeping />
-              </ProtectedRoute>
-            } />
-
-            {/* Fallback for internal authenticated users */}
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
     </Routes>

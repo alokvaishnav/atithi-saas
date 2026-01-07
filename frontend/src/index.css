@@ -21,10 +21,10 @@ body {
   color: #0f172a; /* Matches text-slate-900 */
 }
 
-/* Global Text Selection Style */
+/* Global Text Selection Style (SaaS Branding) */
 ::selection {
-  background-color: #3b82f6; /* Blue-500 */
-  color: white;
+  background-color: rgba(139, 92, 246, 0.3); /* Purple-500 with opacity */
+  color: #581c87; /* Dark Purple Text */
 }
 
 /* =========================================
@@ -32,7 +32,7 @@ body {
    ========================================= */
 @layer utilities {
   
-  /* --- A. Custom Scrollbar (Slim & Clean) --- */
+  /* --- A. Custom Scrollbar (Professional & Dark Mode Compatible) --- */
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -43,11 +43,23 @@ body {
   }
   
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full;
+    @apply bg-slate-400/50 rounded-full;
+    border: 1px solid transparent;
+    background-clip: content-box;
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-400;
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    @apply bg-slate-500/80;
+  }
+
+  /* Specific override for Dark Mode Containers (Global HQ) */
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb,
+  .bg-slate-900 .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-700/50;
+  }
+  .dark .custom-scrollbar:hover::-webkit-scrollbar-thumb,
+  .bg-slate-900 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    @apply bg-slate-600;
   }
 
   /* --- B. Hide Scrollbar (for cleaner UI) --- */
@@ -59,12 +71,17 @@ body {
       scrollbar-width: none;
   }
 
-  /* --- C. Glass Effect --- */
+  /* --- C. Glass Effects --- */
   .glass {
     @apply bg-white/10 backdrop-blur-lg border border-white/20;
   }
+  
+  /* Dark Glass for Super Admin */
+  .glass-dark {
+    @apply bg-slate-900/50 backdrop-blur-xl border border-slate-800/50;
+  }
 
-  /* --- D. Mobile Safe Area (For Housekeeping App) --- */
+  /* --- D. Mobile Safe Area --- */
   .safe-area-pb {
     padding-bottom: env(safe-area-inset-bottom, 20px);
   }
@@ -73,7 +90,6 @@ body {
 /* =========================================
    3. REACT BIG CALENDAR OVERRIDES
    ========================================= */
-/* Removes default ugly borders and aligns fonts */
 .rbc-calendar {
   border: none !important;
   font-family: inherit !important;
@@ -106,23 +122,15 @@ body {
    4. PRINT STYLES (For Invoices/GRC)
    ========================================= */
 @media print {
-  /* Force background colors to print (essential for status badges) */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide UI elements */
-  aside, 
-  nav, 
-  header, 
-  button, 
-  .no-print,
-  .print\:hidden {
+  aside, nav, header, button, .no-print, .print\:hidden {
     display: none !important;
   }
 
-  /* Reset layout for printing */
   body, #root, main, .print-container {
     background-color: white !important;
     color: black !important;
@@ -135,7 +143,6 @@ body {
     border: none !important;
   }
 
-  /* Paper setup */
   @page {
     margin: 0;
     size: auto;
@@ -143,67 +150,70 @@ body {
 }
 
 /* =========================================
-   5. ANIMATIONS (Matching React Component Classes)
+   5. ANIMATIONS (SaaS & Dashboard)
    ========================================= */
 
-/* Standard Entrance Animation */
-@keyframes enter {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+/* A. Fade In */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* Standard Exit Animation */
-@keyframes exit {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.95);
-  }
+/* B. Slide Up (For Cards/Lists) */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* Shake animation for Error States */
+/* C. Shake (Error State) */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
 }
 
-/* Utility Classes used in React Components */
-.animate-in {
-  animation: enter 0.3s ease-out forwards;
+/* D. Zoom In (Modals) */
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-.animate-out {
-  animation: exit 0.2s ease-in forwards;
+/* Utility Classes */
+.animate-in {
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
 .fade-in {
-  animation-name: enter;
-  animation-duration: 0.5s;
+  animation-name: fadeIn;
+}
+
+.slide-in-from-bottom-4 {
+  animation: slideUp 0.5s ease-out forwards;
+}
+
+.slide-in-from-top-2 {
+  animation: slideUp 0.3s ease-out forwards reverse; /* Falls down slightly */
+}
+
+.slide-in-from-right-4 {
+  animation: fadeIn 0.5s ease-out forwards; /* Simplified for now */
+}
+
+.zoom-in {
+  animation: zoomIn 0.3s ease-out forwards;
 }
 
 .shake {
   animation: shake 0.3s ease-in-out;
 }
 
-/* Specific Slide overrides for Tailwind Animate logic */
+/* Tailwind Animate Overrides (If plugin is used) */
 .slide-in-from-bottom-4 {
   --tw-enter-translate-y: 1rem;
 }
-
 .slide-in-from-top-2 {
   --tw-enter-translate-y: -0.5rem;
 }
-
-.zoom-in {
+.zoom-in-95 {
   --tw-enter-scale: 0.95;
 }
