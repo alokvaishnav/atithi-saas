@@ -14,23 +14,31 @@ const LicenseLock = ({ children }) => {
   const [error, setError] = useState('');
 
   // 🔐 Use Context
-  // We grab 'loading' to ensure we don't run checks while Auth is initializing
-  const { token, logout, loading: authLoading } = useAuth(); 
+  // Added 'role' and 'user' to bypass checks for Admins
+  const { token, logout, loading: authLoading, role, user } = useAuth(); 
 
   // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // 🟢 PHASE 1: WAIT FOR AUTH TO INITIALIZE
+    // 🟢 PHASE 1: PRE-CHECKS
+    // If Auth is still loading, do nothing yet
     if (authLoading) {
         return;
     }
 
-    // 🟢 PHASE 2: TOKEN SANITIZATION & VALIDATION
+    // 🟢 PHASE 2: ADMIN BYPASS (Critical Fix)
+    // Admins and Superusers don't need license checks.
+    // This prevents the 400 error when the server can't find a hotel license for the admin.
+    if (role === 'ADMIN' || user?.is_superuser) {
+        setStatus('ACTIVE');
+        return;
+    }
+
+    // 🟢 PHASE 3: TOKEN SANITIZATION
     // Ensure token is a string and clean it (remove extra quotes if present)
     const rawToken = typeof token === 'string' ? token : '';
     const cleanToken = rawToken.replace(/"/g, '').trim();
 
     // Regex for basic JWT structure (Header.Payload.Signature)
-    // This prevents sending garbage like "null", "undefined" to the server
     const isJwtFormat = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/.test(cleanToken);
 
     if (!cleanToken || !isJwtFormat) {
@@ -40,7 +48,7 @@ const LicenseLock = ({ children }) => {
         return;
     }
     
-    // 🟢 PHASE 3: API CALL
+    // 🟢 PHASE 4: API CALL
     const checkLicense = async () => {
         try {
             const res = await fetch(`${API_URL}/api/license/status/`, {
@@ -58,9 +66,8 @@ const LicenseLock = ({ children }) => {
             }
 
             // Handle Bad Request (400) -> Ignore & Fail Open
-            // This stops the red error from crashing the UI loop
+            // We assume 'ACTIVE' to prevent locking out users due to server glitches
             if (res.status === 400) {
-                console.warn("License check: Bad Request (400). Token malformed. Skipping check.");
                 setStatus('ACTIVE');
                 return;
             }
@@ -88,7 +95,7 @@ const LicenseLock = ({ children }) => {
     };
     
     checkLicense();
-  }, [token, authLoading, logout]);
+  }, [token, authLoading, logout, role, user]);
 
   // 2. Handle New Key Submission
   const handleActivate = async (e) => {
@@ -127,7 +134,6 @@ const LicenseLock = ({ children }) => {
   // --- RENDER STATES ---
 
   // A. Loading Screen
-  // Only show loading if we have a valid token and are waiting for the API
   if (status === 'LOADING' && token && !authLoading) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
