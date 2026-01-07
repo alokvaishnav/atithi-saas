@@ -1,48 +1,84 @@
 import { useEffect, useState } from 'react';
-import { Lock, Loader2, ShieldAlert, KeyRound, AlertTriangle, RefreshCw, LogOut } from 'lucide-react';
+import { 
+  Lock, Loader2, ShieldAlert, KeyRound, 
+  AlertTriangle, RefreshCw, LogOut
+} from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
 const LicenseLock = ({ children }) => {
-  const [status, setStatus] = useState('LOADING'); 
+  const [status, setStatus] = useState('LOADING'); // LOADING | ACTIVE | WARNING | EXPIRED
   const [daysLeft, setDaysLeft] = useState(0);
   const [inputKey, setInputKey] = useState('');
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
 
-  const { token, logout } = useAuth(); 
+  // 🔐 Use Context
+  // We grab 'loading' to ensure we don't run checks while Auth is initializing
+  const { token, logout, loading: authLoading } = useAuth(); 
 
+  // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // 🟢 PASS-THROUGH: If AuthContext hasn't given us a token yet,
-    // we simply mark as ACTIVE so the Login page can be shown by the Router.
-    if (!token) {
-        setStatus('ACTIVE');
+    // 🟢 PHASE 1: PRE-CHECKS
+    // If Auth is still loading, do nothing yet (keep License in LOADING state or default ACTIVE)
+    if (authLoading) {
+        return;
+    }
+
+    // 🟢 PHASE 2: TOKEN VALIDATION
+    // Ensure token is a string and clean it (remove extra quotes if present)
+    const rawToken = typeof token === 'string' ? token : '';
+    const cleanToken = rawToken.replace(/"/g, '').trim();
+
+    // Regex for basic JWT structure (Header.Payload.Signature)
+    // This prevents sending garbage like "null", "undefined", or "false" to the server
+    const isJwtFormat = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/.test(cleanToken);
+
+    if (!cleanToken || !isJwtFormat) {
+        // If token is invalid/missing, we default to ACTIVE.
+        // The App's ProtectedRoutes will handle redirecting to Login if needed.
+        setStatus('ACTIVE'); 
         return;
     }
     
+    // 🟢 PHASE 3: API CALL
     const checkLicense = async () => {
         try {
             const res = await fetch(`${API_URL}/api/license/status/`, {
                 headers: { 
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${cleanToken}`,
                     'Content-Type': 'application/json'
                 }
             });
 
-            // 🟢 Handle 401 (Unauthorized) - Expired Token
+            // Handle Unauthorized (Token Expired) -> Logout
             if (res.status === 401) {
-                console.warn("Token expired. Logging out.");
+                console.warn("License check: Token expired (401).");
                 logout();
+                return;
+            }
+
+            // Handle Bad Request (400) -> Ignore & Fail Open
+            if (res.status === 400) {
+                console.warn("License check: Bad Request (400). Skipping check.");
+                setStatus('ACTIVE');
                 return;
             }
 
             if (res.ok) {
                 const data = await res.json();
                 setDaysLeft(data.days_left);
-                setStatus(data.is_expired ? 'EXPIRED' : (data.days_left <= 7 ? 'WARNING' : 'ACTIVE'));
+                
+                if (data.is_expired) {
+                    setStatus('EXPIRED');
+                } else if (data.days_left <= 7) {
+                    setStatus('WARNING'); 
+                } else {
+                    setStatus('ACTIVE');
+                }
             } else {
-                // If 400/500, we Fail Open (let the user in)
-                console.warn("License Check Failed (Server Error), defaulting to ACTIVE.");
+                // Server Error (500) -> Fail Open
+                console.warn("License check skipped (Server Error), defaulting to ACTIVE.");
                 setStatus('ACTIVE'); 
             }
         } catch (err) {
@@ -52,20 +88,23 @@ const LicenseLock = ({ children }) => {
     };
     
     checkLicense();
-  }, [token, logout]);
+  }, [token, authLoading, logout]);
 
-  // Handle Activation
+  // 2. Handle New Key Submission
   const handleActivate = async (e) => {
     e.preventDefault();
     setActivating(true);
     setError('');
+
+    // Sanitize token for activation request too
+    const cleanToken = typeof token === 'string' ? token.replace(/"/g, '').trim() : '';
 
     try {
         const res = await fetch(`${API_URL}/api/license/activate/`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+                'Authorization': `Bearer ${cleanToken}`
             },
             body: JSON.stringify({ license_key: inputKey })
         });
@@ -76,62 +115,112 @@ const LicenseLock = ({ children }) => {
             window.location.reload();
         } else {
             const errData = await res.json();
-            setError(errData.error || "Invalid License Key.");
+            setError(errData.error || "Invalid License Key. Please check and try again.");
         }
     } catch (err) {
-        setError("Network error.");
+        setError("Network error. Unable to verify key.");
     } finally {
         setActivating(false);
     }
   };
 
-  // --- RENDER ---
-  if (status === 'LOADING' && token) return (
+  // --- RENDER STATES ---
+
+  // A. Loading Screen
+  // Only show loading if we have a valid token and are waiting for the API
+  if (status === 'LOADING' && token && !authLoading) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
-        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying License...</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
     </div>
   );
 
+  // B. Locked Screen (Expired)
   if (status === 'EXPIRED') return (
-    <div className="h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-700 text-center">
-            <Lock size={40} className="text-red-500 mx-auto mb-6"/>
+    <div className="h-screen bg-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
+        
+        {/* Background FX */}
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-red-600 rounded-full blur-[150px] opacity-20"></div>
+
+        <div className="bg-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-700 relative z-10 text-center">
+            
+            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                <Lock size={40} className="text-red-500"/>
+            </div>
+
             <h1 className="text-2xl font-black uppercase tracking-widest text-white mb-2">System Locked</h1>
-            <p className="text-slate-400 text-sm mb-8">License Expired.</p>
+            <p className="text-slate-400 text-sm mb-8">Your subscription has expired. Please enter a valid renewal key to continue.</p>
+
             <form onSubmit={handleActivate} className="space-y-4">
-                <input 
-                    type="text" required placeholder="XXXX-XXXX-XXXX-XXXX" 
-                    className="w-full pl-4 p-3 bg-slate-900 text-white rounded-xl font-mono outline-none border border-slate-700"
-                    value={inputKey} onChange={e => setInputKey(e.target.value)}
-                />
-                {error && <div className="text-red-400 text-xs font-bold">{error}</div>}
-                <button type="submit" disabled={activating || !inputKey} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-xs hover:bg-blue-500 transition-all flex justify-center gap-2">
-                    {activating ? <Loader2 className="animate-spin" size={16}/> : "Reactivate"}
+                <div className="relative">
+                    <KeyRound className="absolute left-4 top-3.5 text-slate-500" size={18}/>
+                    <input 
+                        type="text" 
+                        required
+                        placeholder="XXXX-XXXX-XXXX-XXXX" 
+                        className="w-full pl-12 p-3 bg-slate-900 text-white rounded-xl font-mono font-bold border border-slate-700 focus:border-blue-500 outline-none uppercase tracking-widest placeholder:text-slate-600"
+                        value={inputKey}
+                        onChange={e => setInputKey(e.target.value)}
+                    />
+                </div>
+                
+                {error && (
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold bg-red-400/10 p-3 rounded-xl border border-red-400/20 animate-in fade-in slide-in-from-top-2">
+                        <ShieldAlert size={14}/> {error}
+                    </div>
+                )}
+
+                <button 
+                    type="submit" 
+                    disabled={activating || !inputKey}
+                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-500 transition-all flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
+                >
+                    {activating ? <Loader2 className="animate-spin" size={16}/> : "Reactivate System"}
                 </button>
             </form>
-            <div className="mt-8 pt-8 border-t border-white/5 flex justify-center">
-                 <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase">
-                    <LogOut size={14}/> Log Out
+
+            <div className="mt-8 pt-8 border-t border-white/5 flex justify-center gap-6">
+                 <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+                    <LogOutIcon size={14}/> Log Out
+                 </button>
+                 <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+                    <RefreshCw size={14}/> Refresh Status
                  </button>
             </div>
         </div>
     </div>
   );
 
+  // C. Active App (With potential warning)
   return (
     <>
         {children}
+        
+        {/* Grace Period Warning Banner */}
         {status === 'WARNING' && (
-            <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg">
+            <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg animate-in slide-in-from-bottom-full">
                 <div className="flex items-center gap-3 container mx-auto max-w-7xl">
                     <AlertTriangle size={18} className="animate-pulse"/>
-                    <span className="text-xs font-black uppercase tracking-widest">License Expiring Soon: {daysLeft} Days</span>
+                    <span className="text-xs font-black uppercase tracking-widest">
+                        License Expiring Soon: {daysLeft} Days Remaining
+                    </span>
                 </div>
+                <button 
+                    onClick={() => window.location.href = '/settings'}
+                    className="text-xs font-bold bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition-colors uppercase"
+                >
+                    Renew Now
+                </button>
             </div>
         )}
     </>
   );
 };
+
+// Helper Component for Logout Icon to avoid missing import
+const LogOutIcon = ({size}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+);
 
 export default LicenseLock;
