@@ -27,8 +27,17 @@ const Dashboard = () => {
   const navigate = useNavigate(); 
   const { token, role, user, hotelName } = useAuth();
 
-  const canSeeFinance = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role) || user?.is_superuser;
-  const canSeeLogs = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+  // 🟢 1. INSTANT REDIRECT FOR SAAS CEO
+  // If this user is the Super Admin, they have no business on the Hotel Dashboard.
+  // Send them to Global HQ immediately.
+  useEffect(() => {
+    if (user?.is_superuser) {
+        navigate('/super-admin', { replace: true });
+    }
+  }, [user, navigate]);
+
+  const canSeeFinance = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role);
+  const canSeeLogs = ['OWNER', 'MANAGER'].includes(role);
 
   // --- ANALYTICS CALCULATION ---
   const calculateClientSideStats = useCallback((currentRooms, currentBookings) => {
@@ -58,7 +67,7 @@ const Dashboard = () => {
 
   // --- SMART DATA FETCHING ---
   const fetchData = useCallback(async (showLoader = false) => {
-    if (!token) return;
+    if (!token || user?.is_superuser) return; // Stop if CEO
     
     try {
       if (showLoader) setLoading(true);
@@ -151,13 +160,15 @@ const Dashboard = () => {
       if (showLoader) setLoading(false); 
       setRefreshing(false);
     }
-  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats, navigate, rooms.length]);
+  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats, navigate, rooms.length, user]);
 
   useEffect(() => { 
-    fetchData(true); 
-    const interval = setInterval(() => fetchData(false), 30000); 
-    return () => clearInterval(interval);
-  }, [fetchData]);
+    if (!user?.is_superuser) {
+        fetchData(true); 
+        const interval = setInterval(() => fetchData(false), 30000); 
+        return () => clearInterval(interval);
+    }
+  }, [fetchData, user]);
 
   // --- RENDER HELPERS ---
   const getLocalDate = () => {
@@ -190,6 +201,11 @@ const Dashboard = () => {
 
   const revenueValues = trendData.map(t => Number(t.daily_revenue || 0));
   const maxRevenue = Math.max(...revenueValues, 1000); 
+
+  // 🟢 3. LOADING STATE (Or Redirecting Placeholder)
+  if (user?.is_superuser) {
+      return null; // Render nothing while redirecting
+  }
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
@@ -425,7 +441,6 @@ const Dashboard = () => {
             <table className="w-full text-sm text-left">
               <tbody className="divide-y divide-slate-50">
                 {expectedDepartures.length > 0 ? expectedDepartures.map(b => {
-                    // Safe access to payments array
                     const payments = Array.isArray(b.payments) ? b.payments : [];
                     const paid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
                     const due = parseFloat(b.total_amount || 0) - paid;
