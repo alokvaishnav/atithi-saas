@@ -33,12 +33,11 @@ const LicenseLock = ({ children }) => {
                 }
             });
 
-            // 🟢 SAFETY CHECK 2: Auto-fix Corrupted Tokens
-            // If server says 400 (Bad Request) or 401 (Unauthorized), 
-            // the token is trash. Log out to clean it up.
+            // 🟢 NUCLEAR OPTION: If corrupted (400/401), kill session immediately
             if (res.status === 400 || res.status === 401) {
-                console.error("Token is corrupted. Auto-cleaning...");
-                logout(); // <--- THIS FIXES YOUR ERROR LOOP
+                console.error("🔥 Token corrupted (400). Performing emergency logout.");
+                localStorage.clear(); // Wipe storage directly
+                window.location.href = '/login'; // Hard redirect (bypasses React state)
                 return;
             }
 
@@ -49,7 +48,7 @@ const LicenseLock = ({ children }) => {
                 if (data.is_expired) {
                     setStatus('EXPIRED');
                 } else if (data.days_left <= 7) {
-                    setStatus('WARNING'); 
+                    setStatus('WARNING'); // Grace period
                 } else {
                     setStatus('ACTIVE');
                 }
@@ -66,7 +65,7 @@ const LicenseLock = ({ children }) => {
     };
     
     checkLicense();
-  }, [token, logout]);
+  }, [token]); // Removed logout dependency to prevent re-run loops
 
   // 2. Handle New Key Submission
   const handleActivate = async (e) => {
@@ -170,6 +169,8 @@ const LicenseLock = ({ children }) => {
   return (
     <>
         {children}
+        
+        {/* Grace Period Warning Banner */}
         {status === 'WARNING' && (
             <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg animate-in slide-in-from-bottom-full">
                 <div className="flex items-center gap-3 container mx-auto max-w-7xl">
