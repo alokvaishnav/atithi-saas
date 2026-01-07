@@ -192,7 +192,7 @@ const AppContent = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
-        {/* 🌏 PUBLIC HOTEL WEBSITE (The Booking Engine) */}
+        {/* 🌏 PUBLIC HOTEL WEBSITE */}
         <Route path="/hotel/:username" element={<BookingSite />} />
 
         {/* EXTERNAL GUEST FACING (No Auth Required) */}
@@ -205,7 +205,7 @@ const AppContent = () => {
           </ProtectedRoute>
         } />
 
-        {/* 🟢 MAIN APP ROUTES (Wrapped in Layout) */}
+        {/* 🟢 CATCH ALL: Handled by AppLayout which contains internal Routes */}
         {/* This structure fixes the React Error #300 by avoiding nested Routes */}
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             
@@ -287,7 +287,7 @@ const AppContent = () => {
               </ProtectedRoute>
             } />
 
-            {/* Fallback for authenticated users */}
+            {/* Fallback for internal authenticated users */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
     </Routes>
