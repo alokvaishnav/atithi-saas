@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { 
   ShieldAlert, Menu, Hotel 
 } from 'lucide-react'; 
@@ -112,6 +112,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 };
 
 // 🏗️ THE APP LAYOUT (Authenticated Shell)
+// UPDATED: Now uses <Outlet /> instead of nested <Routes> to fix Error #300
 const AppLayout = () => {
     const { user, hotelName } = useAuth(); 
     const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -163,89 +164,8 @@ const AppLayout = () => {
 
             {/* SCROLLABLE PAGE AREA */}
             <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
-              <Routes>
-                {/* 🟢 GENERAL ACCESS (Everyone including ADMIN) */}
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/support" element={<Support />} />
-                <Route path="/onboarding" element={<OnboardingWizard />} />
-
-                {/* 🟠 FRONT OFFICE & RESERVATIONS */}
-                <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />
-                <Route path="/rooms" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Rooms /></ProtectedRoute>} />
-                <Route path="/guests" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Guests /></ProtectedRoute>} />
-                <Route path="/guests/edit/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><EditGuest /></ProtectedRoute>} />
-                
-                <Route path="/bookings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Bookings /></ProtectedRoute>} />
-                <Route path="/calendar" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><CalendarView /></ProtectedRoute>} />
-                <Route path="/folio/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Folio /></ProtectedRoute>} />
-                <Route path="/print-grc/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><PrintGRC /></ProtectedRoute>} />
-
-                {/* 🔴 POS & SERVICES (Restricted: No Housekeeping) */}
-                <Route path="/pos" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><POS /></ProtectedRoute>} />
-                <Route path="/services" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
-
-                {/* 👑 SUPER ADMIN */}
-                <Route path="/super-admin" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'SUPERADMIN']}>
-                    <GlobalSettings />
-                  </ProtectedRoute>
-                } />
-
-                {/* 🔐 STAFF MANAGEMENT */}
-                <Route path="/staff" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}>
-                    <Staff />
-                  </ProtectedRoute>
-                } />
-
-                {/* ⚙️ SETTINGS */}
-                <Route path="/settings" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER']}>
-                    <Settings />
-                  </ProtectedRoute>
-                } />
-                <Route path="/pricing" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}>
-                    <Pricing />
-                  </ProtectedRoute>
-                } />
-
-                {/* 📊 FINANCE & REPORTS */}
-                <Route path="/accounting" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}>
-                    <Accounting />
-                  </ProtectedRoute>
-                } />
-
-                <Route path="/expenses" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}>
-                    <Expenses />
-                  </ProtectedRoute>
-                } />
-
-                <Route path="/reports" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT']}>
-                    <Reports />
-                  </ProtectedRoute>
-                } />
-                
-                {/* 📦 INVENTORY */}
-                <Route path="/inventory" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}>
-                    <Inventory />
-                  </ProtectedRoute>
-                } />
-
-                {/* 🧹 HOUSEKEEPING (Desktop) */}
-                <Route path="/housekeeping" element={
-                  <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
-                    <Housekeeping />
-                  </ProtectedRoute>
-                } />
-
-                {/* Fallback for internal authenticated users */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
+              {/* 🟢 FIXED: Using Outlet renders the child route from AppContent here */}
+              <Outlet />
             </div>
           </main>
         </div>
@@ -272,25 +192,104 @@ const AppContent = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
 
-        {/* 🌏 PUBLIC HOTEL WEBSITE */}
+        {/* 🌏 PUBLIC HOTEL WEBSITE (The Booking Engine) */}
         <Route path="/hotel/:username" element={<BookingSite />} />
 
         {/* EXTERNAL GUEST FACING (No Auth Required) */}
         <Route path="/folio-live/:id" element={<DigitalFolio />} />
 
-        {/* 🧹 HOUSEKEEPING MOBILE APP */}
+        {/* 🧹 HOUSEKEEPING MOBILE APP (Protected but Full Screen) */}
         <Route path="/hk-mobile" element={
           <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING']}>
             <HousekeepingMobile />
           </ProtectedRoute>
         } />
 
-        {/* 🟢 CATCH ALL: Handled by AppLayout which contains internal Routes */}
-        <Route path="/*" element={
-          <ProtectedRoute>
-            <AppLayout />
-          </ProtectedRoute>
-        } />
+        {/* 🟢 MAIN APP ROUTES (Wrapped in Layout) */}
+        {/* This structure fixes the React Error #300 by avoiding nested Routes */}
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+            
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/support" element={<Support />} />
+            <Route path="/onboarding" element={<OnboardingWizard />} />
+
+            {/* 🟠 FRONT OFFICE & RESERVATIONS */}
+            <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />
+            <Route path="/rooms" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Rooms /></ProtectedRoute>} />
+            <Route path="/guests" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Guests /></ProtectedRoute>} />
+            <Route path="/guests/edit/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><EditGuest /></ProtectedRoute>} />
+            
+            <Route path="/bookings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Bookings /></ProtectedRoute>} />
+            <Route path="/calendar" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><CalendarView /></ProtectedRoute>} />
+            <Route path="/folio/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Folio /></ProtectedRoute>} />
+            <Route path="/print-grc/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><PrintGRC /></ProtectedRoute>} />
+
+            {/* 🔴 POS & SERVICES */}
+            <Route path="/pos" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><POS /></ProtectedRoute>} />
+            <Route path="/services" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
+
+            {/* 👑 SUPER ADMIN (Owner Only) */}
+            <Route path="/super-admin" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'SUPERADMIN']}>
+                <GlobalSettings />
+              </ProtectedRoute>
+            } />
+
+            {/* 🔐 STAFF MANAGEMENT */}
+            <Route path="/staff" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}>
+                <Staff />
+              </ProtectedRoute>
+            } />
+
+            {/* ⚙️ SETTINGS */}
+            <Route path="/settings" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER']}>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/pricing" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}>
+                <Pricing />
+              </ProtectedRoute>
+            } />
+
+            {/* 📊 FINANCE & REPORTS */}
+            <Route path="/accounting" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}>
+                <Accounting />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/expenses" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}>
+                <Expenses />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/reports" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT']}>
+                <Reports />
+              </ProtectedRoute>
+            } />
+            
+            {/* 📦 INVENTORY */}
+            <Route path="/inventory" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}>
+                <Inventory />
+              </ProtectedRoute>
+            } />
+
+            {/* 🧹 HOUSEKEEPING (Desktop) */}
+            <Route path="/housekeeping" element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}>
+                <Housekeeping />
+              </ProtectedRoute>
+            } />
+
+            {/* Fallback for authenticated users */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Route>
     </Routes>
   );
 }

@@ -16,6 +16,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
+  // Access global user state and profile update functions
   const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
   // State for SaaS Platform Branding (Support Info)
@@ -35,9 +36,10 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 1. FETCH HOTEL BRANDING (Tenant Name)
   useEffect(() => {
     const fetchHotelBranding = async () => {
+      // Safety Check: Don't fetch if no token is present
       if (!token) return;
       
-      // Included 'ADMIN' in the fetch check
+      // Only fetch if role allows (ADMIN/Owners/Managers) or user is a superuser
       if (role !== 'ADMIN' && role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
 
       try {
@@ -46,6 +48,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         });
         
         const data = res.data;
+        // Handle both object and array responses (DRF sometimes returns list for ModelViewSet)
         const settings = Array.isArray(data) ? data[0] : data;
         
         if (settings && settings.hotel_name) {
@@ -56,6 +59,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       }
     };
     
+    // Only fetch if name is missing or is the default generic name
     if (!hotelName || hotelName === 'ATITHI HMS') {
         fetchHotelBranding();
     }
@@ -66,6 +70,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
+            // Note: Backend endpoint must allow GET for authenticated users
             const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -91,7 +96,8 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   };
 
-  // 🧭 RBAC Navigation Groups - Added 'ADMIN' to allow Super Admin access
+  // 🧭 RBAC Navigation Groups
+  // NOTE: 'ADMIN' is added to every group to ensure full access
   const groups = [
     {
       title: "Main",
@@ -114,7 +120,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        // 🔒 Hide POS/Inventory from Housekeeping staff - Added role check for ADMIN to see them
+        // 🔒 Hide POS/Inventory from Housekeeping staff (But show for ADMIN)
         ...(role !== 'HOUSEKEEPING' ? [
             { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
             { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
@@ -135,7 +141,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
-        // 🔒 Hide Staff Directory from Accountants - Added ADMIN to the list
+        // 🔒 Hide Staff Directory from Accountants (Show for ADMIN/OWNER/MANAGER)
         ...(['ADMIN', 'OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
             { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
         ] : []),
@@ -199,7 +205,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* NAVIGATION */}
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
-          {/* 👑 SUPER ADMIN SECTION */}
+          {/* 👑 SUPER ADMIN SECTION - TRIGGERED BY 'ADMIN' ROLE OR SUPERUSER */}
           {(user?.is_superuser || role === 'ADMIN' || user?.role === 'SUPERADMIN') && (
               <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
@@ -225,6 +231,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
 
           {groups.map((group, index) => (
+            // Logic: Show group if role matches, OR if user is ADMIN/Superuser
             (group.roles.includes(role) || role === 'ADMIN' || user?.is_superuser) && group.items.length > 0 && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
