@@ -94,7 +94,8 @@ from .models import (
     BookingCharge, 
     BookingPayment, 
     PlatformSettings, 
-    GlobalAnnouncement
+    GlobalAnnouncement,
+    SubscriptionPlan
 )
 
 # Serializers
@@ -112,7 +113,8 @@ from .serializers import (
     HotelSettingsSerializer,
     PublicHotelSerializer, 
     PublicRoomSerializer, 
-    PlatformSettingsSerializer
+    PlatformSettingsSerializer,
+    SubscriptionPlanSerializer
 )
 
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -2361,3 +2363,15 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     Login Endpoint: Returns JWT + User Data
     """
     serializer_class = CustomTokenObtainPairSerializer
+
+class SubscriptionPlanViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows Plans to be viewed or edited by Super Admin.
+    """
+    queryset = SubscriptionPlan.objects.all().order_by('price')
+    serializer_class = SubscriptionPlanSerializer
+    permission_classes = [permissions.IsAdminUser] # Only Superuser/Staff can access
+    
+    # 🟢 CRITICAL: Disable pagination so the frontend receives a raw List [] 
+    # This prevents the "map is not a function" error in React.
+    pagination_class = None

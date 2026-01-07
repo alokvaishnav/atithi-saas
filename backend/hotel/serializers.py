@@ -13,7 +13,8 @@ User = get_user_model()
 from .models import (
     HotelSettings, Room, Guest, Booking, InventoryItem, 
     Expense, MenuItem, Order, HousekeepingTask, ActivityLog,
-    BookingCharge, BookingPayment, PlatformSettings, GlobalAnnouncement
+    BookingCharge, BookingPayment, PlatformSettings, GlobalAnnouncement,
+    SubscriptionPlan
 )
 
 # If you specifically need the custom user class for type hinting or specific fields:
@@ -70,7 +71,7 @@ class StaffSerializer(serializers.ModelSerializer):
         return user
 
 # ==============================================================================
-# 2. PLATFORM & ANNOUNCEMENTS
+# 2. PLATFORM, PLANS & ANNOUNCEMENTS
 # ==============================================================================
 
 class PlatformSettingsSerializer(serializers.ModelSerializer):
@@ -93,6 +94,12 @@ class GlobalAnnouncementSerializer(serializers.ModelSerializer):
         fields = '__all__'
         
         # Protect system-managed fields
+        read_only_fields = ['id', 'created_at']
+
+class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriptionPlan
+        fields = '__all__'
         read_only_fields = ['id', 'created_at']
 
 # ==============================================================================

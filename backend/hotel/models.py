@@ -48,12 +48,38 @@ class HotelSettings(models.Model):
     # --- License System ---
     license_key = models.CharField(max_length=255, blank=True, null=True)
     license_expiry = models.DateField(null=True, blank=True)
+    
+    # Link to a Subscription Plan (Optional)
+    # plan = models.ForeignKey('SubscriptionPlan', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"Settings for {self.hotel_name}"
 
 # ==============================================================================
-# 2. CORE MODELS (Rooms, Guests, Bookings)
+# 2. SUBSCRIPTION PLANS (NEW - For SaaS Management)
+# ==============================================================================
+
+class SubscriptionPlan(models.Model):
+    PLAN_INTERVALS = (
+        ('month', 'Monthly'),
+        ('year', 'Yearly'),
+    )
+
+    name = models.CharField(max_length=100, unique=True) # e.g. "Gold Tier"
+    price = models.DecimalField(max_digits=10, decimal_places=2) # e.g. 1999.00
+    currency = models.CharField(max_length=10, default='INR')
+    interval = models.CharField(max_length=10, choices=PLAN_INTERVALS, default='month')
+    max_rooms = models.IntegerField(default=10)
+    features = models.JSONField(default=list) # Stores ["POS", "Inventory"]
+    color = models.CharField(max_length=20, default='blue') # UI Theme color
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} - ₹{self.price}"
+
+# ==============================================================================
+# 3. CORE MODELS (Rooms, Guests, Bookings)
 # ==============================================================================
 
 class Room(models.Model):
@@ -197,7 +223,7 @@ class BookingCharge(models.Model):
     date = models.DateField(auto_now_add=True)
 
 # ==============================================================================
-# 3. INVENTORY & POS
+# 4. INVENTORY & POS
 # ==============================================================================
 
 class InventoryItem(models.Model):
@@ -236,7 +262,7 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 # ==============================================================================
-# 4. OPERATIONS & LOGS
+# 5. OPERATIONS & LOGS
 # ==============================================================================
 
 class Expense(models.Model):
@@ -282,7 +308,7 @@ class ActivityLog(models.Model):
     def __str__(self): return f"{self.action} - {self.timestamp}"
 
 # ==============================================================================
-# 5. SAAS PLATFORM SETTINGS (SUPER ADMIN ONLY)
+# 6. SAAS PLATFORM SETTINGS (SUPER ADMIN ONLY)
 # ==============================================================================
 
 class PlatformSettings(models.Model):
@@ -310,7 +336,10 @@ class PlatformSettings(models.Model):
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
 
-    # --- EDITABLE WELCOME EMAIL ---
+    # 🟢 NEW: Global Maintenance Mode Switch
+    maintenance_mode = models.BooleanField(default=False)
+
+    # --- EDITABLE WELCOME MESSAGES ---
     welcome_email_subject = models.CharField(
         max_length=255, 
         default="Welcome to {app_name} - Your Hotel Manager",
@@ -319,6 +348,12 @@ class PlatformSettings(models.Model):
     welcome_email_body = models.TextField(
         default="Hi {name},\n\nWelcome to {app_name}! Your account has been created.\n\nUsername: {username}\nPassword: {password}\n\nLogin here: http://16.171.144.127/login\n\nBest,\n{company_name}",
         help_text="Available placeholders: {name}, {app_name}, {username}, {password}, {company_name}"
+    )
+    
+    # 🟢 NEW: WhatsApp Welcome Message Template
+    welcome_whatsapp_msg = models.TextField(
+        default="Welcome to {app_name}! Your hotel {hotel} is now live. Login at: http://16.171.144.127/login",
+        help_text="Available placeholders: {name}, {app_name}, {hotel}"
     )
 
     def save(self, *args, **kwargs):
@@ -330,7 +365,7 @@ class PlatformSettings(models.Model):
         return "Global Platform Configuration"
 
 # ==============================================================================
-# 6. GLOBAL ANNOUNCEMENTS (SUPER ADMIN BROADCAST)
+# 7. GLOBAL ANNOUNCEMENTS (SUPER ADMIN BROADCAST)
 # ==============================================================================
 
 class GlobalAnnouncement(models.Model):

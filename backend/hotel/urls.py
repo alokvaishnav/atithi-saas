@@ -16,6 +16,7 @@ from .views import (
     HousekeepingViewSet, 
     ActivityLogViewSet, 
     StaffViewSet,
+    SubscriptionPlanViewSet, # 🟢 NEW: Plan Management
 
     # --- Auth & Account Views ---
     CustomTokenObtainPairView,  # Login (JWT)
@@ -45,7 +46,7 @@ from .views import (
 
     # --- Public Booking Views ---
     PublicHotelView, 
-    PublicBookingCreateView
+    PublicBookingCreateView,
 )
 
 # ==========================================
@@ -63,6 +64,9 @@ router.register(r'expenses', ExpenseViewSet)
 router.register(r'services', MenuItemViewSet) # Mapped to 'services' (Food/Laundry items)
 router.register(r'orders', OrderViewSet)
 router.register(r'housekeeping', HousekeepingViewSet)
+
+# 🟢 NEW: Subscription Plans (Super Admin Only)
+router.register(r'plans', SubscriptionPlanViewSet)
 
 # Critical: 'basename' is required here because these ViewSets likely use 
 # distinct get_queryset() logic (e.g., filtering by owner) rather than a static .queryset attribute.

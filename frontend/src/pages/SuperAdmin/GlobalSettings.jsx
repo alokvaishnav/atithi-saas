@@ -71,147 +71,224 @@ const GlobalSettings = () => {
   if (!isAuthorized && !loading) return <AccessDenied user={user} logout={logout} />;
 
   // ==================================================================================
-  // 1. DATA ENGINE
+  // 1. DATA ENGINE (Optimized & Safe)
   // ==================================================================================
   const fetchAllData = useCallback(async (isInitial = false) => {
     if (!token) return;
+
+    // Helper for headers to avoid repetition
+    const getHeaders = () => ({ 
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json' 
+    });
+
     try {
       if (isInitial) setLoading(true);
       else setRefreshing(true);
 
-      const headers = { 'Authorization': `Bearer ${token}` };
       const start = Date.now();
 
-      const [statsRes, logsRes, configRes] = await Promise.all([
-          fetch(`${API_URL}/api/super-admin/stats/`, { headers }).catch(e => null),
-          fetch(`${API_URL}/api/logs/`, { headers }).catch(e => null),
-          fetch(`${API_URL}/api/super-admin/platform-settings/`, { headers }).catch(e => null)
+      // 1. Fetch all core data in parallel
+      const [statsRes, logsRes, configRes, plansRes] = await Promise.all([
+        fetch(`${API_URL}/api/super-admin/stats/`, { headers: getHeaders() }).catch(e => null),
+        fetch(`${API_URL}/api/logs/`, { headers: getHeaders() }).catch(e => null),
+        fetch(`${API_URL}/api/super-admin/platform-settings/`, { headers: getHeaders() }).catch(e => null),
+        fetch(`${API_URL}/api/plans/`, { headers: getHeaders() }).catch(e => null)
       ]);
-      
-      const latency = Date.now() - start;
-      setSystemHealth(prev => ({ ...prev, latency, status: statsRes?.ok ? 'ONLINE' : 'DEGRADED' }));
 
+      // 2. Calculate Latency & Health
+      const latency = Date.now() - start;
+      setSystemHealth(prev => ({ 
+        ...prev, 
+        latency, 
+        status: statsRes?.ok ? 'ONLINE' : 'DEGRADED' 
+      }));
+
+      // 3. Process Stats & Tenants
       if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
-        // 🟢 CRITICAL SAFETY FIX: Ensure 'hotels' is always an array
-        const safeHotels = Array.isArray(data.hotels) ? data.hotels : [];
-        setTenants(safeHotels);
-        setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
+        
+        // 🟢 CRITICAL SAFETY: Ensure arrays are actually arrays to prevent .map() crashes
+        setTenants(Array.isArray(data.hotels) ? data.hotels : []);
+        setStats(data.stats || { 
+          total_hotels: 0, 
+          active_licenses: 0, 
+          platform_revenue: 0, 
+          total_rooms: 0 
+        });
         setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
-        // Future: If backend sends plans, update them here: setPlans(data.plans);
       } else {
-        // Fallback if request fails
-        setTenants([]); 
+        setTenants([]); // Fallback
       }
 
+      // 4. Process Plans (New)
+      if (plansRes && plansRes.ok) {
+        const plansData = await plansRes.json();
+        setPlans(Array.isArray(plansData) ? plansData : []);
+      }
+
+      // 5. Process Logs
       if (logsRes && logsRes.ok) {
-          const logData = await logsRes.json();
-          setLogs(Array.isArray(logData) ? logData : []);
+        const logData = await logsRes.json();
+        setLogs(Array.isArray(logData) ? logData : []);
       }
-      
-      if (configRes && configRes.ok) setPlatformConfig(await configRes.json());
 
-    } catch (err) { 
-      console.error("SuperAdmin Engine Error:", err); 
+      // 6. Process Config
+      if (configRes && configRes.ok) {
+        setPlatformConfig(await configRes.json());
+      }
+
+    } catch (err) {
+      console.error("SuperAdmin Engine Error:", err);
       setSystemHealth({ status: 'OFFLINE', latency: 0, db: 'DISCONNECTED' });
-      setTenants([]); // 🟢 Safety Fallback
-    } finally { 
-      setLoading(false); 
+      setMsg({ type: 'error', text: 'Failed to sync with server' });
+    } finally {
+      setLoading(false);
       setRefreshing(false);
     }
-  }, [token]); 
+  }, [token, API_URL]);
 
-  useEffect(() => { fetchAllData(true); }, [fetchAllData]);
+  // Initial Load
+  useEffect(() => { 
+    fetchAllData(true); 
+  }, [fetchAllData]);
 
   // ==================================================================================
-  // 2. TENANT ACTIONS
+  // 2. TENANT ACTIONS (Create, Update, Toggle)
   // ==================================================================================
 
+  // 🟢 CREATE NEW TENANT
   const handleCreateTenant = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Find selected plan details to apply limits immediately
+
+    // 1. Determine Limits based on Plan
     const selectedPlanObj = plans.find(p => p.name === formData.plan);
     const maxRoomsLimit = selectedPlanObj ? selectedPlanObj.max_rooms : 20;
 
     try {
-        const res = await fetch(`${API_URL}/api/register/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ 
-                username: formData.domain, 
-                email: formData.admin_email,
-                password: 'DefaultPassword123!', 
-                first_name: formData.name, 
-                last_name: 'Admin', 
-                role: 'OWNER',
-                plan: formData.plan, // 🟢 Send selected plan
-                max_rooms: maxRoomsLimit // 🟢 Send plan limit
-            })
-        });
+      const res = await fetch(`${API_URL}/api/register/`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          username: formData.domain,
+          email: formData.admin_email,
+          password: 'DefaultPassword123!', // ⚠️ Security Note: Consider generating random passwords
+          first_name: formData.name,
+          last_name: 'Admin',
+          role: 'OWNER',
+          plan: formData.plan,
+          max_rooms: maxRoomsLimit
+        })
+      });
 
-        if (res.ok) {
-            setShowCreateModal(false);
-            setFormData({ name: '', domain: '', admin_email: '', plan: plans[0]?.name || 'Standard' });
-            fetchAllData(false);
-            alert("🚀 Tenant Deployed Successfully");
-        } else {
-            const errData = await res.json();
-            alert("Deployment Failed: " + (errData.detail || "Unknown error"));
-        }
-    } catch (err) { alert("Network Error"); } 
-    finally { setIsSubmitting(false); }
+      if (res.ok) {
+        setShowCreateModal(false);
+        // Reset Form
+        setFormData({ name: '', domain: '', admin_email: '', plan: plans[0]?.name || 'Standard' });
+        
+        // Refresh Data
+        await fetchAllData(false);
+        
+        // Success Message
+        setMsg({ type: 'success', text: '🚀 Tenant Deployed Successfully' });
+        setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+      } else {
+        const errData = await res.json();
+        setMsg({ type: 'error', text: errData.detail || "Deployment Failed" });
+      }
+    } catch (err) {
+      setMsg({ type: 'error', text: "Network Connection Error" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // 🟢 UPDATE EXISTING TENANT
   const handleUpdateTenant = async (e) => {
-      e.preventDefault();
-      setIsSubmitting(true);
-      try {
-          const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({
-                  action: 'edit_tenant',
-                  hotel_id: editingTenant.id,
-                  ...tenantForm
-              })
-          });
-          if(res.ok) {
-              setEditingTenant(null);
-              fetchAllData(false);
-              setMsg({ type: 'success', text: 'Tenant Configuration Updated' });
-              setTimeout(() => setMsg({type:'', text:''}), 3000);
-          } else {
-              alert("Update Failed");
-          }
-      } catch(err) { alert("Network Error"); }
-      finally { setIsSubmitting(false); }
+    e.preventDefault();
+    if (!editingTenant) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Note: Using the stats endpoint for updates based on existing backend logic
+      const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          action: 'edit_tenant',
+          hotel_id: editingTenant.id,
+          ...tenantForm
+        })
+      });
+
+      if (res.ok) {
+        setEditingTenant(null);
+        await fetchAllData(false); // Refresh list
+        setMsg({ type: 'success', text: 'Tenant Configuration Updated' });
+      } else {
+        setMsg({ type: 'error', text: 'Failed to update tenant details' });
+      }
+    } catch (err) {
+      setMsg({ type: 'error', text: "Network Error during update" });
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+    }
   };
 
-  const handleToggleStatus = async (id) => {
-      if(!confirm("Change tenant status?")) return;
-      try {
-        await fetch(`${API_URL}/api/super-admin/stats/`, { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ action: 'toggle_status', hotel_id: id }) 
-        });
-        fetchAllData(false);
-      } catch(e) {}
+  // 🟢 TOGGLE STATUS (Active/Inactive)
+  const handleToggleStatus = async (id, currentStatus) => {
+    // Optional: Add a custom UI confirmation instead of browser confirm
+    if (!window.confirm(`Are you sure you want to ${currentStatus ? 'disable' : 'enable'} this tenant?`)) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ 
+          action: 'toggle_status', 
+          hotel_id: id 
+        })
+      });
+
+      if (res.ok) {
+        await fetchAllData(false);
+        setMsg({ type: 'success', text: 'Status updated successfully' });
+      } else {
+        setMsg({ type: 'error', text: 'Failed to change status' });
+      }
+    } catch (e) {
+      console.error(e);
+      setMsg({ type: 'error', text: 'Network Error' });
+    } finally {
+      setTimeout(() => setMsg({ type: '', text: '' }), 3000);
+    }
   };
 
   // ==================================================================================
   // 3. PLAN MANAGEMENT ACTIONS
   // ==================================================================================
 
-  const handleSavePlan = (e) => {
+  const handleSavePlan = async (e) => {
       e.preventDefault();
+      setIsSubmitting(true);
       // NOTE: In a real app, send this to backend (POST /api/plans/). 
       // For now, we simulate strictly in UI state.
-      const featuresArray = planForm.features.split(',').map(f => f.trim()).filter(f => f !== '');
-      const newPlanObj = {
-          id: editingPlan ? editingPlan.id : Date.now(),
+      const featuresArray = typeof planForm.features === 'string'
+      ? planForm.features.split(',').map(f => f.trim()).filter(f => f !== '')
+      : planForm.features;
+
+      const payload = {
           name: planForm.name,
           price: planForm.price,
           currency: 'INR',
@@ -220,6 +297,38 @@ const GlobalSettings = () => {
           features: featuresArray,
           color: planForm.color
       };
+
+      try {
+          const url = editingPlan 
+            ? `${API_URL}/api/plans/${editingPlan.id}/` 
+            : `${API_URL}/api/plans/`;
+
+          const method = editingPlan ? 'PATCH' : 'POST';
+
+          const res = await fetch(url, {
+              method: method,
+              headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}` 
+              },
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              setMsg({ type: 'success', text: 'Subscription Plan Saved Successfully' });
+              setShowPlanModal(false);
+              setEditingPlan(null);
+              fetchAllData(false); // Refresh list
+          } else {
+              alert("Failed to save plan. Check console.");
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Network Error");
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
 
       if (editingPlan) {
           setPlans(plans.map(p => p.id === editingPlan.id ? newPlanObj : p));
@@ -233,9 +342,16 @@ const GlobalSettings = () => {
       setTimeout(() => setMsg({type:'', text:''}), 3000);
   };
 
-  const handleDeletePlan = (id) => {
-      if(confirm("Delete this plan? Existing subscribers will remain on this plan until moved.")) {
-          setPlans(plans.filter(p => p.id !== id));
+  const handleDeletePlan = async (id) => {
+      if(!confirm("Delete this plan from database?")) return;
+      try {
+          await fetch(`${API_URL}/api/plans/${id}/`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+          });
+          fetchAllData(false);
+      } catch (err) {
+          alert("Delete failed");
       }
   };
 
