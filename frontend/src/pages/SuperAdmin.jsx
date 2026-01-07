@@ -2,55 +2,49 @@ import { useEffect, useState, useCallback } from 'react';
 import { 
   Server, Shield, Building, Activity, 
   Search, Power, Trash2, Plus, Loader2, 
-  Database, Cpu, CheckCircle, Edit3,
-  TrendingUp, RefreshCw, X, Key, Calendar,
+  Database, Cpu, CheckCircle,
+  TrendingUp, RefreshCw, X, Key,
   ShieldCheck, History, Globe, Settings2,
-  Zap, AlertTriangle, Copy, Mail, MessageCircle, Save, Megaphone
+  Zap, AlertTriangle, Copy, Mail, MessageCircle, Save, Upload
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
-const GlobalSettings = () => {
-  // 🟢 1. HOOKS (Must be at the top)
+const SuperAdmin = () => {
   const { token, user } = useAuth(); 
   
-  // --- DATA STATE ---
+  // --- STATE HOOKS (Must be at the top) ---
+  
+  // Data State
   const [tenants, setTenants] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
   const [stats, setStats] = useState({ 
     total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 
   });
   const [logs, setLogs] = useState([]);
   
-  // --- PLATFORM CONFIG STATE ---
-  const [activeTab, setActiveTab] = useState('DASHBOARD'); // DASHBOARD, ANNOUNCEMENTS, CONFIG
+  // Platform Config State
+  const [activeTab, setActiveTab] = useState('DASHBOARD'); // DASHBOARD, CONFIG
   const [platformConfig, setPlatformConfig] = useState({
     app_name: '', company_name: '', support_email: '', support_phone: '',
     smtp_host: '', smtp_port: '587', smtp_user: '', smtp_password: '',
-    welcome_email_subject: '', welcome_email_body: ''
+    whatsapp_phone_id: '', whatsapp_token: ''
   });
 
-  // --- UI STATE ---
+  // UI State
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [msg, setMsg] = useState({ type: '', text: '' });
   
-  // --- MODAL STATES ---
+  // Modals State
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState(null); // For Inspection
-  const [editingHotel, setEditingHotel] = useState(null);     // For Editing (Name/License)
+  const [selectedTenant, setSelectedTenant] = useState(null);
   
-  // --- FORM STATES ---
+  // Form State
   const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'PRO' });
-  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '' });
-  const [editForm, setEditForm] = useState({ hotel_name: '', license_expiry: '' });
 
-  // ==================================================================================
-  // 1. DATA FETCHING ENGINE
-  // ==================================================================================
+  // --- 1. FETCH DATA ENGINE ---
   const fetchAllData = useCallback(async (isInitial = false) => {
     if (!token) return;
     try {
@@ -59,18 +53,18 @@ const GlobalSettings = () => {
 
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      // Parallel Fetch with individual fail-safes
+      // We use individual try-catches or handle promises so one failure doesn't kill the page
       const [statsRes, logsRes, configRes] = await Promise.all([
-          fetch(`${API_URL}/api/super-admin/stats/`, { headers }).catch(e => null),
-          fetch(`${API_URL}/api/logs/`, { headers }).catch(e => null),
-          fetch(`${API_URL}/api/super-admin/platform-settings/`, { headers }).catch(e => null)
+          fetch(`${API_URL}/api/super-admin/stats/`, { headers }).catch(err => null),
+          fetch(`${API_URL}/api/logs/`, { headers }).catch(err => null),
+          fetch(`${API_URL}/api/super-admin/platform-settings/`, { headers }).catch(err => null)
       ]);
       
       if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
+        // Ensure hotels is an array
         setTenants(Array.isArray(data.hotels) ? data.hotels : []);
         setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
-        setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
       }
 
       if (logsRes && logsRes.ok) {
@@ -90,19 +84,16 @@ const GlobalSettings = () => {
     }
   }, [token]); 
 
-  // --- USE EFFECT ---
+  // --- 2. EFFECTS ---
   useEffect(() => { 
       fetchAllData(true); 
   }, [fetchAllData]);
 
-  // ==================================================================================
-  // 2. TENANT ACTIONS
-  // ==================================================================================
+  // --- 3. ACTIONS ---
 
-  // A. Toggle Status (Active/Suspended)
   const toggleStatus = async (id, currentStatus) => {
     const originalTenants = [...tenants];
-    setTenants(tenants.map(t => t.id === id ? { ...t, is_active: !t.is_active } : t)); // Optimistic UI
+    setTenants(tenants.map(t => t.id === id ? { ...t, is_active: !t.is_active } : t)); // Optimistic Update
 
     if(!window.confirm(`Confirm: ${currentStatus === 'ACTIVE' ? 'SUSPEND' : 'ACTIVATE'} Node ID #${id}?`)) {
         setTenants(originalTenants); 
@@ -125,14 +116,12 @@ const GlobalSettings = () => {
     }
   };
 
-  // B. Generate License Key
   const generateLicenseKey = (hotelId) => {
       const randomKey = `ATITHI-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-PRO`;
       navigator.clipboard.writeText(randomKey);
       alert(`LICENSE GENERATED & COPIED TO CLIPBOARD:\n\n${randomKey}`);
   };
 
-  // C. Create New Tenant
   const handleCreate = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -167,78 +156,7 @@ const GlobalSettings = () => {
     }
   };
 
-  // D. Edit Tenant (Name & License)
-  const openEditModal = (hotel) => {
-    setEditingHotel(hotel);
-    // Populate form with existing data (handle nested hotel_settings object)
-    setEditForm({
-        hotel_name: hotel.hotel_settings?.hotel_name || hotel.hotel_name || '',
-        license_expiry: hotel.hotel_settings?.license_expiry || ''
-    });
-  };
-
-  const handleSaveTenantEdit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-        const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-                action: 'edit_tenant',
-                hotel_id: editingHotel.id,
-                ...editForm
-            })
-        });
-
-        if(res.ok) {
-            setMsg({ type: 'success', text: 'Tenant updated successfully' });
-            setEditingHotel(null);
-            fetchAllData(false); // Refresh data
-            setTimeout(() => setMsg({type:'', text:''}), 3000);
-        } else {
-            setMsg({ type: 'error', text: 'Update failed on server' });
-        }
-    } catch (err) {
-        setMsg({ type: 'error', text: 'Network Error' });
-    } finally {
-        setIsSubmitting(false);
-    }
-  };
-
-  // ==================================================================================
-  // 3. ANNOUNCEMENTS & CONFIG ACTIONS
-  // ==================================================================================
-
-  const handlePostAnnouncement = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-        await fetch(`${API_URL}/api/super-admin/stats/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ action: 'create_announcement', ...newAnnouncement })
-        });
-        setNewAnnouncement({ title: '', message: '' });
-        fetchAllData(false);
-        setMsg({ type: 'success', text: 'Announcement Broadcasted!' });
-        setTimeout(() => setMsg({ type: '', text: '' }), 3000);
-    } catch (err) { alert("Failed to post"); }
-    finally { setIsSubmitting(false); }
-  };
-
-  const handleDeleteAnnouncement = async (id) => {
-      if(!confirm("Delete this announcement?")) return;
-      try {
-          await fetch(`${API_URL}/api/super-admin/stats/`, { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ action: 'delete_announcement', id }) 
-          });
-          fetchAllData(false);
-      } catch (err) {}
-  };
-
+  // --- SAVE PLATFORM CONFIG ---
   const handleSaveConfig = async (e) => {
       e.preventDefault();
       setIsSubmitting(true);
@@ -254,9 +172,10 @@ const GlobalSettings = () => {
       finally { setIsSubmitting(false); }
   };
 
-  // 🟢 4. CONDITIONAL RENDER (Must be AFTER hooks)
-  
+  // --- 4. CONDITIONAL RENDERS (Must be AFTER hooks) ---
+
   // 🛡️ SECURITY: Double Check Access
+  // We check this AFTER hooks are declared to avoid React errors
   if (!user?.is_superuser && user?.role !== 'SUPERADMIN' && !loading) {
       return (
         <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-4">
@@ -270,17 +189,20 @@ const GlobalSettings = () => {
   // --- FILTER LOGIC ---
   const filteredTenants = tenants.filter(t => {
     const term = searchTerm.toLowerCase();
-    const nameMatch = (t.hotel_settings?.hotel_name || t.username || '').toLowerCase().includes(term);
-    const emailMatch = (t.email || '').toLowerCase().includes(term);
+    // Safety check for hotel_settings
+    const hotelName = t.hotel_settings?.hotel_name || t.username || '';
+    const email = t.email || '';
+    
+    const matchesSearch = hotelName.toLowerCase().includes(term) || email.toLowerCase().includes(term);
     
     const isActive = t.is_active;
     const matchesStatus = statusFilter === 'ALL' || 
                           (statusFilter === 'ACTIVE' && isActive) || 
                           (statusFilter === 'SUSPENDED' && !isActive);
-    return (nameMatch || emailMatch) && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
-  // --- LOADING RENDER ---
+  // --- LOADING STATE ---
   if (loading) return (
     <div className="h-screen bg-slate-950 flex flex-col items-center justify-center gap-6">
         <div className="relative">
@@ -294,9 +216,6 @@ const GlobalSettings = () => {
     </div>
   );
 
-  // ==================================================================================
-  // MAIN RENDER
-  // ==================================================================================
   return (
     <div className="p-4 md:p-8 bg-slate-950 min-h-screen font-sans text-white animate-in fade-in duration-700">
       
@@ -314,16 +233,13 @@ const GlobalSettings = () => {
         </div>
         
         <div className="flex gap-4">
-            <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 overflow-x-auto">
-                {['DASHBOARD', 'ANNOUNCEMENTS', 'CONFIG'].map(tab => (
-                    <button 
-                        key={tab}
-                        onClick={() => setActiveTab(tab)} 
-                        className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
-                    >
-                        {tab}
-                    </button>
-                ))}
+            <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800">
+                <button onClick={() => setActiveTab('DASHBOARD')} className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'DASHBOARD' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                    Dashboard
+                </button>
+                <button onClick={() => setActiveTab('CONFIG')} className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'CONFIG' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                    Global Config
+                </button>
             </div>
             {activeTab === 'DASHBOARD' && (
                 <button onClick={() => setShowCreateModal(true)} className="bg-white text-slate-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
@@ -332,12 +248,6 @@ const GlobalSettings = () => {
             )}
         </div>
       </div>
-
-      {msg.text && (
-        <div className={`p-4 mb-6 rounded-xl border flex items-center gap-3 animate-in slide-in-from-top-2 ${msg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-          <span className="font-bold text-sm">{msg.text}</span>
-        </div>
-      )}
 
       {/* --- VIEW: DASHBOARD --- */}
       {activeTab === 'DASHBOARD' && (
@@ -410,12 +320,8 @@ const GlobalSettings = () => {
                                         </td>
                                         <td className="p-6 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => setSelectedTenant(t)} className="p-2 bg-slate-800 text-slate-400 rounded-lg hover:text-white hover:bg-slate-700 transition-all" title="Inspect Node"><Activity size={16}/></button>
-                                                
-                                                <button onClick={() => openEditModal(t)} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-400/10 transition-all" title="Edit Tenant"><Edit3 size={16}/></button>
-                                                
-                                                <button onClick={() => generateLicenseKey(t.id)} className="p-2 bg-slate-800 text-yellow-400 rounded-lg hover:bg-yellow-400/10 transition-all" title="Generate Key"><Key size={16}/></button>
-                                                
+                                                <button onClick={() => setSelectedTenant(t)} className="p-2 bg-slate-800 text-slate-400 rounded-lg hover:text-white hover:bg-slate-700 transition-all"><Activity size={16}/></button>
+                                                <button onClick={() => generateLicenseKey(t.id)} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-400/10 transition-all"><Key size={16}/></button>
                                                 <button onClick={() => toggleStatus(t.id, t.is_active ? 'ACTIVE' : 'SUSPENDED')} className={`p-2 rounded-lg transition-all ${!t.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'} hover:text-white`}>
                                                     <Power size={16}/>
                                                 </button>
@@ -448,44 +354,6 @@ const GlobalSettings = () => {
                 </div>
             </div>
         </div>
-      )}
-
-      {/* --- VIEW: ANNOUNCEMENTS --- */}
-      {activeTab === 'ANNOUNCEMENTS' && (
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-right-4">
-             {/* Create Form */}
-             <div className="md:col-span-1 bg-slate-900 p-6 rounded-3xl shadow-lg border border-slate-800 h-fit">
-                 <h3 className="font-black text-white mb-4 flex items-center gap-2"><Megaphone size={20} className="text-orange-400"/> New Announcement</h3>
-                 <form onSubmit={handlePostAnnouncement} className="space-y-4">
-                     <div>
-                         <label className="text-[10px] font-black text-slate-500 uppercase">Title</label>
-                         <input required className="w-full p-3 bg-slate-950 rounded-xl border border-slate-800 text-white font-bold outline-none focus:border-purple-500" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} />
-                     </div>
-                     <div>
-                         <label className="text-[10px] font-black text-slate-500 uppercase">Message</label>
-                         <textarea required rows="4" className="w-full p-3 bg-slate-950 rounded-xl border border-slate-800 text-white text-sm outline-none focus:border-purple-500" value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})} />
-                     </div>
-                     <button type="submit" disabled={isSubmitting} className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-500 transition-colors flex justify-center items-center gap-2">
-                         {isSubmitting ? <Loader2 className="animate-spin"/> : <Plus size={18}/>} Post to All Dashboards
-                     </button>
-                 </form>
-             </div>
-
-             {/* List */}
-             <div className="md:col-span-2 space-y-4">
-                 {announcements.map(ann => (
-                     <div key={ann.id} className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-sm flex justify-between items-start">
-                         <div>
-                             <h4 className="font-bold text-white text-lg">{ann.title}</h4>
-                             <p className="text-slate-400 mt-1">{ann.message}</p>
-                             <p className="text-xs text-slate-600 mt-4 font-mono">{new Date(ann.created_at).toLocaleString()}</p>
-                         </div>
-                         <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-400 hover:text-red-500 bg-slate-950 p-2 rounded-lg border border-slate-800"><Trash2 size={18}/></button>
-                     </div>
-                 ))}
-                 {announcements.length === 0 && <div className="text-center text-slate-600 p-10 font-bold uppercase tracking-widest">No active announcements</div>}
-             </div>
-         </div>
       )}
 
       {/* --- VIEW: GLOBAL CONFIG --- */}
@@ -561,7 +429,7 @@ const GlobalSettings = () => {
           </div>
       )}
 
-      {/* --- MODAL 1: CREATE TENANT --- */}
+      {/* CREATE MODAL */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
             <form onSubmit={handleCreate} className="bg-slate-900 p-10 rounded-[40px] w-full max-w-lg border border-slate-700 space-y-6 shadow-2xl relative">
@@ -614,7 +482,7 @@ const GlobalSettings = () => {
         </div>
       )}
 
-      {/* --- MODAL 2: INSPECTION MODAL --- */}
+      {/* INSPECTION MODAL */}
       {selectedTenant && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
             <div className="bg-slate-900 p-12 rounded-[50px] w-full max-w-xl border border-slate-700 shadow-2xl relative overflow-hidden">
@@ -647,37 +515,6 @@ const GlobalSettings = () => {
         </div>
       )}
 
-      {/* --- MODAL 3: EDIT TENANT (Name & License) --- */}
-      {editingHotel && (
-          <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-              <div className="bg-slate-900 p-8 rounded-[40px] w-full max-w-md border border-slate-700 shadow-2xl relative">
-                  <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xl font-black text-white uppercase tracking-wider">Modify Tenant</h3>
-                      <button onClick={() => setEditingHotel(null)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X size={20}/></button>
-                  </div>
-                  <form onSubmit={handleSaveTenantEdit} className="space-y-4">
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Hotel Name</label>
-                          <input className="w-full p-3 bg-slate-950 rounded-xl border border-slate-800 font-bold text-white focus:border-blue-500 outline-none" 
-                              value={editForm.hotel_name} onChange={e => setEditForm({...editForm, hotel_name: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">License Expiry (YYYY-MM-DD)</label>
-                          <div className="relative">
-                            <Calendar className="absolute left-3 top-3 text-slate-500" size={18}/>
-                            <input type="date" className="w-full pl-10 p-3 bg-slate-950 rounded-xl border border-slate-800 font-bold text-white focus:border-blue-500 outline-none" 
-                                value={editForm.license_expiry} onChange={e => setEditForm({...editForm, license_expiry: e.target.value})} />
-                          </div>
-                          <p className="text-[9px] text-slate-600 mt-1 uppercase tracking-widest">Leave empty for Lifetime Access</p>
-                      </div>
-                      <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-500 transition-colors uppercase tracking-widest text-xs">
-                          {isSubmitting ? <Loader2 className="animate-spin inline mr-2"/> : null} Save Changes
-                      </button>
-                  </form>
-              </div>
-          </div>
-      )}
-
     </div>
   );
 };
@@ -698,4 +535,4 @@ const DetailBox = ({ label, val, highlight = "text-white" }) => (
     </div>
 );
 
-export default GlobalSettings;
+export default SuperAdmin;
