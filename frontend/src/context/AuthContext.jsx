@@ -15,21 +15,28 @@ export const AuthProvider = ({ children }) => {
 
   const navigate = useNavigate();
 
-  // 1️⃣ HELPER: Validate JWT Format
-  // A valid JWT must have 3 parts separated by dots (header.payload.signature)
-  const isValidToken = (str) => {
-      return str && 
-             typeof str === 'string' && 
-             str.split('.').length === 3 && 
-             !str.includes('"') && 
-             !str.includes('null') &&
-             !str.includes('undefined');
+  // 1️⃣ HELPER: Sanitize Token
+  // Removes extra quotes, whitespace, and handles "null" strings
+  // This fixes the "400 Bad Request" caused by double-stringified tokens
+  const cleanToken = (str) => {
+      if (!str || typeof str !== 'string') return null;
+      if (str === 'null' || str === 'undefined') return null;
+      return str.replace(/"/g, '').trim();
   };
 
-  // 2️⃣ Centralized Logout
+  // 2️⃣ HELPER: Validate JWT Structure
+  // A valid JWT must have 3 parts separated by dots (header.payload.signature)
+  const isValidJwtStructure = (str) => {
+      if (!str) return false;
+      const parts = str.split('.');
+      return parts.length === 3;
+  };
+
+  // 3️⃣ Centralized Logout
   const logout = useCallback(() => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user_data');
+    localStorage.removeItem('refresh_token');
     setUser(null);
     setRole(null);
     setToken(null);
@@ -38,18 +45,21 @@ export const AuthProvider = ({ children }) => {
     navigate('/login'); 
   }, [navigate]);
 
-  // 3️⃣ App Initialization
+  // 4️⃣ App Initialization
   useEffect(() => {
     const initAuth = () => {
         try {
-            const storedToken = localStorage.getItem('access_token');
+            const rawToken = localStorage.getItem('access_token');
             const storedUserData = localStorage.getItem('user_data');
 
-            // 🟢 CRITICAL FIX: Only load if token is structurally valid
-            if (isValidToken(storedToken) && storedUserData) {
+            // Step A: Sanitize the token
+            const validToken = cleanToken(rawToken);
+
+            // Step B: Validate Structure & User Data
+            if (isValidJwtStructure(validToken) && storedUserData) {
                 const parsedUser = JSON.parse(storedUserData);
                 
-                setToken(storedToken);
+                setToken(validToken); // 🟢 Load the CLEAN token
                 setUser(parsedUser);
                 
                 // Role Logic
@@ -66,14 +76,14 @@ export const AuthProvider = ({ children }) => {
                 
                 setIsAuthenticated(true);
             } else {
-                // If data exists but is invalid (corrupted), clear it silently
-                if (storedToken || storedUserData) {
-                    console.warn("Found corrupted session data. Cleaning up.");
+                // If data exists but is corrupt/invalid, wipe it to stop loops
+                if (rawToken || storedUserData) {
+                    console.warn("AuthContext: Found corrupted session data. Auto-cleaning.");
                     localStorage.clear();
                 }
             }
         } catch (error) {
-            console.error("Auth Restoration Error:", error);
+            console.error("AuthContext: Restoration Error:", error);
             localStorage.clear();
         } finally {
             setLoading(false);
@@ -83,7 +93,7 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // 4️⃣ Login Function
+  // 5️⃣ Login Function
   const login = async (username, password) => {
     try {
         const res = await fetch(`${API_URL}/api/login/`, {
@@ -95,14 +105,17 @@ export const AuthProvider = ({ children }) => {
         const data = await res.json();
 
         if (res.ok) {
-            // A. Validate Token Integrity
-            if (!isValidToken(data.access)) {
-                return { success: false, msg: "Server returned invalid token format." };
+            // A. Sanitize & Validate Token immediately
+            const validToken = cleanToken(data.access);
+            
+            if (!isValidJwtStructure(validToken)) {
+                console.error("Login failed: Server returned malformed token.");
+                return { success: false, msg: "Server Error: Invalid security token." };
             }
 
-            // B. Save Clean Data
-            localStorage.setItem('access_token', data.access);
-            // Ignore refresh token for now to simplify
+            // B. Save Clean Data (No quotes!)
+            localStorage.setItem('access_token', validToken);
+            localStorage.setItem('refresh_token', data.refresh);
             
             // C. Role Logic
             const detectedRole = data.role === 'ADMIN' 
@@ -124,7 +137,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('user_data', JSON.stringify(userData));
 
             // D. Update State
-            setToken(data.access);
+            setToken(validToken);
             setRole(detectedRole);
             setHotelName(displayHotelName);
             setUser(userData);
@@ -135,7 +148,7 @@ export const AuthProvider = ({ children }) => {
             return { success: false, msg: data.detail || "Login failed" };
         }
     } catch (err) {
-        console.error("Login Error:", err);
+        console.error("Login Network Error:", err);
         return { success: false, msg: "Server connection failed" };
     }
   };

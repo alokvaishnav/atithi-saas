@@ -19,19 +19,18 @@ const LicenseLock = ({ children }) => {
 
   // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // 🟢 PHASE 1: PRE-CHECKS
-    // If Auth is still loading, do nothing yet (keep License in LOADING state or default ACTIVE)
+    // 🟢 PHASE 1: WAIT FOR AUTH TO INITIALIZE
     if (authLoading) {
         return;
     }
 
-    // 🟢 PHASE 2: TOKEN VALIDATION
+    // 🟢 PHASE 2: TOKEN SANITIZATION & VALIDATION
     // Ensure token is a string and clean it (remove extra quotes if present)
     const rawToken = typeof token === 'string' ? token : '';
     const cleanToken = rawToken.replace(/"/g, '').trim();
 
     // Regex for basic JWT structure (Header.Payload.Signature)
-    // This prevents sending garbage like "null", "undefined", or "false" to the server
+    // This prevents sending garbage like "null", "undefined" to the server
     const isJwtFormat = /^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/.test(cleanToken);
 
     if (!cleanToken || !isJwtFormat) {
@@ -53,14 +52,15 @@ const LicenseLock = ({ children }) => {
 
             // Handle Unauthorized (Token Expired) -> Logout
             if (res.status === 401) {
-                console.warn("License check: Token expired (401).");
+                console.warn("License check: Token expired (401). Logging out.");
                 logout();
                 return;
             }
 
             // Handle Bad Request (400) -> Ignore & Fail Open
+            // This stops the red error from crashing the UI loop
             if (res.status === 400) {
-                console.warn("License check: Bad Request (400). Skipping check.");
+                console.warn("License check: Bad Request (400). Token malformed. Skipping check.");
                 setStatus('ACTIVE');
                 return;
             }
