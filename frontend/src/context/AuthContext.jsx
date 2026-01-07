@@ -16,16 +16,12 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   // 1️⃣ HELPER: Sanitize Token
-  // Removes extra quotes, whitespace, and handles "null" strings
-  // This fixes the "400 Bad Request" caused by double-stringified tokens
   const cleanToken = (str) => {
-      if (!str || typeof str !== 'string') return null;
-      if (str === 'null' || str === 'undefined') return null;
+      if (!str || typeof str !== 'string' || str === 'null' || str === 'undefined') return null;
       return str.replace(/"/g, '').trim();
   };
 
   // 2️⃣ HELPER: Validate JWT Structure
-  // A valid JWT must have 3 parts separated by dots (header.payload.signature)
   const isValidJwtStructure = (str) => {
       if (!str) return false;
       const parts = str.split('.');
@@ -34,9 +30,7 @@ export const AuthProvider = ({ children }) => {
 
   // 3️⃣ Centralized Logout
   const logout = useCallback(() => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user_data');
-    localStorage.removeItem('refresh_token');
+    localStorage.clear();
     setUser(null);
     setRole(null);
     setToken(null);
@@ -52,33 +46,30 @@ export const AuthProvider = ({ children }) => {
             const rawToken = localStorage.getItem('access_token');
             const storedUserData = localStorage.getItem('user_data');
 
-            // Step A: Sanitize the token
             const validToken = cleanToken(rawToken);
 
-            // Step B: Validate Structure & User Data
             if (isValidJwtStructure(validToken) && storedUserData) {
                 const parsedUser = JSON.parse(storedUserData);
                 
-                setToken(validToken); // 🟢 Load the CLEAN token
+                setToken(validToken);
                 setUser(parsedUser);
                 
-                // Role Logic
-                const activeRole = parsedUser.role === 'ADMIN' 
-                    ? 'ADMIN' 
-                    : (parsedUser.is_superuser ? 'OWNER' : (parsedUser.role || 'STAFF'));
+                // 🟢 ADVANCED ROLE LOGIC (Restoration)
+                // If is_superuser is true, ALWAYS force role to OWNER/SUPERADMIN
+                // This prevents "Staff" defaults for global admins.
+                let activeRole = parsedUser.role || 'STAFF';
+                if (parsedUser.is_superuser) activeRole = 'OWNER';
                 
                 setRole(activeRole);
                 
-                // Hotel Name Logic
                 const settingsName = parsedUser.hotel_settings?.hotel_name;
                 const flatName = parsedUser.hotel_name;
                 setHotelName(settingsName || flatName || 'Atithi HMS');
                 
                 setIsAuthenticated(true);
             } else {
-                // If data exists but is corrupt/invalid, wipe it to stop loops
                 if (rawToken || storedUserData) {
-                    console.warn("AuthContext: Found corrupted session data. Auto-cleaning.");
+                    console.warn("AuthContext: Session invalid. Cleaning up.");
                     localStorage.clear();
                 }
             }
@@ -105,22 +96,27 @@ export const AuthProvider = ({ children }) => {
         const data = await res.json();
 
         if (res.ok) {
-            // A. Sanitize & Validate Token immediately
+            // A. Validate Token
             const validToken = cleanToken(data.access);
-            
             if (!isValidJwtStructure(validToken)) {
-                console.error("Login failed: Server returned malformed token.");
                 return { success: false, msg: "Server Error: Invalid security token." };
             }
 
-            // B. Save Clean Data (No quotes!)
+            // B. Save Token
             localStorage.setItem('access_token', validToken);
             localStorage.setItem('refresh_token', data.refresh);
             
-            // C. Role Logic
-            const detectedRole = data.role === 'ADMIN' 
-                ? 'ADMIN' 
-                : (data.is_superuser ? 'OWNER' : (data.role || 'STAFF'));
+            // 🟢 C. ADVANCED ROLE RESOLUTION
+            // Priority:
+            // 1. If is_superuser is TRUE -> Role is 'OWNER' (Overrides everything)
+            // 2. If explicit role is 'ADMIN' -> Role is 'ADMIN'
+            // 3. Fallback -> 'STAFF'
+            let detectedRole = data.role;
+            if (data.is_superuser) {
+                detectedRole = 'OWNER'; 
+            } else if (!detectedRole) {
+                detectedRole = 'STAFF';
+            }
             
             const settings = data.hotel_settings || {};
             const displayHotelName = settings.hotel_name || data.hotel_name || 'Atithi HMS';
@@ -128,8 +124,8 @@ export const AuthProvider = ({ children }) => {
             const userData = {
                 username: data.username,
                 id: data.id,
-                is_superuser: data.is_superuser,
-                role: detectedRole,
+                is_superuser: data.is_superuser, 
+                role: detectedRole, // Save the resolved role
                 hotel_name: displayHotelName,
                 hotel_settings: settings 
             };
