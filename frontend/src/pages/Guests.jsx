@@ -16,8 +16,8 @@ const Guests = () => {
   // --- STATE MANAGEMENT ---
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // New: Error State
-  const [submitting, setSubmitting] = useState(false); // New: Form Loading State
+  const [error, setError] = useState(null); 
+  const [submitting, setSubmitting] = useState(false); 
   const [searchTerm, setSearchTerm] = useState('');
   
   // 🛡️ SECURITY: Only Owners and Managers can Delete or Blacklist
@@ -48,13 +48,17 @@ const Guests = () => {
       }
 
       if (res.ok) {
-          setGuests(await res.json());
+          const data = await res.json();
+          // 🟢 CRITICAL FIX: Ensure data is an array before setting state
+          setGuests(Array.isArray(data) ? data : []);
       } else {
           setError("Failed to load guest directory.");
+          setGuests([]); // Prevent crash
       }
     } catch (err) { 
         console.error(err); 
         setError("Network error. Please check your connection.");
+        setGuests([]); // Prevent crash
     } finally { 
         setLoading(false); 
     }
@@ -64,8 +68,9 @@ const Guests = () => {
 
   // --- ACTIONS ---
   const toggleVIP = async (id, currentStatus) => {
-    // Optimistic Update
-    setGuests(prev => prev.map(g => g.id === id ? { ...g, is_vip: !currentStatus } : g));
+    // Optimistic Update with Safety Check
+    setGuests(prev => (Array.isArray(prev) ? prev : []).map(g => g.id === id ? { ...g, is_vip: !currentStatus } : g));
+    
     if(selectedGuest && selectedGuest.id === id) {
         setSelectedGuest(prev => ({ ...prev, is_vip: !currentStatus }));
     }
@@ -86,7 +91,8 @@ const Guests = () => {
     if (!isAdmin) return alert("Only Managers can blacklist guests.");
     
     // Optimistic Update
-    setGuests(prev => prev.map(g => g.id === id ? { ...g, is_blacklisted: !currentStatus } : g));
+    setGuests(prev => (Array.isArray(prev) ? prev : []).map(g => g.id === id ? { ...g, is_blacklisted: !currentStatus } : g));
+    
     if(selectedGuest && selectedGuest.id === id) {
         setSelectedGuest(prev => ({ ...prev, is_blacklisted: !currentStatus }));
     }
@@ -107,7 +113,9 @@ const Guests = () => {
       if (!window.confirm("Permanently delete this guest profile? History will be lost.")) return;
 
       const originalGuests = [...guests];
-      setGuests(guests.filter(g => g.id !== id));
+      // Safe Filter
+      setGuests(prev => (Array.isArray(prev) ? prev : []).filter(g => g.id !== id));
+      
       if(selectedGuest?.id === id) setSelectedGuest(null);
 
       try {
@@ -148,18 +156,21 @@ const Guests = () => {
   };
 
   // --- CALCULATIONS & FILTER ---
-  const filteredGuests = guests.filter(g => 
+  // 🟢 SAFE DERIVATION: Ensure 'guests' is an array before processing
+  const safeGuests = Array.isArray(guests) ? guests : [];
+
+  const filteredGuests = safeGuests.filter(g => 
     (g.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
     (g.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (g.phone || '').includes(searchTerm)
   );
 
-  const vipCount = guests.filter(g => g.is_vip).length;
-  const corporateCount = guests.filter(g => g.type === 'CORPORATE').length;
-  const totalLTV = guests.reduce((sum, g) => sum + (parseFloat(g.total_spent) || 0), 0);
+  const vipCount = safeGuests.filter(g => g.is_vip).length;
+  const corporateCount = safeGuests.filter(g => g.type === 'CORPORATE').length;
+  const totalLTV = safeGuests.reduce((sum, g) => sum + (parseFloat(g.total_spent) || 0), 0);
 
   // --- LOADING & ERROR STATES ---
-  if (loading && guests.length === 0) return (
+  if (loading && safeGuests.length === 0) return (
     <div className="h-screen flex flex-col items-center justify-center text-slate-400 gap-4">
         <Loader2 className="animate-spin text-blue-600" size={40}/>
         <p className="text-xs font-bold uppercase tracking-widest">Loading Directory...</p>
@@ -205,7 +216,7 @@ const Guests = () => {
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
               <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><User size={20}/></div>
               <div>
-                  <p className="text-2xl font-black text-slate-800">{guests.length}</p>
+                  <p className="text-2xl font-black text-slate-800">{safeGuests.length}</p>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Profiles</p>
               </div>
           </div>

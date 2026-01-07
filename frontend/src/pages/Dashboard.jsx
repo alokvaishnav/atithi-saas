@@ -22,7 +22,7 @@ const Dashboard = () => {
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null); // New: Error state
+  const [error, setError] = useState(null); 
 
   const navigate = useNavigate(); 
   
@@ -36,13 +36,15 @@ const Dashboard = () => {
   // --- ANALYTICS CALCULATION (Client Side Fallback & Liability Calc) ---
   const calculateClientSideStats = useCallback((currentRooms, currentBookings) => {
     // 1. Operational Tasks (Dirty Rooms)
-    const dirtyRooms = Array.isArray(currentRooms) ? currentRooms.filter(r => r.status === 'DIRTY') : [];
+    // 🟢 SAFE CHECK: Ensure array before filter
+    const safeRooms = Array.isArray(currentRooms) ? currentRooms : [];
+    const dirtyRooms = safeRooms.filter(r => r.status === 'DIRTY');
     setTasks(dirtyRooms);
 
-    // 2. Calculate Liability (Pending Payments) locally as it relies on granular booking data
-    if (canSeeFinance && Array.isArray(currentBookings)) {
-        const totalLiability = currentBookings.reduce((sum, b) => {
-            // Only count confirmed or checked-in bookings for liability
+    // 2. Calculate Liability (Pending Payments) locally
+    if (canSeeFinance) {
+        const safeBookings = Array.isArray(currentBookings) ? currentBookings : [];
+        const totalLiability = safeBookings.reduce((sum, b) => {
             if (b.status === 'CANCELLED') return sum;
             
             const total = parseFloat(b.total_amount || 0);
@@ -72,53 +74,53 @@ const Dashboard = () => {
       ];
 
       // 2. Restricted Data (Conditional)
-      if (canSeeLogs) requests.push(fetch(`${API_URL}/api/logs/`, { headers }));
-      if (canSeeFinance) requests.push(fetch(`${API_URL}/api/analytics/`, { headers }));
+      // Use null placeholders to keep index consistent if skipped
+      const logsReq = canSeeLogs ? fetch(`${API_URL}/api/logs/`, { headers }) : Promise.resolve(null);
+      const analyticsReq = canSeeFinance ? fetch(`${API_URL}/api/analytics/`, { headers }) : Promise.resolve(null);
 
-      const responses = await Promise.all(requests);
+      const [resRooms, resBookings, resLogs, resAnalytics] = await Promise.all([
+          ...requests, 
+          logsReq, 
+          analyticsReq
+      ]);
 
       // Check for Session Expiry
-      if (responses.some(r => r.status === 401)) {
+      if (resRooms.status === 401 || resBookings.status === 401) {
           navigate('/login');
           return;
       }
 
       // Process Base Data
-      const [resRooms, resBookings] = responses;
+      let roomsData = [], bookingsData = [];
       
-      if (resRooms.ok && resBookings.ok) {
-        const roomsData = await resRooms.json();
-        const bookingsData = await resBookings.json();
-        
-        setRooms(Array.isArray(roomsData) ? roomsData : []);
-        setBookings(Array.isArray(bookingsData) ? bookingsData : []);
-        
-        // Always run client side calc for Tasks & Liability
-        calculateClientSideStats(roomsData, bookingsData);
-      } else {
-          throw new Error("Failed to load core data");
+      if (resRooms.ok) {
+          const data = await resRooms.json();
+          // 🟢 SAFE: Default to empty array if API returns object/error
+          roomsData = Array.isArray(data) ? data : [];
+      }
+      
+      if (resBookings.ok) {
+          const data = await resBookings.json();
+          bookingsData = Array.isArray(data) ? data : [];
       }
 
-      // Process Optional Data (Logs & Analytics)
-      // Note: Indices depend on permissions, so we check carefully
-      let logData = [];
-      let analyticsData = null;
+      setRooms(roomsData);
+      setBookings(bookingsData);
+      
+      // Always run calculation with safe data
+      calculateClientSideStats(roomsData, bookingsData);
 
-      // If logs were requested, they are next in the array
-      let currentIndex = 2;
-      if (canSeeLogs && responses[currentIndex]) {
-          if (responses[currentIndex].ok) logData = await responses[currentIndex].json();
-          currentIndex++;
-      }
-      setLogs(logData);
-
-      // If analytics were requested
-      if (canSeeFinance && responses[currentIndex]) {
-          if (responses[currentIndex].ok) analyticsData = await responses[currentIndex].json();
+      // Process Logs
+      if (resLogs && resLogs.ok) {
+          const logData = await resLogs.json();
+          setLogs(Array.isArray(logData) ? logData : []);
       }
 
-      if (analyticsData) {
+      // Process Analytics
+      if (resAnalytics && resAnalytics.ok) {
+          const analyticsData = await resAnalytics.json();
           setAnnouncements(analyticsData.announcements || []);
+          
           if (analyticsData.stats) {
               setFinancials(prev => ({
                   ...prev, 
@@ -134,7 +136,7 @@ const Dashboard = () => {
 
     } catch (err) { 
       console.error("Dashboard Sync Error:", err);
-      setError("Failed to sync dashboard. Please check your connection.");
+      setError("Failed to sync dashboard. Showing cached data.");
     } finally { 
       if (showLoader) setLoading(false); 
       setRefreshing(false);
@@ -148,7 +150,6 @@ const Dashboard = () => {
   }, [fetchData]);
 
   // --- OPERATIONAL METRICS ---
-  // Fix: Use local date to prevent timezone issues showing tomorrow's bookings as today
   const getLocalDate = () => {
       const d = new Date();
       const offset = d.getTimezoneOffset() * 60000;
@@ -156,6 +157,7 @@ const Dashboard = () => {
   };
   const todayStr = getLocalDate();
 
+  // 🟢 CRITICAL SAFETY: Ensure these are arrays before filter/map
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
 

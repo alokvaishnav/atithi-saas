@@ -1,11 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
-import './index.css'; // 🟢 CRITICAL: Loads Tailwind & Global Styles
+import './index.css'; // 🟢 Loads Tailwind & Global Styles
 
 // 🚀 ENTRY POINT
-// This mounts the React application into the DOM element with id 'root'
-// defined in your index.html file.
+// CRITICAL NOTE: Do NOT wrap <App /> in <BrowserRouter> here.
+// The Router is already handled inside App.jsx to prevent routing conflicts.
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

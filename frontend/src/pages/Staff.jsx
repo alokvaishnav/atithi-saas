@@ -15,14 +15,15 @@ const Staff = () => {
   // --- STATE ---
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // New: Error state
+  const [error, setError] = useState(null); 
   const [showModal, setShowModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
   // 🛡️ SECURITY: Only Admins can access this page
-  const canManage = ['OWNER', 'MANAGER'].includes(role) || currentUser?.is_superuser;
-  // Only Owners can delete staff (Managers can add but not delete to prevent lockouts)
-  const isOwner = role === 'OWNER' || currentUser?.is_superuser;
+  // Updated to include 'ADMIN' in the check
+  const canManage = ['OWNER', 'MANAGER', 'ADMIN'].includes(role) || currentUser?.is_superuser;
+  // Owners and Admins can delete staff
+  const isOwner = role === 'OWNER' || role === 'ADMIN' || currentUser?.is_superuser;
 
   const [formData, setFormData] = useState({
     username: '', password: '', email: '', 
@@ -46,13 +47,16 @@ const Staff = () => {
 
       if (res.ok) {
           const data = await res.json();
-          setStaff(data);
+          // 🟢 CRITICAL FIX: Ensure data is an array
+          setStaff(Array.isArray(data) ? data : []);
       } else {
           setError("Failed to load staff list.");
+          setStaff([]); // Prevent crash
       }
     } catch (err) { 
         console.error(err); 
         setError("Network connection failed.");
+        setStaff([]);
     } finally { 
         setLoading(false); 
     }
@@ -65,7 +69,6 @@ const Staff = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      // Use the specific endpoint for staff registration
       const res = await fetch(`${API_URL}/api/register/staff/`, {
         method: 'POST',
         headers: { 
@@ -102,7 +105,7 @@ const Staff = () => {
 
   // --- DELETE STAFF ---
   const handleDelete = async (id) => {
-    if (!isOwner) return alert("Only Owners can delete staff accounts.");
+    if (!isOwner) return alert("Only Owners/Admins can delete staff accounts.");
     if (!window.confirm("Are you sure you want to delete this staff account? Access will be revoked immediately.")) return;
     
     // Optimistic Update
@@ -169,7 +172,7 @@ const Staff = () => {
                 <div className="flex items-center gap-4 mb-6">
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-md ${
                         member.role === 'MANAGER' ? 'bg-purple-600' :
-                        member.role === 'OWNER' ? 'bg-slate-900' : 'bg-blue-500'
+                        member.role === 'OWNER' || member.role === 'ADMIN' ? 'bg-slate-900' : 'bg-blue-500'
                     }`}>
                         {member.first_name?.[0] || member.username?.[0]?.toUpperCase() || '?'}
                     </div>
@@ -192,12 +195,12 @@ const Staff = () => {
                     </div>
                     <div className="flex items-center gap-3 text-xs font-bold text-slate-500">
                         <Shield size={14} className="text-slate-300"/> 
-                        {['OWNER', 'MANAGER'].includes(member.role) ? 'Admin Access' : 'Standard Access'}
+                        {['OWNER', 'MANAGER', 'ADMIN'].includes(member.role) ? 'Admin Access' : 'Standard Access'}
                     </div>
                 </div>
 
                 {/* 🔒 PREVENT DELETING SELF OR OWNER */}
-                {member.role !== 'OWNER' && member.id !== currentUser?.id && isOwner && (
+                {member.role !== 'OWNER' && member.role !== 'ADMIN' && member.id !== currentUser?.id && isOwner && (
                     <button 
                         onClick={() => handleDelete(member.id)} 
                         className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
@@ -207,8 +210,8 @@ const Staff = () => {
                     </button>
                 )}
                 
-                {member.role === 'OWNER' && (
-                    <div className="absolute top-4 right-4 text-amber-400 p-2" title="Owner (Protected)">
+                {(member.role === 'OWNER' || member.role === 'ADMIN') && (
+                    <div className="absolute top-4 right-4 text-amber-400 p-2" title="Admin (Protected)">
                         <KeyRound size={16}/>
                     </div>
                 )}

@@ -55,21 +55,23 @@ const FrontDesk = () => {
           const roomsData = await roomRes.json();
           const bookingsData = await bookingRes.json();
           
-          // 🟢 CRITICAL FIX: Check if data is Array before sorting to prevent crash
+          // 🟢 CRITICAL FIX: Ensure data is an Array before sorting/setting state
           const safeRooms = Array.isArray(roomsData) ? roomsData : [];
           const safeBookings = Array.isArray(bookingsData) ? bookingsData : [];
 
-          // Sort rooms safely
+          // Sort rooms safely (handle non-numeric room numbers gracefully)
           setRooms(safeRooms.sort((a,b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0)));
           setBookings(safeBookings);
       } else {
           setError("Failed to sync data with server.");
+          // Fallback to empty arrays to prevent crash
+          setRooms([]);
+          setBookings([]);
       }
       
     } catch (err) { 
         console.error("Reception Sync Error:", err); 
         setError("Network connection failed.");
-        // Prevent crash on render by ensuring arrays exist
         setRooms([]);
         setBookings([]);
     } finally { 
@@ -122,13 +124,16 @@ const FrontDesk = () => {
 
   // --- DERIVED DATA & LOGIC ---
   const activeBookingsMap = {};
-  // Safe filter check
-  (Array.isArray(bookings) ? bookings : []).filter(b => b.status === 'CHECKED_IN').forEach(b => {
+  
+  // 🟢 SAFE FILTER: Ensure bookings is array
+  const safeBookingsList = Array.isArray(bookings) ? bookings : [];
+  
+  safeBookingsList.filter(b => b.status === 'CHECKED_IN').forEach(b => {
       const roomId = b.room_details?.id || b.room; 
       if(roomId) activeBookingsMap[roomId] = b;
   });
 
-  // Safe Sort Helper
+  // 🟢 SAFE SORT HELPER
   const sortList = (list) => {
       if (!Array.isArray(list)) return [];
       return list.sort((a, b) => {
@@ -138,12 +143,12 @@ const FrontDesk = () => {
       });
   };
 
-  // Safe lists
-  const safeBookingsList = Array.isArray(bookings) ? bookings : [];
+  // Create derived lists using safe methods
   const arrivals = sortList(safeBookingsList.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED'));
   const departures = sortList(safeBookingsList.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN'));
   const inHouse = sortList(safeBookingsList.filter(b => b.status === 'CHECKED_IN'));
 
+  // 🟢 SAFE FILTER HELPER
   const getFilteredList = (list) => {
       if (!Array.isArray(list)) return [];
       return list.filter(b => 

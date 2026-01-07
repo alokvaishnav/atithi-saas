@@ -36,7 +36,8 @@ export const AuthProvider = ({ children }) => {
             const storedToken = localStorage.getItem('access_token');
             const storedUserData = localStorage.getItem('user_data');
 
-            if (storedToken && storedUserData) {
+            // 🟢 ROBUST CHECK: Ensure token is valid and not string "null"/"undefined"
+            if (storedToken && storedToken !== 'null' && storedToken !== 'undefined' && storedUserData) {
                 const parsedUser = JSON.parse(storedUserData);
                 
                 setToken(storedToken);
@@ -56,6 +57,9 @@ export const AuthProvider = ({ children }) => {
                 setHotelName(settingsName || flatName || 'Atithi HMS');
                 
                 setIsAuthenticated(true);
+            } else {
+                // If data is partial or invalid, ensure we start clean
+                setLoading(false);
             }
         } catch (error) {
             console.error("Auth Restoration Error:", error);
