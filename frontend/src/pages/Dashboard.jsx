@@ -25,30 +25,30 @@ const Dashboard = () => {
   const [error, setError] = useState(null); 
 
   const navigate = useNavigate(); 
-  
-  // 🟢 USE CONTEXT
   const { token, role, user, hotelName } = useAuth();
 
-  // 🛡️ ROLE HELPERS
   const canSeeFinance = ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role) || user?.is_superuser;
   const canSeeLogs = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
 
-  // --- ANALYTICS CALCULATION (Client Side Fallback & Liability Calc) ---
+  // --- ANALYTICS CALCULATION ---
   const calculateClientSideStats = useCallback((currentRooms, currentBookings) => {
-    // 1. Operational Tasks (Dirty Rooms)
-    // 🟢 SAFE CHECK: Ensure array before filter
+    // 🟢 SAFE CHECK 1: Ensure arrays before filtering
     const safeRooms = Array.isArray(currentRooms) ? currentRooms : [];
+    const safeBookings = Array.isArray(currentBookings) ? currentBookings : [];
+
     const dirtyRooms = safeRooms.filter(r => r.status === 'DIRTY');
     setTasks(dirtyRooms);
 
-    // 2. Calculate Liability (Pending Payments) locally
+    // 🟢 SAFE CHECK 2: Finance Calculations
     if (canSeeFinance) {
-        const safeBookings = Array.isArray(currentBookings) ? currentBookings : [];
         const totalLiability = safeBookings.reduce((sum, b) => {
             if (b.status === 'CANCELLED') return sum;
             
             const total = parseFloat(b.total_amount || 0);
-            const paid = b.payments?.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0) || 0;
+            // Ensure payments is an array before reduce
+            const safePayments = Array.isArray(b.payments) ? b.payments : [];
+            const paid = safePayments.reduce((pSum, p) => pSum + parseFloat(p.amount || 0), 0);
+            
             return sum + (total - paid);
         }, 0);
 
@@ -73,83 +73,93 @@ const Dashboard = () => {
         fetch(`${API_URL}/api/bookings/`, { headers }),
       ];
 
-      // 2. Restricted Data (Conditional)
-      // Use null placeholders to keep index consistent if skipped
-      const logsReq = canSeeLogs ? fetch(`${API_URL}/api/logs/`, { headers }) : Promise.resolve(null);
-      const analyticsReq = canSeeFinance ? fetch(`${API_URL}/api/analytics/`, { headers }) : Promise.resolve(null);
+      // 2. Optional Data Handlers
+      // We push promises conditionally to avoid 403s on unauthorized endpoints
+      if (canSeeLogs) requests.push(fetch(`${API_URL}/api/logs/`, { headers }));
+      if (canSeeFinance) requests.push(fetch(`${API_URL}/api/analytics/`, { headers }));
 
-      const [resRooms, resBookings, resLogs, resAnalytics] = await Promise.all([
-          ...requests, 
-          logsReq, 
-          analyticsReq
-      ]);
+      const responses = await Promise.all(requests);
 
-      // Check for Session Expiry
-      if (resRooms.status === 401 || resBookings.status === 401) {
+      // Check Session
+      if (responses.some(r => r.status === 401)) {
           navigate('/login');
           return;
       }
 
-      // Process Base Data
-      let roomsData = [], bookingsData = [];
+      // --- PROCESS BASE DATA ---
+      const [resRooms, resBookings] = responses;
       
+      let roomsData = [];
+      let bookingsData = [];
+
       if (resRooms.ok) {
           const data = await resRooms.json();
-          // 🟢 SAFE: Default to empty array if API returns object/error
+          // 🟢 CRITICAL: Force array type to prevent crash
           roomsData = Array.isArray(data) ? data : [];
       }
       
       if (resBookings.ok) {
           const data = await resBookings.json();
+          // 🟢 CRITICAL: Force array type
           bookingsData = Array.isArray(data) ? data : [];
       }
 
       setRooms(roomsData);
       setBookings(bookingsData);
       
-      // Always run calculation with safe data
+      // Run calculations with safe data
       calculateClientSideStats(roomsData, bookingsData);
 
-      // Process Logs
-      if (resLogs && resLogs.ok) {
-          const logData = await resLogs.json();
-          setLogs(Array.isArray(logData) ? logData : []);
+      // --- PROCESS OPTIONAL DATA ---
+      // Determine indices based on what was requested
+      let currentIndex = 2; // Start after rooms/bookings
+
+      if (canSeeLogs && responses[currentIndex]) {
+          if (responses[currentIndex].ok) {
+              const data = await responses[currentIndex].json();
+              setLogs(Array.isArray(data) ? data : []);
+          }
+          currentIndex++;
       }
 
-      // Process Analytics
-      if (resAnalytics && resAnalytics.ok) {
-          const analyticsData = await resAnalytics.json();
-          setAnnouncements(analyticsData.announcements || []);
-          
-          if (analyticsData.stats) {
-              setFinancials(prev => ({
-                  ...prev, 
-                  revenue: analyticsData.stats.revenue || 0,
-                  expenses: analyticsData.stats.total_expenses || 0,
-                  profit: analyticsData.stats.net_profit || 0,
-              }));
-          }
-          if (analyticsData.trend) {
-              setTrendData(analyticsData.trend);
+      if (canSeeFinance && responses[currentIndex]) {
+          if (responses[currentIndex].ok) {
+              const data = await responses[currentIndex].json();
+              // Validate structure of analytics response
+              if (data) {
+                  setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
+                  if (data.stats) {
+                      setFinancials(prev => ({
+                          ...prev, 
+                          revenue: data.stats.revenue || 0,
+                          expenses: data.stats.total_expenses || 0,
+                          profit: data.stats.net_profit || 0,
+                      }));
+                  }
+                  if (Array.isArray(data.trend)) {
+                      setTrendData(data.trend);
+                  }
+              }
           }
       }
 
     } catch (err) { 
       console.error("Dashboard Sync Error:", err);
-      setError("Failed to sync dashboard. Showing cached data.");
+      // Only show error if we have no data at all to avoid flickering
+      if (rooms.length === 0) setError("System is syncing. Please wait...");
     } finally { 
       if (showLoader) setLoading(false); 
       setRefreshing(false);
     }
-  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats, navigate]);
+  }, [token, canSeeFinance, canSeeLogs, calculateClientSideStats, navigate, rooms.length]);
 
   useEffect(() => { 
     fetchData(true); 
-    const interval = setInterval(() => fetchData(false), 30000); // 30s Live Refresh
+    const interval = setInterval(() => fetchData(false), 30000); 
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // --- OPERATIONAL METRICS ---
+  // --- RENDER HELPERS ---
   const getLocalDate = () => {
       const d = new Date();
       const offset = d.getTimezoneOffset() * 60000;
@@ -157,12 +167,12 @@ const Dashboard = () => {
   };
   const todayStr = getLocalDate();
 
-  // 🟢 CRITICAL SAFETY: Ensure these are arrays before filter/map
+  // 🟢 SAFETIES FOR RENDER
   const safeBookings = Array.isArray(bookings) ? bookings : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
 
   const expectedArrivals = safeBookings.filter(b => 
-    b.check_in_date === todayStr && (b.status === 'CONFIRMED' || b.status === 'CHECKED_IN')
+    b.check_in_date === todayStr && ['CONFIRMED', 'CHECKED_IN'].includes(b.status)
   );
 
   const expectedDepartures = safeBookings.filter(b => 
@@ -183,16 +193,13 @@ const Dashboard = () => {
 
   if (loading) return (
     <div className="p-12 flex flex-col items-center justify-center min-h-screen bg-slate-50">
-      <div className="relative">
-        <Loader2 className="w-20 h-20 text-blue-600 animate-spin" />
-        <Building className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-400" size={24}/>
-      </div>
-      <p className="mt-6 font-black text-slate-400 uppercase tracking-[0.3em] text-[10px]">Loading Dashboard...</p>
+      <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+      <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">Loading Dashboard...</p>
     </div>
   );
 
   return (
-    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen font-sans">
       
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
@@ -209,21 +216,20 @@ const Dashboard = () => {
         </div>
         
         <div className="flex gap-4 w-full md:w-auto items-center">
-            {/* Manual Refresh Button */}
             <button 
                 onClick={() => fetchData(true)} 
-                className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+                className="p-3 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
                 title="Refresh Data"
             >
                 <RefreshCcw size={18} className={refreshing ? "animate-spin" : ""}/>
             </button>
 
             <div className="bg-white p-4 px-6 rounded-2xl border border-slate-200 shadow-sm text-right flex-1 md:flex-none">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Property Health</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Health</p>
                 <p className="text-xl font-black text-emerald-500">{healthScore}%</p>
             </div>
             <div className="bg-slate-900 p-4 px-6 rounded-2xl shadow-xl text-right border border-slate-700 flex-1 md:flex-none">
-                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active Personnel</p>
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Active User</p>
                 <p className="text-xl font-black text-white truncate max-w-[100px] md:max-w-none ml-auto italic">{role}</p>
             </div>
         </div>
@@ -419,9 +425,12 @@ const Dashboard = () => {
             <table className="w-full text-sm text-left">
               <tbody className="divide-y divide-slate-50">
                 {expectedDepartures.length > 0 ? expectedDepartures.map(b => {
-                    const paid = b.payments?.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0) || 0;
+                    // Safe access to payments array
+                    const payments = Array.isArray(b.payments) ? b.payments : [];
+                    const paid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
                     const due = parseFloat(b.total_amount || 0) - paid;
                     const showDue = canSeeFinance; 
+                    
                     return (
                         <tr key={b.id} className="hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => navigate(`/folio/${b.id}`)}>
                             <td className="p-6">

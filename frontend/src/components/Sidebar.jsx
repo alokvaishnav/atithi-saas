@@ -16,17 +16,16 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
-  // Access global user state and profile update functions
   const { hotelName, role, user, token, logout, updateGlobalProfile } = useAuth(); 
 
-  // State for SaaS Platform Branding (Support Info)
+  // State for SaaS Platform Branding
   const [platformInfo, setPlatformInfo] = useState({
     appName: 'Atithi SaaS',
     companyName: 'Tech Support',
     supportPhone: ''
   });
 
-  // MOBILE AUTO-CLOSE: Close sidebar when route changes on small screens
+  // MOBILE AUTO-CLOSE
   useEffect(() => {
     if (onClose && window.innerWidth < 768) {
         onClose();
@@ -36,11 +35,14 @@ const Sidebar = ({ isOpen, onClose }) => {
   // 1. FETCH HOTEL BRANDING (Tenant Name)
   useEffect(() => {
     const fetchHotelBranding = async () => {
-      // Safety Check: Don't fetch if no token is present
       if (!token) return;
       
-      // Only fetch if role allows (ADMIN/Owners/Managers) or user is a superuser
-      if (role !== 'ADMIN' && role !== 'OWNER' && role !== 'MANAGER' && !user?.is_superuser) return;
+      // 🟢 OPTIMIZATION: Only Admins/Owners need to sync settings actively.
+      // Staff should rely on the name loaded during Login (stored in Context).
+      // This prevents 403/404 errors for restricted users.
+      const canAccessSettings = ['ADMIN', 'OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
+      
+      if (!canAccessSettings) return;
 
       try {
         const res = await axios.get(`${API_URL}/api/settings/`, {
@@ -48,29 +50,29 @@ const Sidebar = ({ isOpen, onClose }) => {
         });
         
         const data = res.data;
-        // Handle both object and array responses (DRF sometimes returns list for ModelViewSet)
+        // Handle DRF responses (List or Object)
         const settings = Array.isArray(data) ? data[0] : data;
         
         if (settings && settings.hotel_name) {
             updateGlobalProfile(settings.hotel_name.toUpperCase());
         }
       } catch (err) {
-        // Silent fail: Using cached/default hotel branding from Context
+        // Silent fail: Keep using the cached name from Context
+        // console.warn("Branding sync skipped");
       }
     };
     
-    // Only fetch if name is missing or is the default generic name
-    if (!hotelName || hotelName === 'ATITHI HMS') {
+    // Only fetch if name is default or missing, AND user has permission
+    if (!hotelName || hotelName === 'ATITHI HMS' || hotelName === 'Atithi HMS') {
         fetchHotelBranding();
     }
-  }, [updateGlobalProfile, role, user, token, hotelName]); 
+  }, [token, role, user, hotelName, updateGlobalProfile]); 
 
-  // 2. FETCH PLATFORM BRANDING (SaaS Support Info)
+  // 2. FETCH PLATFORM BRANDING
   useEffect(() => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
-            // Note: Backend endpoint must allow GET for authenticated users
             const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -82,22 +84,21 @@ const Sidebar = ({ isOpen, onClose }) => {
                 });
             }
         } catch (error) {
-            // Fallback to defaults silently if unauthorized or API fails
+            // Fallback to defaults if endpoint doesn't exist yet
         }
     };
     fetchPlatformSettings();
   }, [token]);
 
-
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to logout?")) {
       logout(); 
+      // Navigate is handled by AuthContext but explicit call ensures UI update
       navigate('/login');
     }
   };
 
   // 🧭 RBAC Navigation Groups
-  // NOTE: 'ADMIN' is added to every group to ensure full access
   const groups = [
     {
       title: "Main",
@@ -120,7 +121,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        // 🔒 Hide POS/Inventory from Housekeeping staff (But show for ADMIN)
+        // 🔒 Hide POS/Inventory from Housekeeping staff
         ...(role !== 'HOUSEKEEPING' ? [
             { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
             { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
@@ -141,7 +142,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
-        // 🔒 Hide Staff Directory from Accountants (Show for ADMIN/OWNER/MANAGER)
+        // 🔒 Staff Directory for Admin/Owners
         ...(['ADMIN', 'OWNER', 'MANAGER'].includes(role) || user?.is_superuser ? [
             { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
         ] : []),
@@ -181,7 +182,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         
-        {/* BRAND HEADER (Hotel Name) */}
+        {/* BRAND HEADER */}
         <div className="p-8 border-b border-white/5 flex items-center justify-between bg-slate-950">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20 text-white">
@@ -205,8 +206,8 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* NAVIGATION */}
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
-          {/* 👑 SUPER ADMIN SECTION - TRIGGERED BY 'ADMIN' ROLE OR SUPERUSER */}
-          {(user?.is_superuser || role === 'ADMIN' || user?.role === 'SUPERADMIN') && (
+          {/* 👑 SUPER ADMIN SECTION */}
+          {(user?.is_superuser || role === 'ADMIN' || role === 'SUPERADMIN') && (
               <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
                   SaaS Control Plane
@@ -231,7 +232,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           )}
 
           {groups.map((group, index) => (
-            // Logic: Show group if role matches, OR if user is ADMIN/Superuser
+            // Logic: Show group if role matches OR user is ADMIN/Superuser
             (group.roles.includes(role) || role === 'ADMIN' || user?.is_superuser) && group.items.length > 0 && (
               <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">

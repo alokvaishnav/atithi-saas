@@ -51,27 +51,38 @@ const FrontDesk = () => {
           return;
       }
 
-      if (roomRes.ok && bookingRes.ok) {
+      // Process Rooms
+      if (roomRes.ok) {
           const roomsData = await roomRes.json();
-          const bookingsData = await bookingRes.json();
-          
-          // 🟢 CRITICAL FIX: Ensure data is an Array before sorting/setting state
+          // 🟢 SAFE CHECK: Ensure array before use
           const safeRooms = Array.isArray(roomsData) ? roomsData : [];
-          const safeBookings = Array.isArray(bookingsData) ? bookingsData : [];
+          // Sort using a copy to prevent mutation issues
+          setRooms([...safeRooms].sort((a,b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0)));
+      } else {
+          console.warn("Rooms fetch failed");
+          setRooms([]);
+      }
 
-          // Sort rooms safely (handle non-numeric room numbers gracefully)
-          setRooms(safeRooms.sort((a,b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0)));
+      // Process Bookings
+      if (bookingRes.ok) {
+          const bookingsData = await bookingRes.json();
+          // 🟢 SAFE CHECK: Ensure array before use
+          const safeBookings = Array.isArray(bookingsData) ? bookingsData : [];
           setBookings(safeBookings);
       } else {
-          setError("Failed to sync data with server.");
-          // Fallback to empty arrays to prevent crash
-          setRooms([]);
+          console.warn("Bookings fetch failed");
           setBookings([]);
+      }
+
+      // Handle general error if both failed
+      if (!roomRes.ok && !bookingRes.ok) {
+          setError("Failed to sync data with server.");
       }
       
     } catch (err) { 
         console.error("Reception Sync Error:", err); 
         setError("Network connection failed.");
+        // Fallback to prevent crash
         setRooms([]);
         setBookings([]);
     } finally { 
@@ -123,17 +134,18 @@ const FrontDesk = () => {
   };
 
   // --- DERIVED DATA & LOGIC ---
+  // 🟢 DOUBLE SAFETY: Ensure state variables are arrays before using .filter or .map
+  const safeRoomsState = Array.isArray(rooms) ? rooms : [];
+  const safeBookingsState = Array.isArray(bookings) ? bookings : [];
+
   const activeBookingsMap = {};
   
-  // 🟢 SAFE FILTER: Ensure bookings is array
-  const safeBookingsList = Array.isArray(bookings) ? bookings : [];
-  
-  safeBookingsList.filter(b => b.status === 'CHECKED_IN').forEach(b => {
+  safeBookingsState.filter(b => b.status === 'CHECKED_IN').forEach(b => {
       const roomId = b.room_details?.id || b.room; 
       if(roomId) activeBookingsMap[roomId] = b;
   });
 
-  // 🟢 SAFE SORT HELPER
+  // Safe Sort Helper
   const sortList = (list) => {
       if (!Array.isArray(list)) return [];
       return list.sort((a, b) => {
@@ -144,22 +156,22 @@ const FrontDesk = () => {
   };
 
   // Create derived lists using safe methods
-  const arrivals = sortList(safeBookingsList.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED'));
-  const departures = sortList(safeBookingsList.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN'));
-  const inHouse = sortList(safeBookingsList.filter(b => b.status === 'CHECKED_IN'));
+  const arrivals = sortList(safeBookingsState.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED'));
+  const departures = sortList(safeBookingsState.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN'));
+  const inHouse = sortList(safeBookingsState.filter(b => b.status === 'CHECKED_IN'));
 
-  // 🟢 SAFE FILTER HELPER
+  // Safe Filter Helper
   const getFilteredList = (list) => {
       if (!Array.isArray(list)) return [];
       return list.filter(b => 
-          b.guest_details?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          b.room_details?.room_number?.toString().includes(searchTerm) ||
-          b.booking_id?.toString().includes(searchTerm)
+          (b.guest_details?.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (b.room_details?.room_number || '').toString().includes(searchTerm) ||
+          (b.booking_id || '').toString().includes(searchTerm)
       );
   };
 
   // --- LOADING STATE ---
-  if (loading && rooms.length === 0) return (
+  if (loading && safeRoomsState.length === 0) return (
     <div className="p-20 text-center flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-6">
         <Loader2 className="animate-spin text-blue-600" size={60}/> 
         <span className="font-black text-slate-400 uppercase tracking-[0.3em] text-xs animate-pulse">Initializing Mission Control...</span>
@@ -197,7 +209,7 @@ const FrontDesk = () => {
                 <LogOut size={18} className="text-red-500"/> Departures: {departures.length}
             </div>
             <div className="bg-slate-900 p-4 px-8 rounded-2xl text-xs font-black text-white flex items-center gap-3 shadow-xl">
-                <BedDouble size={18} className="text-blue-400"/> {Math.round((inHouse.length / (rooms.length || 1)) * 100) || 0}% Cap.
+                <BedDouble size={18} className="text-blue-400"/> {Math.round((inHouse.length / (safeRoomsState.length || 1)) * 100) || 0}% Cap.
             </div>
         </div>
       </div>
@@ -293,7 +305,7 @@ const FrontDesk = () => {
       {/* 4. VIEW: ROOM MATRIX */}
       {activeTab === 'MATRIX' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4">
-            {rooms.map(room => {
+            {safeRoomsState.map(room => {
                 const activeBooking = activeBookingsMap[room.id];
                 let color = "bg-white border-slate-200 hover:border-blue-400";
                 let icon = <CheckCircle size={20} className="text-green-500"/>;
