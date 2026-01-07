@@ -7,8 +7,9 @@ import {
   ShieldCheck, History, Globe, Settings2,
   Zap, AlertTriangle, Copy, Mail, MessageCircle, Save, Megaphone
 } from 'lucide-react';
-import { API_URL } from '../config';
-import { useAuth } from '../context/AuthContext'; 
+// 🟢 CRITICAL FIX: Updated paths to go up two levels (../../)
+import { API_URL } from '../../config';
+import { useAuth } from '../../context/AuthContext'; 
 
 const GlobalSettings = () => {
   // 🟢 1. HOOKS (Must be at the top)
