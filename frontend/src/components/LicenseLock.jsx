@@ -26,42 +26,41 @@ const LicenseLock = ({ children }) => {
         return;
     }
     
-    checkLicense();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    const checkLicense = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/license/status/`, {
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
 
-  const checkLicense = async () => {
-    try {
-        const res = await fetch(`${API_URL}/api/license/status/`, {
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (res.ok) {
-            const data = await res.json();
-            setDaysLeft(data.days_left);
-            
-            if (data.is_expired) {
-                setStatus('EXPIRED');
-            } else if (data.days_left <= 7) {
-                setStatus('WARNING'); // Grace period
+            if (res.ok) {
+                const data = await res.json();
+                setDaysLeft(data.days_left);
+                
+                if (data.is_expired) {
+                    setStatus('EXPIRED');
+                } else if (data.days_left <= 7) {
+                    setStatus('WARNING'); // Grace period
+                } else {
+                    setStatus('ACTIVE');
+                }
             } else {
-                setStatus('ACTIVE');
+                // Fallback: If server checks fail (e.g., 500 or 401), fail OPEN
+                // This ensures users aren't locked out by server glitches.
+                console.warn("License check failed, defaulting to active.");
+                setStatus('ACTIVE'); 
             }
-        } else {
-            // Fallback: If server checks fail (e.g., 500 or 401), fail OPEN
-            // This ensures users aren't locked out by server glitches.
-            console.warn("License check failed, defaulting to active.");
+        } catch (err) {
+            console.error("License Check Error:", err);
+            // Fail open for connectivity issues (Offline Mode Support)
             setStatus('ACTIVE'); 
         }
-    } catch (err) {
-        console.error("License Check Error:", err);
-        // Fail open for connectivity issues (Offline Mode Support)
-        setStatus('ACTIVE'); 
-    }
-  };
+    };
+    
+    checkLicense();
+  }, [token]);
 
   // 2. Handle New Key Submission
   const handleActivate = async (e) => {
@@ -82,11 +81,11 @@ const LicenseLock = ({ children }) => {
         if (res.ok) {
             const data = await res.json();
             alert(`Activation Successful! Valid until: ${data.expiry_date}`);
-            await checkLicense(); // Refresh status immediately
-            setInputKey('');
+            // Force a reload to ensure new license state is applied globally
+            window.location.reload();
         } else {
             const errData = await res.json();
-            setError(errData.error || "Invalid License Key.");
+            setError(errData.error || "Invalid License Key. Please check and try again.");
         }
     } catch (err) {
         setError("Network error. Unable to verify key.");
@@ -98,7 +97,7 @@ const LicenseLock = ({ children }) => {
   // --- RENDER STATES ---
 
   // A. Loading Screen (Only if we have a valid token)
-  if (status === 'LOADING' && token && token !== 'null') return (
+  if (status === 'LOADING' && token && token !== 'null' && token !== 'undefined') return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
@@ -154,7 +153,7 @@ const LicenseLock = ({ children }) => {
                  <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
                     <LogOut size={14}/> Log Out
                  </button>
-                 <button onClick={checkLicense} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+                 <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
                     <RefreshCw size={14}/> Refresh Status
                  </button>
             </div>
