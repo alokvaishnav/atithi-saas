@@ -13,7 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 
 const GlobalSettings = () => {
   // 🟢 1. HOOKS (Must be at the top)
-  const { token, user } = useAuth(); 
+  const { token, user, logout } = useAuth(); // Added logout for easy reset
   
   // --- DATA STATE ---
   const [tenants, setTenants] = useState([]);
@@ -48,6 +48,41 @@ const GlobalSettings = () => {
   const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'PRO' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '' });
   const [editForm, setEditForm] = useState({ hotel_name: '', license_expiry: '' });
+
+  // 🛡️ SECURITY CHECK
+  // We check if the user is authorized. We allow 'OWNER' because your superuser 'alok' is an OWNER.
+  const isAuthorized = user?.is_superuser || user?.role === 'SUPERADMIN' || user?.role === 'OWNER';
+
+  if (!isAuthorized && !loading) {
+      return (
+        <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-6">
+            <ShieldCheck size={80} className="text-red-600"/>
+            <div className="text-center">
+                <h1 className="text-3xl font-black uppercase tracking-widest text-white">Access Denied</h1>
+                <p className="text-red-500 font-mono mt-2">ERR_PERMISSIONS_INSUFFICIENT</p>
+            </div>
+            
+            {/* 🟢 DEBUG PANEL: Shows you exactly what the system sees */}
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-left min-w-[300px]">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Current Session Data</p>
+                <div className="space-y-2 font-mono text-sm text-slate-300">
+                    <p>Username: <span className="text-white">{user?.username || 'Unknown'}</span></p>
+                    <p>Role: <span className="text-yellow-400">{user?.role || 'None'}</span></p>
+                    <p>Superuser: <span className={user?.is_superuser ? "text-green-400" : "text-red-400"}>{user?.is_superuser ? 'YES' : 'NO'}</span></p>
+                </div>
+            </div>
+
+            <div className="flex gap-4">
+                <button onClick={() => window.location.reload()} className="px-6 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold text-xs uppercase tracking-widest">
+                    Refresh
+                </button>
+                <button onClick={logout} className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-500 font-bold text-xs uppercase tracking-widest">
+                    Log Out & Reset
+                </button>
+            </div>
+        </div>
+      );
+  }
 
   // ==================================================================================
   // 1. DATA FETCHING ENGINE
@@ -254,19 +289,6 @@ const GlobalSettings = () => {
       } catch(err) { console.error(err); }
       finally { setIsSubmitting(false); }
   };
-
-  // 🟢 4. CONDITIONAL RENDER (Must be AFTER hooks)
-  
-  // 🛡️ SECURITY: Double Check Access
-  if (!user?.is_superuser && user?.role !== 'SUPERADMIN' && !loading) {
-      return (
-        <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-4">
-            <ShieldCheck size={64}/>
-            <h1 className="text-2xl font-black uppercase tracking-widest">System Restricted</h1>
-            <p className="text-slate-500 font-mono">ERR_ACCESS_DENIED_0x01</p>
-        </div>
-      );
-  }
 
   // --- FILTER LOGIC ---
   const filteredTenants = tenants.filter(t => {

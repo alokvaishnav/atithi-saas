@@ -165,6 +165,9 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   ];
 
+  // Logic to determine if Super Admin Menu should be shown
+  const isSuperAdmin = user?.is_superuser || role === 'SUPERADMIN' || role === 'OWNER';
+
   return (
     <>
       {/* MOBILE OVERLAY */}
@@ -206,8 +209,8 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* NAVIGATION */}
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
-          {/* 👑 SUPER ADMIN SECTION */}
-          {(user?.is_superuser || role === 'ADMIN' || role === 'SUPERADMIN') && (
+          {/* 👑 SUPER ADMIN SECTION (Dynamically Shown) */}
+          {isSuperAdmin && (
               <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
                   SaaS Control Plane
