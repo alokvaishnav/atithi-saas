@@ -17,14 +17,14 @@ const FrontDesk = () => {
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // Added Error State
+  const [error, setError] = useState(null); 
   const [activeTab, setActiveTab] = useState('MATRIX'); 
   const [searchTerm, setSearchTerm] = useState('');
 
   // --- MISSION CONTROL STATES ---
   const [gstBase, setGstBase] = useState('');
   
-  // Fix: Get Local Date string (YYYY-MM-DD) instead of UTC to avoid timezone issues
+  // Local Date Helper
   const getLocalDate = () => {
       const d = new Date();
       const offset = d.getTimezoneOffset() * 60000;
@@ -55,9 +55,13 @@ const FrontDesk = () => {
           const roomsData = await roomRes.json();
           const bookingsData = await bookingRes.json();
           
-          // Sort rooms by room_number just in case API sends them random
-          setRooms(roomsData.sort((a,b) => a.room_number - b.room_number));
-          setBookings(bookingsData);
+          // 🟢 CRITICAL FIX: Check if data is Array before sorting to prevent crash
+          const safeRooms = Array.isArray(roomsData) ? roomsData : [];
+          const safeBookings = Array.isArray(bookingsData) ? bookingsData : [];
+
+          // Sort rooms safely
+          setRooms(safeRooms.sort((a,b) => (parseInt(a.room_number) || 0) - (parseInt(b.room_number) || 0)));
+          setBookings(safeBookings);
       } else {
           setError("Failed to sync data with server.");
       }
@@ -65,6 +69,9 @@ const FrontDesk = () => {
     } catch (err) { 
         console.error("Reception Sync Error:", err); 
         setError("Network connection failed.");
+        // Prevent crash on render by ensuring arrays exist
+        setRooms([]);
+        setBookings([]);
     } finally { 
         setLoading(false); 
     }
@@ -115,24 +122,30 @@ const FrontDesk = () => {
 
   // --- DERIVED DATA & LOGIC ---
   const activeBookingsMap = {};
-  (bookings || []).filter(b => b.status === 'CHECKED_IN').forEach(b => {
-      // Logic handles both full room objects or just IDs if backend serializers differ
+  // Safe filter check
+  (Array.isArray(bookings) ? bookings : []).filter(b => b.status === 'CHECKED_IN').forEach(b => {
       const roomId = b.room_details?.id || b.room; 
       if(roomId) activeBookingsMap[roomId] = b;
   });
 
-  // Sort lists by room number for easier reading
-  const sortList = (list) => list.sort((a, b) => {
-      const rA = a.room_details?.room_number || 0;
-      const rB = b.room_details?.room_number || 0;
-      return rA - rB;
-  });
+  // Safe Sort Helper
+  const sortList = (list) => {
+      if (!Array.isArray(list)) return [];
+      return list.sort((a, b) => {
+          const rA = a.room_details?.room_number || 0;
+          const rB = b.room_details?.room_number || 0;
+          return rA - rB;
+      });
+  };
 
-  const arrivals = sortList(bookings.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED'));
-  const departures = sortList(bookings.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN'));
-  const inHouse = sortList(bookings.filter(b => b.status === 'CHECKED_IN'));
+  // Safe lists
+  const safeBookingsList = Array.isArray(bookings) ? bookings : [];
+  const arrivals = sortList(safeBookingsList.filter(b => b.check_in_date === todayStr && b.status === 'CONFIRMED'));
+  const departures = sortList(safeBookingsList.filter(b => b.check_out_date === todayStr && b.status === 'CHECKED_IN'));
+  const inHouse = sortList(safeBookingsList.filter(b => b.status === 'CHECKED_IN'));
 
   const getFilteredList = (list) => {
+      if (!Array.isArray(list)) return [];
       return list.filter(b => 
           b.guest_details?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           b.room_details?.room_number?.toString().includes(searchTerm) ||

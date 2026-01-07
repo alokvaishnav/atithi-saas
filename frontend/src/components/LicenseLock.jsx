@@ -4,6 +4,7 @@ import {
   AlertTriangle, RefreshCw, Mail
 } from 'lucide-react';
 import { API_URL } from '../config';
+import { useAuth } from '../context/AuthContext'; // Using context for cleaner token access
 
 const LicenseLock = ({ children }) => {
   const [status, setStatus] = useState('LOADING'); // LOADING | ACTIVE | WARNING | EXPIRED
@@ -12,16 +13,18 @@ const LicenseLock = ({ children }) => {
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
 
-  const token = localStorage.getItem('access_token');
+  // 🔐 Use Context for live token updates (better than localStorage direct read)
+  const { token, logout } = useAuth(); 
 
-  // 1. Verify License on Mount
+  // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // If no token exists (user not logged in), we skip the check 
-    // and let the AuthContext handle the redirect to Login.
+    // 🟢 CRITICAL FIX: If no token exists, skip check and allow AuthContext to handle login redirect.
+    // This prevents the 400 Bad Request error loop.
     if (!token) {
-        setStatus('ACTIVE');
+        setStatus('ACTIVE'); // Default to active so Login page can render
         return;
     }
+    
     checkLicense();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -94,8 +97,9 @@ const LicenseLock = ({ children }) => {
 
   // --- RENDER STATES ---
 
-  // A. Loading Screen
-  if (status === 'LOADING') return (
+  // A. Loading Screen (Only if we have a token and are actually checking)
+  // If no token, we skip this to show Login page immediately
+  if (status === 'LOADING' && token) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
@@ -148,9 +152,9 @@ const LicenseLock = ({ children }) => {
             </form>
 
             <div className="mt-8 pt-8 border-t border-white/5 flex justify-center gap-6">
-                 <a href="mailto:support@atithi.com" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
-                    <Mail size={14}/> Contact Support
-                 </a>
+                 <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
+                    <LogOutIcon size={14}/> Log Out
+                 </button>
                  <button onClick={checkLicense} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
                     <RefreshCw size={14}/> Refresh Status
                  </button>
@@ -184,5 +188,10 @@ const LicenseLock = ({ children }) => {
     </>
   );
 };
+
+// Helper Component for Logout Icon to avoid missing import
+const LogOutIcon = ({size}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+);
 
 export default LicenseLock;
