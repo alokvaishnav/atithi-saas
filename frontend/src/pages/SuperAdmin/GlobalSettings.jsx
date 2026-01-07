@@ -5,17 +5,16 @@ import {
   Database, Cpu, CheckCircle, Edit3,
   TrendingUp, RefreshCw, X, Key, Calendar,
   ShieldCheck, History, Globe, Settings2,
-  Zap, AlertTriangle, Copy, Mail, MessageCircle, Save, Megaphone
+  Zap, AlertTriangle, Copy, Mail, MessageCircle, Save, Megaphone,
+  BarChart3, Lock, Users, HardDrive, CreditCard, Tag, Check, DollarSign
 } from 'lucide-react';
-// 🟢 CRITICAL FIX: Updated paths to go up two levels (../../)
 import { API_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext'; 
 
 const GlobalSettings = () => {
-  // 🟢 1. HOOKS (Must be at the top)
-  const { token, user, logout } = useAuth(); // Added logout for easy reset
+  const { token, user, logout } = useAuth();
   
-  // --- DATA STATE ---
+  // --- CORE DATA ---
   const [tenants, setTenants] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [stats, setStats] = useState({ 
@@ -23,69 +22,55 @@ const GlobalSettings = () => {
   });
   const [logs, setLogs] = useState([]);
   
-  // --- PLATFORM CONFIG STATE ---
-  const [activeTab, setActiveTab] = useState('DASHBOARD'); // DASHBOARD, ANNOUNCEMENTS, CONFIG
+  // 🟢 DYNAMIC PLANS STATE (Default Plans)
+  const [plans, setPlans] = useState([
+      { id: 1, name: 'Standard', price: 1999, currency: 'INR', interval: 'month', max_rooms: 20, features: ['Dashboard', 'Front Desk', 'Housekeeping'], color: 'blue' },
+      { id: 2, name: 'Business', price: 4999, currency: 'INR', interval: 'month', max_rooms: 50, features: ['All Standard', 'Inventory', 'POS', 'Reports'], color: 'purple' },
+      { id: 3, name: 'Enterprise', price: 9999, currency: 'INR', interval: 'month', max_rooms: 9999, features: ['All Business', 'Multi-User', 'Audit Logs', 'API Access'], color: 'orange' }
+  ]);
+
+  const [systemHealth, setSystemHealth] = useState({ status: 'ONLINE', latency: 0, db: 'CONNECTED' });
+  
+  // --- CONFIG STATE ---
+  const [activeTab, setActiveTab] = useState('COMMAND'); // COMMAND, TENANTS, PLANS, INFRA, CONFIG
   const [platformConfig, setPlatformConfig] = useState({
     app_name: '', company_name: '', support_email: '', support_phone: '',
     smtp_host: '', smtp_port: '587', smtp_user: '', smtp_password: '',
-    welcome_email_subject: '', welcome_email_body: ''
+    maintenance_mode: false
   });
 
   // --- UI STATE ---
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
   
-  // --- MODAL STATES ---
+  // --- MODALS ---
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState(null); // For Inspection
-  const [editingHotel, setEditingHotel] = useState(null);     // For Editing (Name/License)
+  const [showPlanModal, setShowPlanModal] = useState(false); 
+  const [editingTenant, setEditingTenant] = useState(null); 
+  const [editingPlan, setEditingPlan] = useState(null); 
   
-  // --- FORM STATES ---
-  const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'PRO' });
+  // --- FORMS ---
+  // Default plan is now the first plan in the list
+  const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'Standard' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '' });
-  const [editForm, setEditForm] = useState({ hotel_name: '', license_expiry: '' });
+  const [tenantForm, setTenantForm] = useState({ 
+      hotel_name: '', license_expiry: '', plan: 'Standard', max_rooms: 100, 
+      reset_password: '' 
+  });
+  const [planForm, setPlanForm] = useState({
+      name: '', price: '', max_rooms: '', features: '', color: 'blue'
+  });
 
   // 🛡️ SECURITY CHECK
-  // We check if the user is authorized. We allow 'OWNER' because your superuser 'alok' is an OWNER.
   const isAuthorized = user?.is_superuser || user?.role === 'SUPERADMIN' || user?.role === 'OWNER';
 
-  if (!isAuthorized && !loading) {
-      return (
-        <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-6">
-            <ShieldCheck size={80} className="text-red-600"/>
-            <div className="text-center">
-                <h1 className="text-3xl font-black uppercase tracking-widest text-white">Access Denied</h1>
-                <p className="text-red-500 font-mono mt-2">ERR_PERMISSIONS_INSUFFICIENT</p>
-            </div>
-            
-            {/* 🟢 DEBUG PANEL: Shows you exactly what the system sees */}
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-left min-w-[300px]">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Current Session Data</p>
-                <div className="space-y-2 font-mono text-sm text-slate-300">
-                    <p>Username: <span className="text-white">{user?.username || 'Unknown'}</span></p>
-                    <p>Role: <span className="text-yellow-400">{user?.role || 'None'}</span></p>
-                    <p>Superuser: <span className={user?.is_superuser ? "text-green-400" : "text-red-400"}>{user?.is_superuser ? 'YES' : 'NO'}</span></p>
-                </div>
-            </div>
-
-            <div className="flex gap-4">
-                <button onClick={() => window.location.reload()} className="px-6 py-3 bg-slate-800 text-white rounded-lg hover:bg-slate-700 font-bold text-xs uppercase tracking-widest">
-                    Refresh
-                </button>
-                <button onClick={logout} className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-500 font-bold text-xs uppercase tracking-widest">
-                    Log Out & Reset
-                </button>
-            </div>
-        </div>
-      );
-  }
+  if (!isAuthorized && !loading) return <AccessDenied user={user} logout={logout} />;
 
   // ==================================================================================
-  // 1. DATA FETCHING ENGINE
+  // 1. DATA ENGINE
   // ==================================================================================
   const fetchAllData = useCallback(async (isInitial = false) => {
     if (!token) return;
@@ -94,84 +79,51 @@ const GlobalSettings = () => {
       else setRefreshing(true);
 
       const headers = { 'Authorization': `Bearer ${token}` };
+      const start = Date.now();
 
-      // Parallel Fetch with individual fail-safes
       const [statsRes, logsRes, configRes] = await Promise.all([
           fetch(`${API_URL}/api/super-admin/stats/`, { headers }).catch(e => null),
           fetch(`${API_URL}/api/logs/`, { headers }).catch(e => null),
           fetch(`${API_URL}/api/super-admin/platform-settings/`, { headers }).catch(e => null)
       ]);
       
+      const latency = Date.now() - start;
+      setSystemHealth(prev => ({ ...prev, latency, status: statsRes?.ok ? 'ONLINE' : 'DEGRADED' }));
+
       if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
         setTenants(Array.isArray(data.hotels) ? data.hotels : []);
         setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
         setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
+        // Future: If backend sends plans, update them here: setPlans(data.plans);
       }
 
-      if (logsRes && logsRes.ok) {
-          const logData = await logsRes.json();
-          setLogs(Array.isArray(logData) ? logData : []);
-      }
-
-      if (configRes && configRes.ok) {
-          setPlatformConfig(await configRes.json());
-      }
+      if (logsRes && logsRes.ok) setLogs(await logsRes.json());
+      if (configRes && configRes.ok) setPlatformConfig(await configRes.json());
 
     } catch (err) { 
       console.error("SuperAdmin Engine Error:", err); 
+      setSystemHealth({ status: 'OFFLINE', latency: 0, db: 'DISCONNECTED' });
     } finally { 
       setLoading(false); 
       setRefreshing(false);
     }
   }, [token]); 
 
-  // --- USE EFFECT ---
-  useEffect(() => { 
-      fetchAllData(true); 
-  }, [fetchAllData]);
+  useEffect(() => { fetchAllData(true); }, [fetchAllData]);
 
   // ==================================================================================
   // 2. TENANT ACTIONS
   // ==================================================================================
 
-  // A. Toggle Status (Active/Suspended)
-  const toggleStatus = async (id, currentStatus) => {
-    const originalTenants = [...tenants];
-    setTenants(tenants.map(t => t.id === id ? { ...t, is_active: !t.is_active } : t)); // Optimistic UI
-
-    if(!window.confirm(`Confirm: ${currentStatus === 'ACTIVE' ? 'SUSPEND' : 'ACTIVATE'} Node ID #${id}?`)) {
-        setTenants(originalTenants); 
-        return;
-    }
-    
-    try {
-        const res = await fetch(`${API_URL}/api/super-admin/stats/`, { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ action: 'toggle_status', hotel_id: id }) 
-        });
-        if(!res.ok) {
-            setTenants(originalTenants);
-            alert("Command Failed: Server rejected request.");
-        }
-    } catch (err) { 
-        setTenants(originalTenants);
-        console.error(err); 
-    }
-  };
-
-  // B. Generate License Key
-  const generateLicenseKey = (hotelId) => {
-      const randomKey = `ATITHI-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-PRO`;
-      navigator.clipboard.writeText(randomKey);
-      alert(`LICENSE GENERATED & COPIED TO CLIPBOARD:\n\n${randomKey}`);
-  };
-
-  // C. Create New Tenant
-  const handleCreate = async (e) => {
+  const handleCreateTenant = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
+    
+    // Find selected plan details to apply limits immediately
+    const selectedPlanObj = plans.find(p => p.name === formData.plan);
+    const maxRoomsLimit = selectedPlanObj ? selectedPlanObj.max_rooms : 20;
+
     try {
         const res = await fetch(`${API_URL}/api/register/`, {
             method: 'POST',
@@ -181,70 +133,135 @@ const GlobalSettings = () => {
                 email: formData.admin_email,
                 password: 'DefaultPassword123!', 
                 first_name: formData.name, 
-                last_name: 'Admin',
-                role: 'OWNER'
+                last_name: 'Admin', 
+                role: 'OWNER',
+                plan: formData.plan, // 🟢 Send selected plan
+                max_rooms: maxRoomsLimit // 🟢 Send plan limit
             })
         });
 
         if (res.ok) {
             setShowCreateModal(false);
-            setFormData({ name: '', domain: '', admin_email: '', plan: 'PRO' });
+            setFormData({ name: '', domain: '', admin_email: '', plan: plans[0]?.name || 'Standard' });
             fetchAllData(false);
-            alert("🚀 TENANT DEPLOYED SUCCESSFULLY\n\nCredentials sent to admin email.");
+            alert("🚀 Tenant Deployed Successfully");
         } else {
-            const err = await res.json();
-            alert("Deployment Halted: " + (JSON.stringify(err) || "Unknown error"));
+            const errData = await res.json();
+            alert("Deployment Failed: " + (errData.detail || "Unknown error"));
         }
-    } catch (err) { 
-        console.error(err);
-        alert("Network Error: Could not reach control plane.");
-    } finally { 
-        setIsSubmitting(false); 
-    }
+    } catch (err) { alert("Network Error"); } 
+    finally { setIsSubmitting(false); }
   };
 
-  // D. Edit Tenant (Name & License)
-  const openEditModal = (hotel) => {
-    setEditingHotel(hotel);
-    // Populate form with existing data (handle nested hotel_settings object)
-    setEditForm({
-        hotel_name: hotel.hotel_settings?.hotel_name || hotel.hotel_name || '',
-        license_expiry: hotel.hotel_settings?.license_expiry || ''
-    });
+  const handleUpdateTenant = async (e) => {
+      e.preventDefault();
+      setIsSubmitting(true);
+      try {
+          const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({
+                  action: 'edit_tenant',
+                  hotel_id: editingTenant.id,
+                  ...tenantForm
+              })
+          });
+          if(res.ok) {
+              setEditingTenant(null);
+              fetchAllData(false);
+              setMsg({ type: 'success', text: 'Tenant Configuration Updated' });
+              setTimeout(() => setMsg({type:'', text:''}), 3000);
+          } else {
+              alert("Update Failed");
+          }
+      } catch(err) { alert("Network Error"); }
+      finally { setIsSubmitting(false); }
   };
 
-  const handleSaveTenantEdit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-        const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
+  const handleToggleStatus = async (id) => {
+      if(!confirm("Change tenant status?")) return;
+      try {
+        await fetch(`${API_URL}/api/super-admin/stats/`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-                action: 'edit_tenant',
-                hotel_id: editingHotel.id,
-                ...editForm
-            })
+            body: JSON.stringify({ action: 'toggle_status', hotel_id: id }) 
         });
-
-        if(res.ok) {
-            setMsg({ type: 'success', text: 'Tenant updated successfully' });
-            setEditingHotel(null);
-            fetchAllData(false); // Refresh data
-            setTimeout(() => setMsg({type:'', text:''}), 3000);
-        } else {
-            setMsg({ type: 'error', text: 'Update failed on server' });
-        }
-    } catch (err) {
-        setMsg({ type: 'error', text: 'Network Error' });
-    } finally {
-        setIsSubmitting(false);
-    }
+        fetchAllData(false);
+      } catch(e) {}
   };
 
   // ==================================================================================
-  // 3. ANNOUNCEMENTS & CONFIG ACTIONS
+  // 3. PLAN MANAGEMENT ACTIONS
   // ==================================================================================
+
+  const handleSavePlan = (e) => {
+      e.preventDefault();
+      // NOTE: In a real app, send this to backend (POST /api/plans/). 
+      // For now, we simulate strictly in UI state.
+      const featuresArray = planForm.features.split(',').map(f => f.trim()).filter(f => f !== '');
+      const newPlanObj = {
+          id: editingPlan ? editingPlan.id : Date.now(),
+          name: planForm.name,
+          price: planForm.price,
+          currency: 'INR',
+          interval: 'month',
+          max_rooms: planForm.max_rooms,
+          features: featuresArray,
+          color: planForm.color
+      };
+
+      if (editingPlan) {
+          setPlans(plans.map(p => p.id === editingPlan.id ? newPlanObj : p));
+      } else {
+          setPlans([...plans, newPlanObj]);
+      }
+      
+      setShowPlanModal(false);
+      setEditingPlan(null);
+      setMsg({ type: 'success', text: 'Subscription Plan Updated' });
+      setTimeout(() => setMsg({type:'', text:''}), 3000);
+  };
+
+  const handleDeletePlan = (id) => {
+      if(confirm("Delete this plan? Existing subscribers will remain on this plan until moved.")) {
+          setPlans(plans.filter(p => p.id !== id));
+      }
+  };
+
+  const openPlanModal = (plan = null) => {
+      if (plan) {
+          setEditingPlan(plan);
+          setPlanForm({
+              name: plan.name,
+              price: plan.price,
+              max_rooms: plan.max_rooms,
+              features: plan.features.join(', '),
+              color: plan.color || 'blue'
+          });
+      } else {
+          setEditingPlan(null);
+          setPlanForm({ name: '', price: '', max_rooms: '', features: '', color: 'blue' });
+      }
+      setShowPlanModal(true);
+  };
+
+  // ==================================================================================
+  // 4. CONFIG & BROADCAST ACTIONS
+  // ==================================================================================
+
+  const handleSaveConfig = async (e) => {
+      e.preventDefault();
+      setIsSubmitting(true);
+      try {
+          const res = await fetch(`${API_URL}/api/super-admin/platform-settings/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify(platformConfig)
+          });
+          if(res.ok) alert("System Configuration Saved");
+      } catch(err) {}
+      finally { setIsSubmitting(false); }
+  };
 
   const handlePostAnnouncement = async (e) => {
     e.preventDefault();
@@ -257,192 +274,205 @@ const GlobalSettings = () => {
         });
         setNewAnnouncement({ title: '', message: '' });
         fetchAllData(false);
-        setMsg({ type: 'success', text: 'Announcement Broadcasted!' });
-        setTimeout(() => setMsg({ type: '', text: '' }), 3000);
-    } catch (err) { alert("Failed to post"); }
+        alert("Broadcast Sent!");
+    } catch (err) {}
     finally { setIsSubmitting(false); }
   };
 
-  const handleDeleteAnnouncement = async (id) => {
-      if(!confirm("Delete this announcement?")) return;
-      try {
-          await fetch(`${API_URL}/api/super-admin/stats/`, { 
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ action: 'delete_announcement', id }) 
-          });
-          fetchAllData(false);
-      } catch (err) {}
+  // --- UI HELPERS ---
+  const openEditModal = (t) => {
+      setEditingTenant(t);
+      setTenantForm({
+          hotel_name: t.hotel_settings?.hotel_name || t.hotel_name || '',
+          license_expiry: t.hotel_settings?.license_expiry || '',
+          plan: t.plan || plans[0]?.name || 'Standard',
+          max_rooms: t.hotel_settings?.max_rooms || 100,
+          reset_password: ''
+      });
   };
 
-  const handleSaveConfig = async (e) => {
-      e.preventDefault();
-      setIsSubmitting(true);
-      try {
-          const res = await fetch(`${API_URL}/api/super-admin/platform-settings/`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify(platformConfig)
-          });
-          if(res.ok) alert("Global System Configuration Updated Successfully! 🚀");
-          else alert("Failed to save configuration.");
-      } catch(err) { console.error(err); }
-      finally { setIsSubmitting(false); }
-  };
+  if (loading) return <LoadingScreen />;
 
-  // --- FILTER LOGIC ---
-  const filteredTenants = tenants.filter(t => {
-    const term = searchTerm.toLowerCase();
-    const nameMatch = (t.hotel_settings?.hotel_name || t.username || '').toLowerCase().includes(term);
-    const emailMatch = (t.email || '').toLowerCase().includes(term);
-    
-    const isActive = t.is_active;
-    const matchesStatus = statusFilter === 'ALL' || 
-                          (statusFilter === 'ACTIVE' && isActive) || 
-                          (statusFilter === 'SUSPENDED' && !isActive);
-    return (nameMatch || emailMatch) && matchesStatus;
-  });
-
-  // --- LOADING RENDER ---
-  if (loading) return (
-    <div className="h-screen bg-slate-950 flex flex-col items-center justify-center gap-6">
-        <div className="relative">
-            <Loader2 className="animate-spin text-purple-500" size={60}/>
-            <ShieldCheck className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white" size={24}/>
-        </div>
-        <div className="flex flex-col items-center">
-            <p className="text-purple-400 font-black uppercase tracking-[0.4em] text-xs">Connecting to Core...</p>
-            <p className="text-slate-600 font-mono text-[10px] mt-2">v3.0.0-stable</p>
-        </div>
-    </div>
-  );
-
-  // ==================================================================================
-  // MAIN RENDER
-  // ==================================================================================
   return (
-    <div className="p-4 md:p-8 bg-slate-950 min-h-screen font-sans text-white animate-in fade-in duration-700">
-      
-      {/* 1. TOP HEADER & TABS */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-10 gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-             <span className="bg-purple-600 p-2 rounded-xl shadow-xl shadow-purple-900/40"><Server size={24}/></span>
-             <h2 className="text-4xl font-black text-white tracking-tighter uppercase italic">Platform Core</h2>
-             {refreshing && <RefreshCw size={14} className="animate-spin text-slate-500" />}
-          </div>
-          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest ml-1 flex items-center gap-2">
-            <Globe size={12}/> Global Infrastructure Management • {platformConfig.app_name || 'SaaS Engine'}
-          </p>
-        </div>
+    <div className="flex h-screen bg-slate-950 font-sans text-white overflow-hidden">
         
-        <div className="flex gap-4">
-            <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 overflow-x-auto">
-                {['DASHBOARD', 'ANNOUNCEMENTS', 'CONFIG'].map(tab => (
+        {/* SIDEBAR NAVIGATION */}
+        <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col">
+            <div className="p-6 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/30">
+                        <Server size={20} className="text-white"/>
+                    </div>
+                    <div>
+                        <h1 className="font-black text-lg tracking-tight">GLOBAL HQ</h1>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">SaaS Control</p>
+                    </div>
+                </div>
+            </div>
+            
+            <nav className="flex-1 p-4 space-y-2">
+                {[
+                    { id: 'COMMAND', icon: Activity, label: 'Command Center' },
+                    { id: 'TENANTS', icon: Building, label: 'Tenant Manager' },
+                    { id: 'PLANS', icon: CreditCard, label: 'Subscription Plans' },
+                    { id: 'INFRA', icon: HardDrive, label: 'Infrastructure' },
+                    { id: 'CONFIG', icon: Settings2, label: 'Global Config' }
+                ].map(item => (
                     <button 
-                        key={tab}
-                        onClick={() => setActiveTab(tab)} 
-                        className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${activeTab === item.id ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                     >
-                        {tab}
+                        <item.icon size={18}/> {item.label}
                     </button>
                 ))}
+            </nav>
+
+            <div className="p-4 border-t border-slate-800">
+                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-4">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">System Latency</p>
+                    <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${systemHealth.latency < 200 ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
+                        <span className="text-sm font-mono text-white">{systemHealth.latency}ms</span>
+                    </div>
+                </div>
+                <button onClick={logout} className="w-full py-3 text-red-400 hover:bg-slate-800 rounded-xl font-bold uppercase text-xs transition-colors">Log Out</button>
             </div>
-            {activeTab === 'DASHBOARD' && (
-                <button onClick={() => setShowCreateModal(true)} className="bg-white text-slate-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
-                    <Plus size={18}/> New Tenant
-                </button>
-            )}
         </div>
-      </div>
 
-      {msg.text && (
-        <div className={`p-4 mb-6 rounded-xl border flex items-center gap-3 animate-in slide-in-from-top-2 ${msg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
-          <span className="font-bold text-sm">{msg.text}</span>
-        </div>
-      )}
-
-      {/* --- VIEW: DASHBOARD --- */}
-      {activeTab === 'DASHBOARD' && (
-        <div className="animate-in slide-in-from-bottom-4 duration-500">
+        {/* MAIN CONTENT AREA */}
+        <div className="flex-1 overflow-y-auto bg-slate-950 p-8 relative">
             
-            {/* METRICS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                <MetricCard title="Total Nodes" val={stats.total_hotels} icon={Building} color="text-blue-400" bg="bg-blue-400/10" border="border-blue-400/20" />
-                <MetricCard title="Active Tenants" val={stats.active_licenses || stats.total_hotels} icon={ShieldCheck} color="text-emerald-400" bg="bg-emerald-400/10" border="border-emerald-400/20" />
-                <MetricCard title="Total Inventory" val={stats.total_rooms} icon={Database} color="text-orange-400" bg="bg-orange-400/10" border="border-orange-400/20" />
-                <MetricCard title="Platform ARR" val={`₹${((stats.platform_revenue || 0) / 100000).toFixed(1)}L`} icon={TrendingUp} color="text-purple-400" bg="bg-purple-400/10" border="border-purple-400/20" />
+            {/* Header Actions */}
+            <div className="flex justify-between items-end mb-8">
+                <div>
+                    <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">{activeTab.replace('_', ' ')}</h2>
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+                        {platformConfig.app_name || 'Atithi SaaS'} • {user?.username}
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    <button onClick={() => fetchAllData(false)} className="p-3 bg-slate-900 border border-slate-800 rounded-xl hover:text-white text-slate-400 transition-all">
+                        <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''}/>
+                    </button>
+                    {activeTab === 'TENANTS' && (
+                        <button onClick={() => setShowCreateModal(true)} className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 shadow-lg transition-all">
+                            <Plus size={16}/> Deploy Tenant
+                        </button>
+                    )}
+                    {activeTab === 'PLANS' && (
+                        <button onClick={() => openPlanModal()} className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 shadow-lg transition-all">
+                            <Plus size={16}/> Create Plan
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* MAIN CONTENT GRID */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                
-                {/* Left: Tenant List */}
-                <div className="xl:col-span-2 bg-slate-900 rounded-[40px] border border-slate-800 overflow-hidden shadow-2xl">
-                    <div className="p-8 border-b border-slate-800 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <Database className="text-purple-500" size={24}/>
-                            <h3 className="text-xl font-black text-white uppercase italic">Tenant Hub</h3>
+            {/* ERROR/SUCCESS MSG */}
+            {msg.text && (
+                <div className={`p-4 mb-6 rounded-xl border flex items-center gap-3 animate-in slide-in-from-top-2 ${msg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}`}>
+                    <span className="font-bold text-xs uppercase tracking-wider">{msg.text}</span>
+                </div>
+            )}
+
+            {/* --- TAB: COMMAND CENTER --- */}
+            {activeTab === 'COMMAND' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                    {/* Metrics Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <MetricCard title="Total ARR" val={`₹${((stats.platform_revenue || 0)/100000).toFixed(2)}L`} icon={TrendingUp} color="text-emerald-400" />
+                        <MetricCard title="Active Nodes" val={stats.total_hotels} icon={Building} color="text-blue-400" />
+                        <MetricCard title="Total Licenses" val={stats.active_licenses} icon={ShieldCheck} color="text-purple-400" />
+                        <MetricCard title="Global Inventory" val={stats.total_rooms} icon={Database} color="text-orange-400" />
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Revenue Chart */}
+                        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
+                            <div className="flex justify-between items-center mb-8">
+                                <h3 className="font-black text-white uppercase text-sm tracking-widest flex items-center gap-2"><BarChart3 size={18} className="text-purple-500"/> Revenue Intelligence</h3>
+                                <div className="flex gap-2">
+                                    <span className="px-3 py-1 bg-white/5 rounded-lg text-[10px] font-bold text-slate-400">Monthly</span>
+                                    <span className="px-3 py-1 bg-purple-600 rounded-lg text-[10px] font-bold text-white shadow-lg">Annual</span>
+                                </div>
+                            </div>
+                            <div className="flex items-end justify-between h-48 gap-4">
+                                {[35, 42, 28, 55, 60, 48, 72, 65, 85, 90, 78, 95].map((h, i) => (
+                                    <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
+                                        <div style={{height: `${h}%`}} className="w-full bg-slate-800 rounded-t-lg group-hover:bg-purple-500 transition-all duration-500 relative">
+                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {h}%
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-600 uppercase">M{i+1}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={14} />
-                            <input 
-                                type="text" 
-                                placeholder="Search..." 
-                                className="pl-9 pr-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-bold outline-none focus:border-purple-500 w-40 transition-all"
-                                value={searchTerm} 
-                                onChange={(e) => setSearchTerm(e.target.value)} 
-                            />
+
+                        {/* Recent Alerts */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
+                            <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><AlertTriangle size={18} className="text-yellow-500"/> Critical Alerts</h3>
+                            <div className="space-y-4">
+                                {logs.filter(l => l.action === 'ERROR' || l.details.includes('Failed')).slice(0,5).map((l, i) => (
+                                    <div key={i} className="flex gap-3 items-start p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                        <X size={14} className="text-red-500 mt-1 shrink-0"/>
+                                        <div>
+                                            <p className="text-xs font-bold text-red-200">{l.details}</p>
+                                            <p className="text-[10px] text-red-400 mt-1">{new Date(l.timestamp).toLocaleTimeString()}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                {logs.length === 0 && <p className="text-slate-500 text-xs italic">System nominal. No critical alerts.</p>}
+                            </div>
                         </div>
                     </div>
-                    
-                    <div className="overflow-x-auto">
+                </div>
+            )}
+
+            {/* --- TAB: TENANT MANAGER --- */}
+            {activeTab === 'TENANTS' && (
+                <div className="animate-in fade-in slide-in-from-bottom-4">
+                    <div className="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden">
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <div className="relative w-64">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={16}/>
+                                <input className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 py-3 text-xs font-bold text-white outline-none focus:border-purple-500" placeholder="Search Node ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
+                            </div>
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                                Total: {tenants.length} Nodes
+                            </div>
+                        </div>
                         <table className="w-full text-left">
-                            <thead className="bg-slate-950/50">
+                            <thead className="bg-slate-950/50 text-[10px] font-black text-slate-500 uppercase tracking-widest">
                                 <tr>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Node Identity</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Tier</th>
-                                    <th className="p-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 text-right">Ops Control</th>
+                                    <th className="p-6">Node Identity</th>
+                                    <th className="p-6">Plan</th>
+                                    <th className="p-6">Status</th>
+                                    <th className="p-6 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-800/50">
-                                {filteredTenants.map(t => (
-                                    <tr key={t.id} className="hover:bg-slate-800/40 transition-colors group">
+                            <tbody className="divide-y divide-slate-800">
+                                {tenants.filter(t => (t.hotel_settings?.hotel_name || t.username).toLowerCase().includes(searchTerm.toLowerCase())).map(t => (
+                                    <tr key={t.id} className="hover:bg-slate-800/50 transition-colors">
                                         <td className="p-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 border border-slate-700 group-hover:border-purple-500 transition-all">
-                                                    <Building size={18}/>
-                                                </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center font-bold text-slate-400">{t.username[0].toUpperCase()}</div>
                                                 <div>
-                                                    <span className="block text-sm font-black text-white uppercase tracking-tight italic">
-                                                        {t.hotel_settings?.hotel_name || t.username}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-                                                        ID: {t.username}
-                                                    </span>
+                                                    <p className="font-bold text-white text-sm">{t.hotel_settings?.hotel_name || t.username}</p>
+                                                    <p className="text-[10px] text-slate-500">{t.email}</p>
                                                 </div>
                                             </div>
                                         </td>
+                                        <td className="p-6"><span className="px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded text-[10px] font-black">{t.plan || 'PRO'}</span></td>
                                         <td className="p-6">
-                                            <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
-                                                t.plan === 'ENTERPRISE' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 
-                                                'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                            }`}>
-                                                {t.plan || 'PRO'}
+                                            <span className={`px-2 py-1 rounded text-[10px] font-black ${t.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                                {t.is_active ? 'ONLINE' : 'SUSPENDED'}
                                             </span>
                                         </td>
-                                        <td className="p-6 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => setSelectedTenant(t)} className="p-2 bg-slate-800 text-slate-400 rounded-lg hover:text-white hover:bg-slate-700 transition-all" title="Inspect Node"><Activity size={16}/></button>
-                                                
-                                                <button onClick={() => openEditModal(t)} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-400/10 transition-all" title="Edit Tenant"><Edit3 size={16}/></button>
-                                                
-                                                <button onClick={() => generateLicenseKey(t.id)} className="p-2 bg-slate-800 text-yellow-400 rounded-lg hover:bg-yellow-400/10 transition-all" title="Generate Key"><Key size={16}/></button>
-                                                
-                                                <button onClick={() => toggleStatus(t.id, t.is_active ? 'ACTIVE' : 'SUSPENDED')} className={`p-2 rounded-lg transition-all ${!t.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'} hover:text-white`}>
-                                                    <Power size={16}/>
-                                                </button>
-                                            </div>
+                                        <td className="p-6 text-right flex justify-end gap-2">
+                                            <button onClick={() => openEditModal(t)} className="p-2 bg-slate-800 hover:bg-purple-600 hover:text-white rounded-lg text-slate-400 transition-all"><Settings2 size={16}/></button>
+                                            <button onClick={() => handleToggleStatus(t.id)} className="p-2 bg-slate-800 hover:bg-red-600 hover:text-white rounded-lg text-slate-400 transition-all"><Power size={16}/></button>
                                         </td>
                                     </tr>
                                 ))}
@@ -450,274 +480,304 @@ const GlobalSettings = () => {
                         </table>
                     </div>
                 </div>
+            )}
 
-                {/* Right: Logs */}
-                <div className="bg-slate-900 rounded-[40px] border border-slate-800 p-8 flex flex-col h-[600px] xl:h-auto overflow-hidden">
-                    <div className="flex items-center gap-3 mb-6">
-                        <History className="text-blue-500" size={20}/>
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">Platform Audit Trail</h3>
-                    </div>
-                    <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                        {logs.length > 0 ? logs.map((log, i) => (
-                            <div key={i} className="flex gap-4 items-start pb-4 border-l border-slate-800 ml-2 pl-4 relative">
-                                <div className={`absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full ${log.action === 'CREATE' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
-                                <div>
-                                    <p className="text-[11px] font-bold text-slate-300 leading-snug">{log.details}</p>
-                                    <p className="text-[9px] text-slate-600 font-black uppercase mt-1 tracking-widest">{new Date(log.timestamp).toLocaleTimeString()}</p>
+            {/* --- TAB: SUBSCRIPTION PLANS (NEW) --- */}
+            {activeTab === 'PLANS' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
+                    {plans.map(plan => (
+                        <div key={plan.id} className="bg-slate-900 rounded-[35px] border border-slate-800 p-8 relative overflow-hidden group hover:border-purple-500 transition-all duration-300">
+                            <div className={`absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity bg-${plan.color}-500/20 rounded-bl-[40px]`}>
+                                <Tag size={80} className={`text-${plan.color}-500`}/>
+                            </div>
+                            
+                            <div className="relative z-10">
+                                <h3 className={`text-sm font-black uppercase tracking-widest text-${plan.color}-400 mb-2`}>{plan.name}</h3>
+                                <div className="flex items-baseline gap-1 mb-6">
+                                    <span className="text-3xl font-black text-white">₹{plan.price}</span>
+                                    <span className="text-xs font-bold text-slate-500 uppercase">/{plan.interval}</span>
+                                </div>
+                                
+                                <div className="space-y-3 mb-8">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-slate-800 p-1.5 rounded-lg text-slate-400"><Database size={12}/></div>
+                                        <p className="text-xs font-bold text-slate-300">{plan.max_rooms} Max Rooms</p>
+                                    </div>
+                                    {plan.features.map((feat, i) => (
+                                        <div key={i} className="flex items-center gap-3">
+                                            <div className="bg-green-500/10 p-1.5 rounded-lg text-green-500"><Check size={12}/></div>
+                                            <p className="text-xs font-bold text-slate-400">{feat}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <button onClick={() => openPlanModal(plan)} className="flex-1 py-3 bg-white text-slate-900 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-colors">
+                                        Edit Plan
+                                    </button>
+                                    <button onClick={() => handleDeletePlan(plan.id)} className="p-3 bg-slate-800 text-red-400 rounded-xl hover:bg-red-500/10 transition-colors">
+                                        <Trash2 size={16}/>
+                                    </button>
                                 </div>
                             </div>
-                        )) : <p className="text-center text-slate-600 text-xs">No logs found.</p>}
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* --- VIEW: ANNOUNCEMENTS --- */}
-      {activeTab === 'ANNOUNCEMENTS' && (
-         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-right-4">
-             {/* Create Form */}
-             <div className="md:col-span-1 bg-slate-900 p-6 rounded-3xl shadow-lg border border-slate-800 h-fit">
-                 <h3 className="font-black text-white mb-4 flex items-center gap-2"><Megaphone size={20} className="text-orange-400"/> New Announcement</h3>
-                 <form onSubmit={handlePostAnnouncement} className="space-y-4">
-                     <div>
-                         <label className="text-[10px] font-black text-slate-500 uppercase">Title</label>
-                         <input required className="w-full p-3 bg-slate-950 rounded-xl border border-slate-800 text-white font-bold outline-none focus:border-purple-500" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} />
-                     </div>
-                     <div>
-                         <label className="text-[10px] font-black text-slate-500 uppercase">Message</label>
-                         <textarea required rows="4" className="w-full p-3 bg-slate-950 rounded-xl border border-slate-800 text-white text-sm outline-none focus:border-purple-500" value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})} />
-                     </div>
-                     <button type="submit" disabled={isSubmitting} className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-500 transition-colors flex justify-center items-center gap-2">
-                         {isSubmitting ? <Loader2 className="animate-spin"/> : <Plus size={18}/>} Post to All Dashboards
-                     </button>
-                 </form>
-             </div>
-
-             {/* List */}
-             <div className="md:col-span-2 space-y-4">
-                 {announcements.map(ann => (
-                     <div key={ann.id} className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-sm flex justify-between items-start">
-                         <div>
-                             <h4 className="font-bold text-white text-lg">{ann.title}</h4>
-                             <p className="text-slate-400 mt-1">{ann.message}</p>
-                             <p className="text-xs text-slate-600 mt-4 font-mono">{new Date(ann.created_at).toLocaleString()}</p>
-                         </div>
-                         <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-400 hover:text-red-500 bg-slate-950 p-2 rounded-lg border border-slate-800"><Trash2 size={18}/></button>
-                     </div>
-                 ))}
-                 {announcements.length === 0 && <div className="text-center text-slate-600 p-10 font-bold uppercase tracking-widest">No active announcements</div>}
-             </div>
-         </div>
-      )}
-
-      {/* --- VIEW: GLOBAL CONFIG --- */}
-      {activeTab === 'CONFIG' && (
-          <div className="max-w-5xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
-              <form onSubmit={handleSaveConfig} className="bg-slate-900 p-10 rounded-[40px] border border-slate-800 shadow-2xl space-y-10 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none"><Settings2 size={250}/></div>
-                  
-                  {/* BRANDING */}
-                  <div className="relative z-10">
-                      <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-6 border-b border-slate-800 pb-2 flex items-center gap-2">
-                          <Settings2 size={16}/> Software Branding
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">App Name</label>
-                              <input className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 focus:border-purple-500 outline-none transition-all" 
-                                  value={platformConfig.app_name} onChange={e => setPlatformConfig({...platformConfig, app_name: e.target.value})} placeholder="My SaaS Name"/>
-                          </div>
-                          <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Company Name (Legal)</label>
-                              <input className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 focus:border-purple-500 outline-none transition-all" 
-                                  value={platformConfig.company_name} onChange={e => setPlatformConfig({...platformConfig, company_name: e.target.value})} placeholder="My Tech Pvt Ltd"/>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* CONTACT INFO */}
-                  <div className="relative z-10">
-                      <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-6 border-b border-slate-800 pb-2 flex items-center gap-2">
-                          <Globe size={16}/> Public Contact Info
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Support Email</label>
-                              <input className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 focus:border-purple-500 outline-none transition-all" 
-                                  value={platformConfig.support_email} onChange={e => setPlatformConfig({...platformConfig, support_email: e.target.value})}/>
-                          </div>
-                          <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Support Phone / WhatsApp</label>
-                              <input className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 focus:border-purple-500 outline-none transition-all" 
-                                  value={platformConfig.support_phone} onChange={e => setPlatformConfig({...platformConfig, support_phone: e.target.value})}/>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* SYSTEM SMTP */}
-                  <div className="relative z-10">
-                      <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-6 border-b border-slate-800 pb-2 flex items-center gap-2">
-                          <Mail size={16}/> System SMTP (Global)
-                      </h3>
-                      <div className="p-4 bg-slate-950/50 rounded-2xl border border-slate-800 mb-6 text-xs text-slate-400">
-                          These credentials will be used to send <strong>Welcome Emails</strong> and <strong>Password Resets</strong> to your tenants.
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <input className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all" 
-                              value={platformConfig.smtp_host} onChange={e => setPlatformConfig({...platformConfig, smtp_host: e.target.value})} placeholder="SMTP Host (e.g., smtp.gmail.com)"/>
-                          <input className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all" 
-                              value={platformConfig.smtp_user} onChange={e => setPlatformConfig({...platformConfig, smtp_user: e.target.value})} placeholder="SMTP Username"/>
-                          <input type="password" className="w-full p-4 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all" 
-                              value={platformConfig.smtp_password} onChange={e => setPlatformConfig({...platformConfig, smtp_password: e.target.value})} placeholder="SMTP Password"/>
-                      </div>
-                  </div>
-
-                  <div className="pt-6 flex justify-end relative z-10">
-                      <button type="submit" disabled={isSubmitting} className="bg-purple-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-purple-500 shadow-xl shadow-purple-900/40 flex items-center gap-3 transition-all active:scale-95">
-                          {isSubmitting ? <Loader2 className="animate-spin"/> : <Save size={20}/>}
-                          Save System Configuration
-                      </button>
-                  </div>
-
-              </form>
-          </div>
-      )}
-
-      {/* --- MODAL 1: CREATE TENANT --- */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-            <form onSubmit={handleCreate} className="bg-slate-900 p-10 rounded-[40px] w-full max-w-lg border border-slate-700 space-y-6 shadow-2xl relative">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="absolute top-8 right-8 text-slate-500 hover:text-white transition-colors"><X/></button>
-                
-                <div>
-                    <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter">Onboard Instance</h3>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Initiating New Infrastructure Deployment</p>
-                </div>
-                
-                <div className="space-y-5">
-                    <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Legal Property Entity</label>
-                        <input required className="w-full p-5 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all shadow-inner" 
-                            placeholder="Grand Atithi Plaza"
-                            value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                    </div>
+                        </div>
+                    ))}
                     
-                    <div className="grid grid-cols-2 gap-4">
-                         <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Cluster ID (Username)</label>
-                            <input required className="w-full p-5 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all shadow-inner" 
-                                placeholder="grand_01"
-                                value={formData.domain} onChange={e => setFormData({...formData, domain: e.target.value})} />
-                         </div>
-                         <div>
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Service Tier</label>
-                            <select className="w-full p-5 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all shadow-inner"
-                                value={formData.plan} onChange={e => setFormData({...formData, plan: e.target.value})}>
-                                <option value="PRO">PRO • Standard</option>
-                                <option value="ENTERPRISE">ENTERPRISE • Scale</option>
-                            </select>
-                         </div>
-                    </div>
-
-                    <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Root Administrator Email</label>
-                        <input required type="email" className="w-full p-5 bg-slate-950 rounded-2xl font-bold text-white border border-slate-800 outline-none focus:border-purple-500 transition-all shadow-inner" 
-                            placeholder="owner@property.com"
-                            value={formData.admin_email} onChange={e => setFormData({...formData, admin_email: e.target.value})} />
-                    </div>
-                </div>
-
-                <div className="pt-4">
-                    <button type="submit" disabled={isSubmitting} className="w-full py-5 bg-purple-600 text-white font-black rounded-2xl hover:bg-purple-500 shadow-2xl shadow-purple-900/50 transition-all flex justify-center items-center gap-3">
-                        {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Cpu size={18}/> DEPLOY TO PRODUCTION</>}
+                    <button onClick={() => openPlanModal()} className="bg-slate-900/50 border-2 border-dashed border-slate-800 rounded-[35px] flex flex-col items-center justify-center gap-4 text-slate-500 hover:text-white hover:border-purple-500 hover:bg-slate-900 transition-all min-h-[400px]">
+                        <div className="bg-slate-800 p-4 rounded-full"><Plus size={32}/></div>
+                        <span className="font-bold text-xs uppercase tracking-widest">Create New Tier</span>
                     </button>
                 </div>
-            </form>
-        </div>
-      )}
+            )}
 
-      {/* --- MODAL 2: INSPECTION MODAL --- */}
-      {selectedTenant && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-            <div className="bg-slate-900 p-12 rounded-[50px] w-full max-w-xl border border-slate-700 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none"><Globe size={250}/></div>
-
-                <div className="flex justify-between items-start mb-10 relative z-10">
-                    <div>
-                        <h3 className="text-4xl font-black text-white tracking-tighter uppercase italic">{selectedTenant.hotel_settings?.hotel_name || selectedTenant.username}</h3>
-                        <p className="text-purple-400 font-mono text-sm mt-1 uppercase tracking-widest">Instance Node: {selectedTenant.username}.atithi.live</p>
+            {/* --- TAB: INFRASTRUCTURE --- */}
+            {activeTab === 'INFRA' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4">
+                    {/* System Announcements */}
+                    <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800">
+                        <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><Megaphone size={18} className="text-orange-400"/> Global Broadcast</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Title</label>
+                                <input className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-orange-500" 
+                                    value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})}/>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Message</label>
+                                <textarea className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-orange-500 min-h-[100px]"
+                                    value={newAnnouncement.message} onChange={e => setNewAnnouncement({...newAnnouncement, message: e.target.value})}/>
+                            </div>
+                            <button onClick={handlePostAnnouncement} className="w-full py-4 bg-orange-500 hover:bg-orange-600 rounded-xl font-black uppercase text-xs tracking-widest text-white transition-all shadow-lg shadow-orange-900/20">
+                                Send Broadcast to All Tenants
+                            </button>
+                        </div>
+                        
+                        <div className="mt-8 pt-8 border-t border-slate-800 space-y-3">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Active Broadcasts</p>
+                            {announcements.map(a => (
+                                <div key={a.id} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+                                    <div>
+                                        <p className="text-xs font-bold text-white">{a.title}</p>
+                                        <p className="text-[10px] text-slate-500">{new Date(a.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                    <button className="text-red-500 hover:text-red-400"><Trash2 size={14}/></button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <button onClick={() => setSelectedTenant(null)} className="p-3 bg-slate-800 rounded-full hover:text-red-500 transition-colors"><X size={24}/></button>
-                </div>
 
-                <div className="grid grid-cols-2 gap-6 mb-12 relative z-10">
-                    <DetailBox label="Onboarded On" val={new Date(selectedTenant.date_joined).toLocaleDateString('en-GB')} />
-                    <DetailBox label="Service Level" val={selectedTenant.plan || 'PRO'} />
-                    <DetailBox label="Deployment Status" val={selectedTenant.is_active ? 'ACTIVE' : 'SUSPENDED'} highlight={!selectedTenant.is_active ? 'text-red-500' : 'text-emerald-500'} />
-                    <DetailBox label="Last Login" val={selectedTenant.last_login ? new Date(selectedTenant.last_login).toLocaleDateString() : 'NEVER'} />
+                    {/* Infrastructure Logs */}
+                    <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 flex flex-col h-[600px]">
+                        <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><HardDrive size={18} className="text-blue-400"/> System Logs</h3>
+                        <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
+                            {logs.map((l, i) => (
+                                <div key={i} className="flex gap-3 items-start border-l-2 border-slate-800 pl-4 py-1">
+                                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${l.action === 'ERROR' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-300">{l.details}</p>
+                                        <p className="text-[10px] text-slate-600 font-mono mt-1">{new Date(l.timestamp).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
+            )}
 
-                <div className="flex gap-4 relative z-10">
-                      <button className="flex-1 py-5 bg-slate-800 text-white font-black rounded-2xl hover:bg-slate-700 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
-                        <RefreshCw size={18}/> Cold Resync
-                      </button>
-                      <button className="flex-1 py-5 bg-red-600 text-white font-black rounded-2xl hover:bg-red-500 transition-all uppercase tracking-widest text-[10px] flex items-center justify-center gap-2">
-                        <Trash2 size={18}/> Termination
-                      </button>
+            {/* --- TAB: GLOBAL CONFIG --- */}
+            {activeTab === 'CONFIG' && (
+                <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+                    <div className="bg-slate-900 p-10 rounded-3xl border border-slate-800">
+                        <h3 className="font-black text-white uppercase text-xl tracking-tighter mb-8 flex items-center gap-3"><Settings2 size={24} className="text-purple-500"/> Platform Configuration</h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                            <div className="space-y-4">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-2">Branding</h4>
+                                <Input label="App Name" val={platformConfig.app_name} set={v => setPlatformConfig({...platformConfig, app_name: v})} />
+                                <Input label="Company Name" val={platformConfig.company_name} set={v => setPlatformConfig({...platformConfig, company_name: v})} />
+                            </div>
+                            <div className="space-y-4">
+                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest border-b border-slate-800 pb-2">Support</h4>
+                                <Input label="Support Email" val={platformConfig.support_email} set={v => setPlatformConfig({...platformConfig, support_email: v})} />
+                                <Input label="Support Phone" val={platformConfig.support_phone} set={v => setPlatformConfig({...platformConfig, support_phone: v})} />
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-8">
+                            <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Mail size={14}/> SMTP Gateway</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input label="Host" val={platformConfig.smtp_host} set={v => setPlatformConfig({...platformConfig, smtp_host: v})} />
+                                <Input label="User" val={platformConfig.smtp_user} set={v => setPlatformConfig({...platformConfig, smtp_user: v})} />
+                                <div className="col-span-2">
+                                    <Input label="Password" type="password" val={platformConfig.smtp_password} set={v => setPlatformConfig({...platformConfig, smtp_password: v})} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-4 pt-6 border-t border-slate-800">
+                            <div className="flex items-center gap-3 mr-auto">
+                                <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${platformConfig.maintenance_mode ? 'bg-red-500' : 'bg-slate-700'}`} onClick={() => setPlatformConfig({...platformConfig, maintenance_mode: !platformConfig.maintenance_mode})}>
+                                    <div className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform ${platformConfig.maintenance_mode ? 'translate-x-6' : ''}`}></div>
+                                </div>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Maintenance Mode</span>
+                            </div>
+                            <button onClick={handleSaveConfig} className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg transition-all">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </div>
+
+        {/* --- MODAL: EDIT TENANT --- */}
+        {editingTenant && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-8 relative animate-in zoom-in-95 duration-200">
+                    <button onClick={() => setEditingTenant(null)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X/></button>
+                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-1">Modify Tenant</h3>
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8">Node: {editingTenant.username}</p>
+                    
+                    <div className="space-y-4">
+                        <Input label="Legal Entity Name" val={tenantForm.hotel_name} set={v => setTenantForm({...tenantForm, hotel_name: v})} />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Service Plan</label>
+                                <select className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-purple-500"
+                                    value={tenantForm.plan} onChange={e => setTenantForm({...tenantForm, plan: e.target.value})}>
+                                    {/* 🟢 DYNAMIC PLANS DROPDOWN */}
+                                    {plans.map(p => (
+                                        <option key={p.id} value={p.name}>{p.name} • ₹{p.price}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <Input label="Max Rooms" type="number" val={tenantForm.max_rooms} set={v => setTenantForm({...tenantForm, max_rooms: v})} />
+                        </div>
+                        <Input label="License Expiry (YYYY-MM-DD)" type="date" val={tenantForm.license_expiry} set={v => setTenantForm({...tenantForm, license_expiry: v})} />
+                        
+                        <div className="pt-4 border-t border-slate-800 mt-4">
+                            <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-2">Danger Zone</p>
+                            <Input label="Reset Admin Password" placeholder="Enter new password to reset..." val={tenantForm.reset_password} set={v => setTenantForm({...tenantForm, reset_password: v})} />
+                        </div>
+                    </div>
+
+                    <button onClick={handleUpdateTenant} disabled={isSubmitting} className="w-full mt-8 bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
+                        {isSubmitting ? <Loader2 className="animate-spin mx-auto"/> : 'Save Modifications'}
+                    </button>
                 </div>
             </div>
-        </div>
-      )}
+        )}
 
-      {/* --- MODAL 3: EDIT TENANT (Name & License) --- */}
-      {editingHotel && (
-          <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-              <div className="bg-slate-900 p-8 rounded-[40px] w-full max-w-md border border-slate-700 shadow-2xl relative">
-                  <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xl font-black text-white uppercase tracking-wider">Modify Tenant</h3>
-                      <button onClick={() => setEditingHotel(null)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X size={20}/></button>
-                  </div>
-                  <form onSubmit={handleSaveTenantEdit} className="space-y-4">
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Hotel Name</label>
-                          <input className="w-full p-3 bg-slate-950 rounded-xl border border-slate-800 font-bold text-white focus:border-blue-500 outline-none" 
-                              value={editForm.hotel_name} onChange={e => setEditForm({...editForm, hotel_name: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">License Expiry (YYYY-MM-DD)</label>
-                          <div className="relative">
-                            <Calendar className="absolute left-3 top-3 text-slate-500" size={18}/>
-                            <input type="date" className="w-full pl-10 p-3 bg-slate-950 rounded-xl border border-slate-800 font-bold text-white focus:border-blue-500 outline-none" 
-                                value={editForm.license_expiry} onChange={e => setEditForm({...editForm, license_expiry: e.target.value})} />
-                          </div>
-                          <p className="text-[9px] text-slate-600 mt-1 uppercase tracking-widest">Leave empty for Lifetime Access</p>
-                      </div>
-                      <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-500 transition-colors uppercase tracking-widest text-xs">
-                          {isSubmitting ? <Loader2 className="animate-spin inline mr-2"/> : null} Save Changes
-                      </button>
-                  </form>
-              </div>
-          </div>
-      )}
+        {/* --- MODAL: EDIT/CREATE PLAN --- */}
+        {showPlanModal && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-8 relative animate-in zoom-in-95 duration-200">
+                    <button onClick={() => setShowPlanModal(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X/></button>
+                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-6">{editingPlan ? 'Edit Plan' : 'Create New Plan'}</h3>
+                    
+                    <form onSubmit={handleSavePlan} className="space-y-4">
+                        <Input label="Plan Name (e.g. Gold Tier)" val={planForm.name} set={v => setPlanForm({...planForm, name: v})} />
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input label="Monthly Price (INR)" type="number" val={planForm.price} set={v => setPlanForm({...planForm, price: v})} />
+                            <Input label="Max Room Limit" type="number" val={planForm.max_rooms} set={v => setPlanForm({...planForm, max_rooms: v})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Features (Comma Separated)</label>
+                            <textarea className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-purple-500 h-24"
+                                value={planForm.features} onChange={e => setPlanForm({...planForm, features: e.target.value})} placeholder="Dashboard, Inventory, POS..."/>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Theme Color</label>
+                            <div className="flex gap-3">
+                                {['blue', 'purple', 'orange', 'emerald', 'red'].map(c => (
+                                    <div key={c} onClick={() => setPlanForm({...planForm, color: c})} 
+                                        className={`w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2 ${planForm.color === c ? 'border-white' : 'border-transparent'}`}></div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button type="submit" className="w-full mt-6 bg-white text-slate-900 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-slate-200 transition-all">
+                            Save Plan Configuration
+                        </button>
+                    </form>
+                </div>
+            </div>
+        )}
+
+        {/* --- MODAL: CREATE TENANT --- */}
+        {showCreateModal && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-slate-900 w-full max-w-lg rounded-3xl border border-slate-800 shadow-2xl p-8 relative animate-in zoom-in-95 duration-200">
+                    <button onClick={() => setShowCreateModal(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X/></button>
+                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter mb-6">Deploy New Node</h3>
+                    <div className="space-y-4">
+                        <Input label="Hotel Name" val={formData.name} set={v => setFormData({...formData, name: v})} placeholder="Grand Hotel"/>
+                        <Input label="Cluster ID (Username)" val={formData.domain} set={v => setFormData({...formData, domain: v})} placeholder="grand_01"/>
+                        <Input label="Admin Email" type="email" val={formData.admin_email} set={v => setFormData({...formData, admin_email: v})} placeholder="admin@hotel.com"/>
+                        
+                        {/* 🟢 DYNAMIC PLANS SELECTOR */}
+                        <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Subscription Tier</label>
+                            <select 
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-purple-500"
+                                value={formData.plan} 
+                                onChange={e => setFormData({...formData, plan: e.target.value})}
+                            >
+                                {plans.map(p => (
+                                    <option key={p.id} value={p.name}>{p.name} ({p.currency} {p.price})</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <button onClick={handleCreateTenant} disabled={isSubmitting} className="w-full mt-8 bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all">
+                        {isSubmitting ? <Loader2 className="animate-spin mx-auto"/> : 'Initialize Deployment'}
+                    </button>
+                </div>
+            </div>
+        )}
 
     </div>
   );
 };
 
-// Sub-components
-const MetricCard = ({ title, val, icon: Icon, color, bg, border }) => (
-    <div className={`bg-slate-900 p-7 rounded-[35px] border ${border} relative overflow-hidden group hover:shadow-2xl transition-all`}>
-        <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-30 transition-all ${color}`}><Icon size={56}/></div>
-        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">{title}</h3>
-        <p className={`text-4xl font-black ${color} tracking-tighter italic`}>{val}</p>
+// --- SUB COMPONENTS ---
+const MetricCard = ({ title, val, icon: Icon, color }) => (
+    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden group">
+        <div className={`absolute top-4 right-4 p-3 bg-slate-950 rounded-xl ${color}`}><Icon size={20}/></div>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">{title}</p>
+        <h3 className="text-3xl font-black text-white italic tracking-tighter">{val}</h3>
     </div>
 );
 
-const DetailBox = ({ label, val, highlight = "text-white" }) => (
-    <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 shadow-inner">
-        <span className="text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] block mb-2">{label}</span>
-        <span className={`text-base font-black uppercase tracking-tight ${highlight}`}>{val}</span>
+const Input = ({ label, val, set, type="text", placeholder="" }) => (
+    <div>
+        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">{label}</label>
+        <input type={type} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-purple-500 transition-colors placeholder:text-slate-700" 
+            value={val} onChange={e => set(e.target.value)} placeholder={placeholder}/>
+    </div>
+);
+
+const AccessDenied = ({ user, logout }) => (
+    <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-6">
+        <ShieldCheck size={80} className="text-red-600"/>
+        <div className="text-center">
+            <h1 className="text-3xl font-black uppercase tracking-widest text-white">Access Denied</h1>
+            <p className="text-red-500 font-mono mt-2">ERR_PERMISSIONS_INSUFFICIENT</p>
+        </div>
+        <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 text-left min-w-[300px]">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 border-b border-slate-800 pb-2">Session Data</p>
+            <div className="space-y-2 font-mono text-sm text-slate-300">
+                <p>User: <span className="text-white">{user?.username}</span></p>
+                <p>Role: <span className="text-yellow-400">{user?.role}</span></p>
+            </div>
+        </div>
+        <button onClick={logout} className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-500 font-bold text-xs uppercase tracking-widest">Log Out</button>
+    </div>
+);
+
+const LoadingScreen = () => (
+    <div className="h-screen bg-slate-950 flex flex-col items-center justify-center gap-6">
+        <Loader2 className="animate-spin text-purple-500" size={60}/>
+        <p className="text-purple-400 font-black uppercase tracking-[0.4em] text-xs">Initializing Core...</p>
     </div>
 );
 
