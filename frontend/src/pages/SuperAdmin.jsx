@@ -175,13 +175,21 @@ const SuperAdmin = () => {
   // --- 4. CONDITIONAL RENDERS (Must be AFTER hooks) ---
 
   // 🛡️ SECURITY: Double Check Access
-  // We check this AFTER hooks are declared to avoid React errors
-  if (!user?.is_superuser && user?.role !== 'SUPERADMIN' && !loading) {
+  // Checks if user is Superuser OR has role 'OWNER' (which AuthContext assigns to superusers)
+  if (!user?.is_superuser && user?.role !== 'SUPERADMIN' && user?.role !== 'OWNER' && !loading) {
       return (
         <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-red-500 gap-4">
             <ShieldCheck size={64}/>
             <h1 className="text-2xl font-black uppercase tracking-widest">System Restricted</h1>
             <p className="text-slate-500 font-mono">ERR_ACCESS_DENIED_0x01</p>
+            
+            {/* DEBUG INFO: Helps us see what role you actually have */}
+            <div className="mt-8 p-4 bg-slate-900 rounded-xl border border-slate-800 text-center">
+                <p className="text-xs text-slate-400 uppercase tracking-widest mb-2">Debug Diagnostics</p>
+                <p className="text-sm font-mono text-slate-300">Current Role: <span className="text-white font-bold">{user?.role || 'NULL'}</span></p>
+                <p className="text-sm font-mono text-slate-300">Is Superuser: <span className="text-white font-bold">{user?.is_superuser ? 'YES' : 'NO'}</span></p>
+                <p className="text-xs text-slate-500 mt-2">Log out and log in as 'admin' to access.</p>
+            </div>
         </div>
       );
   }
@@ -346,7 +354,7 @@ const SuperAdmin = () => {
                                 <div className={`absolute -left-[5px] top-1 w-2.5 h-2.5 rounded-full ${log.action === 'CREATE' ? 'bg-blue-500' : 'bg-purple-500'}`}></div>
                                 <div>
                                     <p className="text-[11px] font-bold text-slate-300 leading-snug">{log.details}</p>
-                                    <p className="text-[9px] text-slate-600 font-black uppercase mt-1 tracking-widest">{new Date(log.timestamp).toLocaleTimeString()}</p>
+                                    <p className="text-xs text-slate-600 font-black uppercase mt-1 tracking-widest">{new Date(log.timestamp).toLocaleTimeString()}</p>
                                 </div>
                             </div>
                         )) : <p className="text-center text-slate-600 text-xs">No logs found.</p>}
