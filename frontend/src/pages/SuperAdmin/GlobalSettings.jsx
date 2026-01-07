@@ -15,6 +15,7 @@ const GlobalSettings = () => {
   const { token, user, logout } = useAuth();
   
   // --- CORE DATA ---
+  // 🟢 SAFETY: Initialize with empty array
   const [tenants, setTenants] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [stats, setStats] = useState({ 
@@ -32,7 +33,7 @@ const GlobalSettings = () => {
   const [systemHealth, setSystemHealth] = useState({ status: 'ONLINE', latency: 0, db: 'CONNECTED' });
   
   // --- CONFIG STATE ---
-  const [activeTab, setActiveTab] = useState('COMMAND'); // COMMAND, TENANTS, PLANS, INFRA, CONFIG
+  const [activeTab, setActiveTab] = useState('COMMAND'); 
   const [platformConfig, setPlatformConfig] = useState({
     app_name: '', company_name: '', support_email: '', support_phone: '',
     smtp_host: '', smtp_port: '587', smtp_user: '', smtp_password: '',
@@ -53,7 +54,6 @@ const GlobalSettings = () => {
   const [editingPlan, setEditingPlan] = useState(null); 
   
   // --- FORMS ---
-  // Default plan is now the first plan in the list
   const [formData, setFormData] = useState({ name: '', domain: '', admin_email: '', plan: 'Standard' });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', message: '' });
   const [tenantForm, setTenantForm] = useState({ 
@@ -92,18 +92,28 @@ const GlobalSettings = () => {
 
       if (statsRes && statsRes.ok) {
         const data = await statsRes.json();
-        setTenants(Array.isArray(data.hotels) ? data.hotels : []);
+        // 🟢 CRITICAL SAFETY FIX: Ensure 'hotels' is always an array
+        const safeHotels = Array.isArray(data.hotels) ? data.hotels : [];
+        setTenants(safeHotels);
+        
         setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
         setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
-        // Future: If backend sends plans, update them here: setPlans(data.plans);
+      } else {
+        // Fallback if request fails
+        setTenants([]); 
       }
 
-      if (logsRes && logsRes.ok) setLogs(await logsRes.json());
+      if (logsRes && logsRes.ok) {
+          const logData = await logsRes.json();
+          setLogs(Array.isArray(logData) ? logData : []);
+      }
+      
       if (configRes && configRes.ok) setPlatformConfig(await configRes.json());
 
     } catch (err) { 
       console.error("SuperAdmin Engine Error:", err); 
       setSystemHealth({ status: 'OFFLINE', latency: 0, db: 'DISCONNECTED' });
+      setTenants([]); // 🟢 Safety Fallback
     } finally { 
       setLoading(false); 
       setRefreshing(false);
@@ -135,8 +145,8 @@ const GlobalSettings = () => {
                 first_name: formData.name, 
                 last_name: 'Admin', 
                 role: 'OWNER',
-                plan: formData.plan, // 🟢 Send selected plan
-                max_rooms: maxRoomsLimit // 🟢 Send plan limit
+                plan: formData.plan, 
+                max_rooms: maxRoomsLimit
             })
         });
 
@@ -196,8 +206,6 @@ const GlobalSettings = () => {
 
   const handleSavePlan = (e) => {
       e.preventDefault();
-      // NOTE: In a real app, send this to backend (POST /api/plans/). 
-      // For now, we simulate strictly in UI state.
       const featuresArray = planForm.features.split(',').map(f => f.trim()).filter(f => f !== '');
       const newPlanObj = {
           id: editingPlan ? editingPlan.id : Date.now(),
@@ -223,7 +231,7 @@ const GlobalSettings = () => {
   };
 
   const handleDeletePlan = (id) => {
-      if(confirm("Delete this plan? Existing subscribers will remain on this plan until moved.")) {
+      if(confirm("Delete this plan?")) {
           setPlans(plans.filter(p => p.id !== id));
       }
   };
@@ -290,6 +298,17 @@ const GlobalSettings = () => {
           reset_password: ''
       });
   };
+
+  // 🟢 CRITICAL SAFETY: FILTER LOGIC
+  // We double check tenants is an array before filtering
+  const safeTenantsList = Array.isArray(tenants) ? tenants : [];
+  
+  const filteredTenants = safeTenantsList.filter(t => {
+    const term = searchTerm.toLowerCase();
+    const nameMatch = (t.hotel_settings?.hotel_name || t.username || '').toLowerCase().includes(term);
+    const emailMatch = (t.email || '').toLowerCase().includes(term);
+    return nameMatch || emailMatch;
+  });
 
   if (loading) return <LoadingScreen />;
 
@@ -378,7 +397,6 @@ const GlobalSettings = () => {
             {/* --- TAB: COMMAND CENTER --- */}
             {activeTab === 'COMMAND' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-                    {/* Metrics Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <MetricCard title="Total ARR" val={`₹${((stats.platform_revenue || 0)/100000).toFixed(2)}L`} icon={TrendingUp} color="text-emerald-400" />
                         <MetricCard title="Active Nodes" val={stats.total_hotels} icon={Building} color="text-blue-400" />
@@ -387,30 +405,23 @@ const GlobalSettings = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Revenue Chart */}
                         <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
                             <div className="flex justify-between items-center mb-8">
                                 <h3 className="font-black text-white uppercase text-sm tracking-widest flex items-center gap-2"><BarChart3 size={18} className="text-purple-500"/> Revenue Intelligence</h3>
                                 <div className="flex gap-2">
                                     <span className="px-3 py-1 bg-white/5 rounded-lg text-[10px] font-bold text-slate-400">Monthly</span>
-                                    <span className="px-3 py-1 bg-purple-600 rounded-lg text-[10px] font-bold text-white shadow-lg">Annual</span>
                                 </div>
                             </div>
                             <div className="flex items-end justify-between h-48 gap-4">
                                 {[35, 42, 28, 55, 60, 48, 72, 65, 85, 90, 78, 95].map((h, i) => (
                                     <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
-                                        <div style={{height: `${h}%`}} className="w-full bg-slate-800 rounded-t-lg group-hover:bg-purple-500 transition-all duration-500 relative">
-                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {h}%
-                                            </div>
-                                        </div>
+                                        <div style={{height: `${h}%`}} className="w-full bg-slate-800 rounded-t-lg group-hover:bg-purple-500 transition-all duration-500 relative"></div>
                                         <span className="text-[10px] font-bold text-slate-600 uppercase">M{i+1}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Recent Alerts */}
                         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
                             <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><AlertTriangle size={18} className="text-yellow-500"/> Critical Alerts</h3>
                             <div className="space-y-4">
@@ -440,7 +451,7 @@ const GlobalSettings = () => {
                                 <input className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 py-3 text-xs font-bold text-white outline-none focus:border-purple-500" placeholder="Search Node ID..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
                             </div>
                             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                Total: {tenants.length} Nodes
+                                Total: {safeTenantsList.length} Nodes
                             </div>
                         </div>
                         <table className="w-full text-left">
@@ -453,7 +464,7 @@ const GlobalSettings = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800">
-                                {tenants.filter(t => (t.hotel_settings?.hotel_name || t.username).toLowerCase().includes(searchTerm.toLowerCase())).map(t => (
+                                {filteredTenants.map(t => (
                                     <tr key={t.id} className="hover:bg-slate-800/50 transition-colors">
                                         <td className="p-6">
                                             <div className="flex items-center gap-3">
@@ -482,7 +493,7 @@ const GlobalSettings = () => {
                 </div>
             )}
 
-            {/* --- TAB: SUBSCRIPTION PLANS (NEW) --- */}
+            {/* --- TAB: SUBSCRIPTION PLANS --- */}
             {activeTab === 'PLANS' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-4">
                     {plans.map(plan => (
@@ -644,9 +655,8 @@ const GlobalSettings = () => {
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Service Plan</label>
                                 <select className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-purple-500"
                                     value={tenantForm.plan} onChange={e => setTenantForm({...tenantForm, plan: e.target.value})}>
-                                    {/* 🟢 DYNAMIC PLANS DROPDOWN */}
                                     {plans.map(p => (
-                                        <option key={p.id} value={p.name}>{p.name} • ₹{p.price}</option>
+                                        <option key={p.id} value={p.name}>{p.name} • {p.max_rooms} Rms</option>
                                     ))}
                                 </select>
                             </div>
