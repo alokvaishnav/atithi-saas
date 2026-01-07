@@ -25,10 +25,13 @@ const LicenseLock = ({ children }) => {
         return;
     }
 
-    // 🟢 PHASE 2: ADMIN BYPASS (Critical Fix)
-    // Admins and Superusers don't need license checks.
-    // This prevents the 400 error when the server can't find a hotel license for the admin.
-    if (role === 'ADMIN' || user?.is_superuser) {
+    // 🟢 PHASE 2: ADVANCED ROLE BYPASS (The Fix)
+    // We explicitly allow high-level roles to skip license checks.
+    // This solves the issue where an 'OWNER' gets locked out because they aren't 'ADMIN'.
+    const bypassRoles = ['ADMIN', 'OWNER', 'SUPERADMIN'];
+    const isPrivileged = bypassRoles.includes(role) || user?.is_superuser;
+
+    if (isPrivileged) {
         setStatus('ACTIVE');
         return;
     }
