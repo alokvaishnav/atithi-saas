@@ -18,7 +18,7 @@ const LicenseLock = ({ children }) => {
 
   // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // 🟢 SAFETY CHECK 1: Don't run if no token
+    // 🟢 SAFETY CHECK: If no token, we default to ACTIVE to let the Router handle the redirect to Login.
     if (!token || token === 'null' || token === 'undefined') {
         setStatus('ACTIVE'); 
         return;
@@ -33,14 +33,6 @@ const LicenseLock = ({ children }) => {
                 }
             });
 
-            // 🟢 NUCLEAR OPTION: If corrupted (400/401), kill session immediately
-            if (res.status === 400 || res.status === 401) {
-                console.error("🔥 Token corrupted (400). Performing emergency logout.");
-                localStorage.clear(); // Wipe storage directly
-                window.location.href = '/login'; // Hard redirect (bypasses React state)
-                return;
-            }
-
             if (res.ok) {
                 const data = await res.json();
                 setDaysLeft(data.days_left);
@@ -53,19 +45,21 @@ const LicenseLock = ({ children }) => {
                     setStatus('ACTIVE');
                 }
             } else {
-                // For 500 errors (Server Down), default to ACTIVE so you aren't locked out.
-                console.warn("License check failed, defaulting to active.");
+                // 🟢 FAIL OPEN: If the server returns 400, 401, or 500, we DO NOT log out.
+                // We assume the system is Active to prevent login loops.
+                // If the token is truly bad, the Dashboard pages will handle the 401 redirect gracefully.
+                console.warn("License check skipped (Server Error), defaulting to ACTIVE.");
                 setStatus('ACTIVE'); 
             }
         } catch (err) {
-            console.error("License Check Error:", err);
-            // Fail open for connectivity issues
+            console.error("License Check Network Error:", err);
+            // Fail open for connectivity issues so you can still log in
             setStatus('ACTIVE'); 
         }
     };
     
     checkLicense();
-  }, [token]); // Removed logout dependency to prevent re-run loops
+  }, [token]);
 
   // 2. Handle New Key Submission
   const handleActivate = async (e) => {
@@ -101,6 +95,7 @@ const LicenseLock = ({ children }) => {
   // --- RENDER STATES ---
 
   // A. Loading Screen
+  // Only show loading if we are actually waiting for a check.
   if (status === 'LOADING' && token && token !== 'null') return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
