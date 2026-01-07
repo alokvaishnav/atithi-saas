@@ -13,7 +13,7 @@ const LicenseLock = ({ children }) => {
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
 
-  // 🔐 Use Context for live token updates (better than localStorage direct read)
+  // 🔐 Use Context for live token updates
   const { token, logout } = useAuth(); 
 
   // 1. Verify License on Mount or Token Change
