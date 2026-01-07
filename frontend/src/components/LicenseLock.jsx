@@ -7,20 +7,28 @@ import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
 
 const LicenseLock = ({ children }) => {
-  const [status, setStatus] = useState('LOADING'); // LOADING | ACTIVE | WARNING | EXPIRED
+  const [status, setStatus] = useState('LOADING'); 
   const [daysLeft, setDaysLeft] = useState(0);
   const [inputKey, setInputKey] = useState('');
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState('');
 
-  // 🔐 Use Context for live token updates
+  // 🔐 Use Context
   const { token, logout } = useAuth(); 
 
-  // 1. Verify License on Mount or Token Change
   useEffect(() => {
-    // 🟢 SAFETY CHECK: If no token, we default to ACTIVE to let the Router handle the redirect to Login.
-    if (!token || token === 'null' || token === 'undefined') {
-        setStatus('ACTIVE'); 
+    // 🟢 CRITICAL VALIDATION
+    // 1. Check if token exists
+    // 2. Check if it's the string "null" or "undefined"
+    // 3. Check if it looks like a JWT (starts with "ey" and is long)
+    const isTokenValid = token && 
+                         token !== 'null' && 
+                         token !== 'undefined' && 
+                         token.length > 20 && 
+                         token.startsWith('ey');
+
+    if (!isTokenValid) {
+        setStatus('ACTIVE'); // Default to active (AuthContext handles login redirect)
         return;
     }
     
@@ -33,35 +41,31 @@ const LicenseLock = ({ children }) => {
                 }
             });
 
+            // If token is expired/invalid (401), log out to clean up session
+            if (res.status === 401) {
+                console.warn("Session expired during license check.");
+                logout();
+                return;
+            }
+
             if (res.ok) {
                 const data = await res.json();
                 setDaysLeft(data.days_left);
-                
-                if (data.is_expired) {
-                    setStatus('EXPIRED');
-                } else if (data.days_left <= 7) {
-                    setStatus('WARNING'); // Grace period
-                } else {
-                    setStatus('ACTIVE');
-                }
+                setStatus(data.is_expired ? 'EXPIRED' : (data.days_left <= 7 ? 'WARNING' : 'ACTIVE'));
             } else {
-                // 🟢 FAIL OPEN: If the server returns 400, 401, or 500, we DO NOT log out.
-                // We assume the system is Active to prevent login loops.
-                // If the token is truly bad, the Dashboard pages will handle the 401 redirect gracefully.
-                console.warn("License check skipped (Server Error), defaulting to ACTIVE.");
+                // If server error (500) or Bad Request (400), Fail Open
                 setStatus('ACTIVE'); 
             }
         } catch (err) {
-            console.error("License Check Network Error:", err);
-            // Fail open for connectivity issues so you can still log in
+            // Network error -> Fail Open
             setStatus('ACTIVE'); 
         }
     };
     
     checkLicense();
-  }, [token]);
+  }, [token, logout]);
 
-  // 2. Handle New Key Submission
+  // Handle Activation
   const handleActivate = async (e) => {
     e.preventDefault();
     setActivating(true);
@@ -83,112 +87,67 @@ const LicenseLock = ({ children }) => {
             window.location.reload();
         } else {
             const errData = await res.json();
-            setError(errData.error || "Invalid License Key. Please check and try again.");
+            setError(errData.error || "Invalid License Key.");
         }
     } catch (err) {
-        setError("Network error. Unable to verify key.");
+        setError("Network error.");
     } finally {
         setActivating(false);
     }
   };
 
-  // --- RENDER STATES ---
+  // --- RENDER ---
 
-  // A. Loading Screen
-  // Only show loading if we are actually waiting for a check.
-  if (status === 'LOADING' && token && token !== 'null') return (
+  // Loading (Only if we are actually checking a valid token)
+  if (status === 'LOADING' && token && token.length > 20) return (
     <div className="h-screen bg-slate-900 flex flex-col items-center justify-center text-white gap-4">
         <Loader2 className="animate-spin text-blue-500" size={48}/>
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Verifying System License...</p>
     </div>
   );
 
-  // B. Locked Screen (Expired)
+  // Expired Lock Screen
   if (status === 'EXPIRED') return (
     <div className="h-screen bg-slate-900 flex items-center justify-center p-4 font-sans relative overflow-hidden">
-        
-        {/* Background FX */}
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-red-600 rounded-full blur-[150px] opacity-20"></div>
-
         <div className="bg-slate-800 p-10 rounded-[40px] shadow-2xl w-full max-w-md border border-slate-700 relative z-10 text-center">
-            
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20">
-                <Lock size={40} className="text-red-500"/>
-            </div>
-
+            <Lock size={40} className="text-red-500 mx-auto mb-6"/>
             <h1 className="text-2xl font-black uppercase tracking-widest text-white mb-2">System Locked</h1>
-            <p className="text-slate-400 text-sm mb-8">Your subscription has expired. Please enter a valid renewal key to continue.</p>
+            <p className="text-slate-400 text-sm mb-8">License Expired.</p>
 
             <form onSubmit={handleActivate} className="space-y-4">
-                <div className="relative">
-                    <KeyRound className="absolute left-4 top-3.5 text-slate-500" size={18}/>
-                    <input 
-                        type="text" 
-                        required
-                        placeholder="XXXX-XXXX-XXXX-XXXX" 
-                        className="w-full pl-12 p-3 bg-slate-900 text-white rounded-xl font-mono font-bold border border-slate-700 focus:border-blue-500 outline-none uppercase tracking-widest placeholder:text-slate-600"
-                        value={inputKey}
-                        onChange={e => setInputKey(e.target.value)}
-                    />
-                </div>
-                
-                {error && (
-                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold bg-red-400/10 p-3 rounded-xl border border-red-400/20 animate-in fade-in slide-in-from-top-2">
-                        <ShieldAlert size={14}/> {error}
-                    </div>
-                )}
-
-                <button 
-                    type="submit" 
-                    disabled={activating || !inputKey}
-                    className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase tracking-widest text-xs hover:bg-blue-500 transition-all flex justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
-                >
-                    {activating ? <Loader2 className="animate-spin" size={16}/> : "Reactivate System"}
+                <input 
+                    type="text" required placeholder="XXXX-XXXX-XXXX-XXXX" 
+                    className="w-full pl-4 p-3 bg-slate-900 text-white rounded-xl font-mono border border-slate-700 outline-none"
+                    value={inputKey} onChange={e => setInputKey(e.target.value)}
+                />
+                {error && <div className="text-red-400 text-xs font-bold">{error}</div>}
+                <button type="submit" disabled={activating || !inputKey} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-xs hover:bg-blue-500 transition-all flex justify-center gap-2">
+                    {activating ? <Loader2 className="animate-spin" size={16}/> : "Reactivate"}
                 </button>
             </form>
-
-            <div className="mt-8 pt-8 border-t border-white/5 flex justify-center gap-6">
-                 <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
-                    <LogOutIcon size={14}/> Log Out
-                 </button>
-                 <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest">
-                    <RefreshCw size={14}/> Refresh Status
+            <div className="mt-8 pt-8 border-t border-white/5 flex justify-center">
+                 <button onClick={logout} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-xs font-bold uppercase">
+                    <LogOut size={14}/> Log Out
                  </button>
             </div>
         </div>
     </div>
   );
 
-  // C. Active App (With potential warning)
+  // Active App
   return (
     <>
         {children}
-        
-        {/* Grace Period Warning Banner */}
         {status === 'WARNING' && (
-            <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg animate-in slide-in-from-bottom-full">
+            <div className="fixed bottom-0 left-0 right-0 bg-orange-500 text-white px-4 py-2 z-50 flex items-center justify-between shadow-lg">
                 <div className="flex items-center gap-3 container mx-auto max-w-7xl">
                     <AlertTriangle size={18} className="animate-pulse"/>
-                    <span className="text-xs font-black uppercase tracking-widest">
-                        License Expiring Soon: {daysLeft} Days Remaining
-                    </span>
+                    <span className="text-xs font-black uppercase tracking-widest">License Expiring Soon: {daysLeft} Days</span>
                 </div>
-                <button 
-                    onClick={() => window.location.href = '/settings'}
-                    className="text-xs font-bold bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition-colors uppercase"
-                >
-                    Renew Now
-                </button>
             </div>
         )}
     </>
   );
 };
-
-// Helper Component for Logout Icon
-const LogOutIcon = ({size}) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-);
 
 export default LicenseLock;
