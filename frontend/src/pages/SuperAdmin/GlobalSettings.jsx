@@ -328,7 +328,7 @@ const GlobalSettings = () => {
       } finally {
           setIsSubmitting(false);
       }
-  };
+  
 
       if (editingPlan) {
           setPlans(plans.map(p => p.id === editingPlan.id ? newPlanObj : p));
