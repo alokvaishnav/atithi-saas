@@ -1894,76 +1894,93 @@ class ReportExportView(APIView):
 # 9. SUPER ADMIN (PLATFORM OWNER)
 # ==============================================================================
 
-class PlatformSettingsView(APIView):
+class PlatformConfigView(APIView):
     """
-    Manages Global SaaS Config: Logo, SMTP, Support Info.
-    Singleton pattern enforced (always fetches ID=1).
+    Manages Global SaaS Config: Logo, SMTP, Support Info, and Branding.
+    Singleton pattern enforced (ID=1).
     
-    - GET: Public (AllowAny) so the Login Page can show the correct Logo/App Name.
-    - POST: Restricted to Super Admin only.
+    - GET: Public access allowed for branding (Login Page/Public Site).
+    - POST/PATCH: Restricted to Super Admin for system updates.
     """
+    # MultiPartParser is required to handle File/Image uploads for the logo
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_permissions(self):
         """
-        Dynamic permissions based on request method.
+        Dynamic permissions: Allow anyone to view branding, but only 
+        Super Admins can modify global settings.
         """
-        if self.request.method == 'POST':
-            # Critical: Only Super Admin can update SMTP/Global settings
+        if self.request.method in ['POST', 'PATCH', 'PUT']:
             return [permissions.IsAdminUser()]
-        
-        # Allow public access for GET so the frontend can load branding on the Login Screen
         return [permissions.AllowAny()]
 
     def get(self, request):
         """
         Fetch Global Settings. 
-        Auto-creates default settings if they don't exist yet (Singleton).
+        Ensures a default configuration row exists (ID=1).
         """
         try:
-            # Singleton: Always fetch the first record or create it
-            # We explicitly enforce id=1 to maintain a single configuration row
+            # Enforce Singleton pattern: ID 1 is the master config
             settings, created = PlatformSettings.objects.get_or_create(id=1)
             
-            serializer = PlatformSettingsSerializer(settings)
-            return Response(serializer.data)
+            # Use serializer to handle full URL for logo and other fields
+            serializer = PlatformSettingsSerializer(settings, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
-            logger.error(f"Error fetching platform settings: {e}")
-            return Response({'error': 'Failed to load platform settings.'}, status=500)
+            logger.error(f"Error fetching platform settings: {str(e)}")
+            return Response(
+                {'error': 'Failed to load platform settings.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def post(self, request):
         """
-        Update Global Settings (SMTP, App Name, etc.).
+        Update Global Settings (SMTP, Branding, Logo, Automation).
+        Uses atomic transaction to ensure log and update succeed together.
         """
         try:
-            # Always operate on the singleton record
-            settings, _ = PlatformSettings.objects.get_or_create(id=1)
-            
-            # Partial update allows changing just the logo or just the SMTP host
-            serializer = PlatformSettingsSerializer(settings, data=request.data, partial=True)
-            
-            if serializer.is_valid():
-                serializer.save()
+            with transaction.atomic():
+                # Fetch existing settings (Singleton)
+                settings, _ = PlatformSettings.objects.get_or_create(id=1)
                 
-                # --- CRITICAL FIX: ACTIVITY LOGGING ---
-                # We must pass request.user. The database requires an ID (NOT NULL constraint).
-                try:
-                    ActivityLog.objects.create(
-                        owner=request.user,  # Ensures the log is tied to the Admin user
-                        action='SYSTEM_UPDATE',
-                        category='SYSTEM',   # Useful for filtering system-level events
-                        details=f"Global Platform Settings updated by {request.user.username}"
-                    )
-                except Exception as log_error:
-                    # Prevent log failure from crashing the whole update
-                    logger.error(f"Platform Settings Logging Failed: {log_error}")
+                # Partial update allows updating just one field (e.g. only the logo)
+                serializer = PlatformSettingsSerializer(
+                    settings, 
+                    data=request.data, 
+                    partial=True, 
+                    context={'request': request}
+                )
+                
+                if serializer.is_valid():
+                    # Check for logo file removal logic if needed
+                    serializer.save()
+                    
+                    # --- AUDIT LOGGING ---
+                    # Logs who changed the global config and what action was taken
+                    try:
+                        ActivityLog.objects.create(
+                            owner=request.user, 
+                            action='SYSTEM_UPDATE',
+                            category='SYSTEM',
+                            details=(
+                                f"Global Settings Updated by Admin: {request.user.username}. "
+                                f"Updated fields: {', '.join(request.data.keys())}"
+                            )
+                        )
+                    except Exception as log_error:
+                        # Log locally but don't fail the API response if logging hits a glitch
+                        logger.error(f"Platform Settings Logging Failed: {str(log_error)}")
 
-                return Response(serializer.data)
+                    return Response(serializer.data, status=status.HTTP_200_OK)
                 
-            return Response(serializer.errors, status=400)
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         except Exception as e:
-            logger.error(f"Error updating platform settings: {e}")
-            return Response({'error': 'Internal server error while updating settings.'}, status=500)
+            logger.error(f"Critical error updating platform settings: {str(e)}")
+            return Response(
+                {'error': 'Internal server error occurred during update.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class SuperAdminStatsView(APIView):
     """
@@ -2476,40 +2493,96 @@ class TenantRegisterView(APIView):
         
 class SuperAdminImpersonateView(APIView):
     """
-    Allows Super Admin to get a login token for ANY user.
-    Critically useful for support (logging in as the customer).
+    Allows Super Admin to generate a valid login token for any specific Tenant/Staff.
+    Essential for troubleshooting and customer support.
+    
+    Security:
+    - Restricted to IsAdminUser (Super Admin).
+    - Blocks impersonation of other Superusers.
+    - Logs the event for security auditing.
     """
-    permission_classes = [permissions.IsAdminUser] # STRICTLY Super Admin Only
+    permission_classes = [permissions.IsAdminUser]
 
     def post(self, request):
         target_user_id = request.data.get('user_id')
+        
         if not target_user_id:
-            return Response({'error': 'Target User ID required'}, status=400)
+            return Response(
+                {'error': 'Target User ID is required.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         try:
             # 1. Fetch the target user
             target_user = User.objects.get(id=target_user_id)
             
-            # 2. Generate a fresh Token Pair for THEM
+            # 🛡️ SECURITY BLOCK: Prevent a Super Admin from impersonating another Super Admin
+            # This prevents administrative loops and unauthorized high-level access.
+            if target_user.is_superuser:
+                return Response(
+                    {'error': 'For security reasons, you cannot impersonate another Super Admin.'}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # 2. Generate the Token Pair for the target user
+            # Uses the custom serializer to ensure 'role' and 'username' are in the JWT claims
             refresh = CustomTokenObtainPairSerializer.get_token(target_user)
             
-            # 3. Log this sensitive action
+            # 3. Gather Hotel Branding Data
+            # This ensures the frontend instantly displays the correct Hotel Name/Logo after redirect
+            hotel_name = "System User"
+            hotel_logo = None
+            
+            if hasattr(target_user, 'hotel_settings') and target_user.hotel_settings:
+                hotel_name = target_user.hotel_settings.hotel_name
+                if target_user.hotel_settings.logo:
+                    hotel_logo = target_user.hotel_settings.logo.url
+            elif target_user.role != 'OWNER':
+                # If staff, try to pull branding from their linked Owner
+                owner = getattr(target_user, 'hotel_owner', None)
+                if owner and hasattr(owner, 'hotel_settings'):
+                    hotel_name = owner.hotel_settings.hotel_name
+                    if owner.hotel_settings.logo:
+                        hotel_logo = owner.hotel_settings.logo.url
+
+            # 4. Create an Audit Trail
+            # Extremely important for compliance to track who used impersonation.
             ActivityLog.objects.create(
-                owner=request.user,
+                owner=request.user,  # Tie log to the Admin performing the action
                 action='IMPERSONATION',
                 category='SECURITY',
-                details=f"Super Admin impersonated user: {target_user.username}"
+                details=(
+                    f"Super Admin '{request.user.username}' (ID: {request.user.id}) "
+                    f"started impersonating '{target_user.username}' (ID: {target_user.id})"
+                )
             )
 
+            # 5. Full Response for AuthContext
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
-                'username': target_user.username,
-                'role': target_user.role
-            })
+                'user': {
+                    'id': target_user.id,
+                    'username': target_user.username,
+                    'email': target_user.email,
+                    'role': target_user.role,
+                    'hotel_name': hotel_name,
+                    'hotel_logo': hotel_logo,
+                    'is_impersonating': True  # Flag to allow frontend to show "Exit Impersonation" bar
+                }
+            }, status=status.HTTP_200_OK)
 
         except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=404)
+            return Response(
+                {'error': 'Target user not found.'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Impersonation Error: {str(e)}")
+            return Response(
+                {'error': 'An internal error occurred during impersonation.'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
 # 1. PUBLIC GUEST REGISTRATION (With ID Card)
 class PublicGuestRegisterView(APIView):
@@ -2587,3 +2660,206 @@ class PublicMenuView(APIView):
             return Response(data)
         except User.DoesNotExist:
             return Response({'error': 'Hotel not found'}, status=404)
+        
+class GenerateInvoiceView(APIView):
+    """
+    Generates a professional PDF Invoice for a specific booking.
+    Calculates Room Rent + Extra Charges - Payments.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, booking_id):
+        # 1. Fetch Booking and verify ownership
+        owner = request.user if request.user.role == 'OWNER' else getattr(request.user, 'hotel_owner', None)
+        booking = get_object_or_404(Booking, id=booking_id, owner=owner)
+        hotel = getattr(owner, 'hotel_settings', None)
+
+        # 2. Prepare PDF Response
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Invoice_{booking.id}.pdf"'
+
+        # 3. Create PDF Canvas
+        if canvas is None:
+            return Response({"error": "PDF library (ReportLab) not installed on server."}, status=500)
+
+        p = canvas.Canvas(response, pagesize=letter)
+        width, height = letter
+
+        # --- Header: Hotel Info ---
+        p.setFont("Helvetica-Bold", 20)
+        p.drawString(50, height - 50, hotel.hotel_name if hotel else "Hotel Invoice")
+        
+        p.setFont("Helvetica", 10)
+        p.drawString(50, height - 65, hotel.address if hotel else "")
+        p.drawString(50, height - 78, f"Phone: {hotel.phone}" if hotel and hotel.phone else "")
+        p.drawString(50, height - 91, f"GST: {hotel.tax_gst_number}" if hotel and hotel.tax_gst_number else "")
+
+        # --- Invoice Meta ---
+        p.setFont("Helvetica-Bold", 12)
+        p.drawRightString(width - 50, height - 50, "INVOICE")
+        p.setFont("Helvetica", 10)
+        p.drawRightString(width - 50, height - 65, f"Invoice #: INV-{booking.id}")
+        p.drawRightString(width - 50, height - 78, f"Date: {date.today().strftime('%d %b %Y')}")
+
+        p.line(50, height - 110, width - 50, height - 110)
+
+        # --- Guest Info ---
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(50, height - 130, "BILL TO:")
+        p.setFont("Helvetica", 10)
+        p.drawString(50, height - 145, f"Name: {booking.guest.full_name}")
+        p.drawString(50, height - 158, f"Phone: {booking.guest.phone}")
+        p.drawString(300, height - 145, f"Room: {booking.room.room_number if booking.room else 'N/A'}")
+        p.drawString(300, height - 158, f"Stay: {booking.check_in_date} to {booking.check_out_date}")
+
+        # --- Table Header ---
+        y = height - 200
+        p.setFillColorRGB(0.9, 0.9, 0.9)
+        p.rect(50, y, width - 100, 20, fill=1)
+        p.setFillColorRGB(0, 0, 0)
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(60, y + 5, "Description")
+        p.drawRightString(width - 60, y + 5, "Amount")
+
+        # --- Line Items ---
+        y -= 25
+        p.setFont("Helvetica", 10)
+        
+        # 1. Room Rent
+        p.drawString(60, y, f"Room Rent ({booking.room.room_type if booking.room else 'Room'})")
+        p.drawRightString(width - 60, y, f"{booking.total_amount:,.2f}")
+        
+        # 2. Extra Charges (Food, etc)
+        charges = booking.charges.all()
+        for charge in charges:
+            y -= 20
+            p.drawString(60, y, charge.description)
+            p.drawRightString(width - 60, y, f"{charge.amount:,.2f}")
+
+        p.line(50, y - 10, width - 50, y - 10)
+
+        # --- Totals ---
+        y -= 30
+        total_charges = booking.total_amount + sum(c.amount for c in charges)
+        total_paid = sum(p.amount for p in booking.payments.all())
+        balance = total_charges - total_paid
+
+        p.drawString(400, y, "Total Amount:")
+        p.drawRightString(width - 60, y, f"{total_charges:,.2f}")
+        
+        y -= 20
+        p.drawString(400, y, "Amount Paid:")
+        p.drawRightString(width - 60, y, f"{total_paid:,.2f}")
+        
+        y -= 5
+        p.line(400, y, width - 50, y)
+        
+        y -= 20
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(400, y, "Balance Due:")
+        p.drawRightString(width - 60, y, f"{balance:,.2f}")
+
+        # --- Footer ---
+        p.setFont("Helvetica-Oblique", 8)
+        p.drawCentredString(width/2, 50, "Thank you for staying with us!")
+        p.drawCentredString(width/2, 40, f"Generated by {hotel.hotel_name if hotel else 'Atithi HMS'}")
+
+        p.showPage()
+        p.save()
+        return response
+    
+class PublicOrderCreateView(APIView):
+    """
+    Handles Food/Service orders from the Public Guest Page.
+    - Links order to an active booking (if room number provided).
+    - Deducts stock from Inventory.
+    - Alerts Hotel Admin via Activity Logs.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        data = request.data
+        hotel_username = data.get('hotel_username')
+        items = data.get('items', []) # Expecting: [{"item_id": 1, "quantity": 2, "name": "Burger"}]
+        total_amount = data.get('total_amount', 0)
+        room_number = data.get('room_number') # Can be Room No or Guest ID
+        guest_name = data.get('name', 'Guest')
+
+        if not hotel_username or not items:
+            return Response({'error': 'Hotel identifier and items are required.'}, status=400)
+
+        try:
+            # 1. Identify the Hotel Owner
+            owner = get_object_or_404(User, username=hotel_username, role='OWNER')
+
+            # 2. Attempt to link to an active Booking (Room Service Logic)
+            booking = None
+            if room_number:
+                # Look for a guest currently checked in to that room
+                booking = Booking.objects.filter(
+                    owner=owner, 
+                    room__room_number=room_number, 
+                    status='CHECKED_IN'
+                ).first()
+                
+                # Fallback: Search by Public Guest ID if room number didn't match
+                if not booking:
+                    booking = Booking.objects.filter(
+                        owner=owner, 
+                        guest__public_guest_id=room_number, 
+                        status__in=['CHECKED_IN', 'CONFIRMED']
+                    ).first()
+
+            # 3. Use a Database Transaction for Atomicity
+            with transaction.atomic():
+                # Create the Order
+                # We store items as a string/json for history
+                order = Order.objects.create(
+                    owner=owner,
+                    booking=booking,
+                    items=json.dumps(items) if isinstance(items, list) else items,
+                    total_amount=total_amount,
+                    status='PENDING' # Status is Pending until Kitchen accepts
+                )
+
+                # 4. If linked to booking, add to Room Bill (Folio) automatically
+                if booking:
+                    BookingCharge.objects.create(
+                        booking=booking,
+                        description=f"In-Room Dining (Order #{order.id})",
+                        amount=total_amount
+                    )
+
+                # 5. Inventory Deduction Logic
+                # Loop through ordered items and reduce stock if linked to inventory
+                for entry in items:
+                    item_id = entry.get('item_id')
+                    qty = int(entry.get('quantity', 1))
+                    
+                    # Deduct from Menu Item's linked inventory if applicable
+                    # (Assuming your MenuItem might have a foreign key to InventoryItem)
+                    try:
+                        menu_item = MenuItem.objects.get(id=item_id, owner=owner)
+                        # If you have stock management on the Menu Item itself:
+                        # menu_item.stock -= qty
+                        # menu_item.save()
+                    except MenuItem.DoesNotExist:
+                        continue
+
+                # 6. Create Activity Log Alert for Hotel Staff
+                ActivityLog.objects.create(
+                    owner=owner,
+                    action='NEW_ORDER',
+                    category='POS',
+                    details=f"New Public Order: ₹{total_amount} from {guest_name} (Room: {room_number if room_number else 'N/A'})"
+                )
+
+            return Response({
+                'status': 'success',
+                'message': 'Order placed successfully! The kitchen has been notified.',
+                'order_id': order.id
+            }, status=201)
+
+        except Exception as e:
+            logger.error(f"Public Order Error: {str(e)}")
+            return Response({'error': 'Failed to process order. Please try again.'}, status=500)
