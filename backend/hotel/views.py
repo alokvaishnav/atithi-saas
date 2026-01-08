@@ -2375,3 +2375,50 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     # 🟢 CRITICAL: Disable pagination so the frontend receives a raw List [] 
     # This prevents the "map is not a function" error in React.
     pagination_class = None
+
+class TenantRegisterView(APIView):
+    """
+    Registers a new Hotel Owner (Tenant).
+    Called by the Super Admin 'Deploy Node' button.
+    """
+    permission_classes = [permissions.IsAdminUser] # Only Super Admin can do this
+
+    def post(self, request):
+        data = request.data
+        try:
+            # 1. Check if username/email exists
+            if User.objects.filter(username=data.get('username')).exists():
+                return Response({'detail': 'Cluster ID (Username) already taken.'}, status=400)
+            
+            # 2. Create the User (Owner Role)
+            user = User.objects.create_user(
+                username=data['username'],
+                email=data['email'],
+                password=data['password'],
+                first_name=data['first_name'],
+                last_name=data['last_name'],
+                role='OWNER'
+            )
+
+            # 3. Create Hotel Settings
+            # We map the frontend 'plan' string to a real plan object if possible
+            plan_name = data.get('plan', 'Standard')
+            # max_rooms = data.get('max_rooms', 20) 
+            
+            HotelSettings.objects.create(
+                owner=user,
+                hotel_name=data['first_name'], # Using the provided name
+                # You can add logic here to save the 'plan' or 'max_rooms' 
+                # if you added those fields to your HotelSettings model.
+            )
+
+            return Response({
+                'status': 'success', 
+                'message': 'Tenant deployed successfully',
+                'user_id': user.id
+            }, status=201)
+
+        except Exception as e:
+            return Response({'detail': str(e)}, status=400)
+
+# ... keep your existing views ...
