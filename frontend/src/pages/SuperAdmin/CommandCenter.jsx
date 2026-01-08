@@ -1,3 +1,4 @@
+import React from 'react';
 import { useEffect, useState } from 'react';
 import { 
     TrendingUp, Building, ShieldCheck, Database, 
