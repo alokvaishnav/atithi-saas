@@ -4,7 +4,7 @@ import {
   Loader2, Image as ImageIcon, Mail, FileText,
   Server, Lock, MessageCircle, Eye, EyeOff, CheckCircle,
   Upload, Clock, Coins, Info, Copy, ExternalLink, Smartphone,
-  AlertCircle
+  AlertCircle, MessageSquare
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
@@ -41,12 +41,19 @@ const Settings = () => {
     // WhatsApp
     whatsapp_provider: 'META',
     whatsapp_phone_id: '',
-    whatsapp_auth_token: ''
+    whatsapp_auth_token: '',
+
+    // 🟢 NEW: Guest Communication
+    guest_welcome_template: '',
+    enable_whatsapp_alerts: true,
+    enable_email_alerts: true,
+    support_phone: '',
+    support_email: ''
   });
   
   const [logoPreview, setLogoPreview] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // New: Error state
+  const [error, setError] = useState(null); 
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('GENERAL');
   const [showPassword, setShowPassword] = useState(false);
@@ -79,9 +86,11 @@ const Settings = () => {
             setFormData(prev => ({
                 ...prev,
                 ...settings,
-                // Ensure protected fields don't get overwritten with nulls if backend hides them
+                // Ensure protected fields don't get overwritten with nulls
                 smtp_password: settings.smtp_password || '',
-                whatsapp_auth_token: settings.whatsapp_auth_token || ''
+                whatsapp_auth_token: settings.whatsapp_auth_token || '',
+                // Default template if empty
+                guest_welcome_template: settings.guest_welcome_template || "Dear {guest_name},\n\nThank you for booking with {hotel_name}!\nYour room ({room_type}) is confirmed for {check_in}.\n\nSee you soon!"
             }));
             if (settings.logo) setLogoPreview(settings.logo);
         }
@@ -125,7 +134,6 @@ const Settings = () => {
         const dataToSend = new FormData();
         
         Object.keys(formData).forEach(key => {
-            // Only append logo if it's a new File (not existing URL string)
             if (key === 'logo') {
                 if (formData.logo instanceof File) {
                     dataToSend.append('logo', formData.logo);
@@ -198,7 +206,7 @@ const Settings = () => {
 
         {/* TABS NAVIGATION */}
         <div className="flex gap-2 mb-6 bg-white p-2 rounded-2xl border border-slate-200 w-fit overflow-x-auto">
-            {['GENERAL', 'DIGITAL PRESENCE', 'EMAIL', 'WHATSAPP'].map((tab) => (
+            {['GENERAL', 'DIGITAL PRESENCE', 'EMAIL', 'WHATSAPP', 'GUEST COMMS'].map((tab) => (
                 <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -208,7 +216,7 @@ const Settings = () => {
                         : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
                     }`}
                 >
-                    {tab === 'EMAIL' ? 'SMTP Email' : tab}
+                    {tab === 'EMAIL' ? 'SMTP Email' : tab === 'GUEST COMMS' ? 'Guest Comms' : tab}
                 </button>
             ))}
         </div>
@@ -343,7 +351,7 @@ const Settings = () => {
                 </div>
             )}
 
-            {/* --- TAB 2: DIGITAL PRESENCE (NEW) --- */}
+            {/* --- TAB 2: DIGITAL PRESENCE --- */}
             {activeTab === 'DIGITAL PRESENCE' && (
                 <div className="relative z-10 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     
@@ -518,6 +526,68 @@ const Settings = () => {
                             <p className="text-xs text-green-800 font-bold">
                                 Once configured, bills will be automatically sent to guests upon Checkout.
                             </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- TAB 5: GUEST COMMUNICATION (NEW) --- */}
+            {activeTab === 'GUEST COMMS' && (
+                <div className="relative z-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div>
+                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 border-b border-slate-100 pb-2 flex items-center gap-2">
+                            <MessageSquare size={16}/> Auto-Reply Configuration
+                        </h3>
+
+                        {/* Toggle Switches */}
+                        <div className="flex gap-6 mb-6">
+                            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-3 rounded-xl border border-slate-200">
+                                <input type="checkbox" 
+                                    name="enable_whatsapp_alerts"
+                                    checked={formData.enable_whatsapp_alerts} 
+                                    onChange={handleChange} 
+                                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs font-bold text-slate-700 uppercase">Enable WhatsApp Alerts</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-4 py-3 rounded-xl border border-slate-200">
+                                <input type="checkbox" 
+                                    name="enable_email_alerts"
+                                    checked={formData.enable_email_alerts} 
+                                    onChange={handleChange} 
+                                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-xs font-bold text-slate-700 uppercase">Enable Email Alerts</span>
+                            </label>
+                        </div>
+
+                        {/* Template Editor */}
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Welcome Message Template</label>
+                            <p className="text-xs text-slate-500 mb-2">
+                                Available Placeholders: <code className="bg-slate-100 px-1 rounded text-purple-600 font-bold">{'{guest_name}'}</code>, <code className="bg-slate-100 px-1 rounded text-purple-600 font-bold">{'{hotel_name}'}</code>, <code className="bg-slate-100 px-1 rounded text-purple-600 font-bold">{'{check_in}'}</code>
+                            </p>
+                            <textarea 
+                                name="guest_welcome_template"
+                                className="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm leading-relaxed"
+                                value={formData.guest_welcome_template}
+                                onChange={handleChange}
+                                placeholder="Dear {guest_name}..."
+                            />
+                        </div>
+
+                        {/* Support Contacts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Support Phone (For Guests)</label>
+                                <input name="support_phone" placeholder="+91 99999..." className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                    value={formData.support_phone} onChange={handleChange} />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">Support Email</label>
+                                <input name="support_email" placeholder="help@hotel.com" className="w-full p-3 bg-slate-50 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500 border-2 border-transparent transition-all" 
+                                    value={formData.support_email} onChange={handleChange} />
+                            </div>
                         </div>
                     </div>
                 </div>

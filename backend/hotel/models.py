@@ -45,18 +45,28 @@ class HotelSettings(models.Model):
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_auth_token = models.CharField(max_length=255, blank=True, null=True)
 
+    # 🟢 NEW: Guest Communication Settings (Owner -> Guest)
+    # Allows hotel owners to customize the message their guests receive
+    guest_welcome_template = models.TextField(
+        default="Dear {guest_name},\n\nThank you for booking with {hotel_name}!\nYour room ({room_type}) is confirmed for {check_in}.\n\nSee you soon!",
+        help_text="Use placeholders like {guest_name}, {hotel_name}, {check_in}"
+    )
+    enable_whatsapp_alerts = models.BooleanField(default=True)
+    enable_email_alerts = models.BooleanField(default=True)
+    
+    # Support Contact for Guests (Appears on Booking Page)
+    support_phone = models.CharField(max_length=20, blank=True, null=True)
+    support_email = models.CharField(max_length=100, blank=True, null=True)
+
     # --- License System ---
     license_key = models.CharField(max_length=255, blank=True, null=True)
     license_expiry = models.DateField(null=True, blank=True)
     
-    # Link to a Subscription Plan (Optional)
-    # plan = models.ForeignKey('SubscriptionPlan', on_delete=models.SET_NULL, null=True, blank=True)
-
     def __str__(self):
         return f"Settings for {self.hotel_name}"
 
 # ==============================================================================
-# 2. SUBSCRIPTION PLANS (NEW - For SaaS Management)
+# 2. SUBSCRIPTION PLANS (For SaaS Management)
 # ==============================================================================
 
 class SubscriptionPlan(models.Model):
@@ -293,8 +303,7 @@ class HousekeepingTask(models.Model):
 class ActivityLog(models.Model):
     """
     Tracks all major system actions for Audit Trails.
-    🟢 CRITICAL: We use 'details' as the field name to match views.py usage:
-    ActivityLog.objects.create(details=...)
+    🟢 CRITICAL: We use 'details' as the field name to match views.py usage.
     """
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     action = models.CharField(max_length=100) 
@@ -305,7 +314,7 @@ class ActivityLog(models.Model):
     
     timestamp = models.DateTimeField(auto_now_add=True)
     
-    # Compatibility Property: Allows access via 'description' if needed
+    # Compatibility Property
     @property
     def description(self):
         return self.details
@@ -322,7 +331,7 @@ class ActivityLog(models.Model):
 class PlatformSettings(models.Model):
     """
     Settings for the SaaS Owner (You).
-    Configures White-labeling, Global SMTP, Support Contacts, etc.
+    Configures White-labeling, Global SMTP, Twilio, Support Info.
     """
     # Branding
     app_name = models.CharField(max_length=50, default="Atithi SaaS")
@@ -340,9 +349,15 @@ class PlatformSettings(models.Model):
     smtp_user = models.CharField(max_length=100, blank=True, null=True)
     smtp_password = models.CharField(max_length=100, blank=True, null=True)
 
-    # System WhatsApp (Global Notifications)
+    # System WhatsApp (Global Notifications) - Legacy Fields (Can be deprecated later)
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
+
+    # 🟢 NEW: Twilio Credentials (Super Admin)
+    # Used for CEO -> Owner alerts and general system notifications
+    twilio_account_sid = models.CharField(max_length=100, blank=True, null=True)
+    twilio_auth_token = models.CharField(max_length=100, blank=True, null=True)
+    twilio_whatsapp_number = models.CharField(max_length=20, blank=True, null=True, help_text="e.g., +14155238886")
 
     # 🟢 NEW: Global Maintenance Mode Switch
     maintenance_mode = models.BooleanField(default=False)

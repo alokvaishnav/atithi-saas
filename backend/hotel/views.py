@@ -28,6 +28,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from .notifications import NotificationService
 
 # ==========================================
 #  THIRD-PARTY LIBRARIES
@@ -2238,6 +2239,7 @@ class PublicBookingCreateView(APIView):
     - Prevents Double Bookings using Database Locking (select_for_update).
     - Validates Dates.
     - Updates Guest profiles if they already exist.
+    - 🟢 NEW: Sends WhatsApp/Email notifications to Guest & Owner.
     """
     permission_classes = [permissions.AllowAny]
 
@@ -2332,18 +2334,20 @@ class PublicBookingCreateView(APIView):
                 room.status = 'BOOKED'
                 room.save()
 
-            # ----------------------------------------------------------------------
-            # 3. POST-TRANSACTION ACTIONS
-            # ----------------------------------------------------------------------
-            # Sending email is slow, so we do it AFTER the transaction is committed 
-            # to keep the database fast.
-            try:
-                # Assuming you have this helper function imported
-                # send_booking_email(booking, 'CONFIRMATION')
-                pass 
-            except Exception as e:
-                logger.error(f"Booking Email Failed: {e}")
+                # 🟢 G. Send Notifications (WhatsApp / Email)
+                # We do this INSIDE the transaction so we have access to the booking object,
+                # but wrap it in a try/except so a notification failure doesn't rollback the booking.
+                try:
+                    # Uses the NotificationService we created to send the "Guest Welcome" message
+                    # configured in HotelSettings.
+                    NotificationService.notify_guest_booking(booking)
+                except Exception as notify_error:
+                    # Log the error but allow the booking to succeed
+                    logger.error(f"Notification Failed for Booking {booking.id}: {notify_error}")
 
+            # ----------------------------------------------------------------------
+            # 3. SUCCESS RESPONSE
+            # ----------------------------------------------------------------------
             return Response({
                 'status': 'Confirmed', 
                 'booking_id': booking.id, 
@@ -2409,40 +2413,55 @@ class TenantRegisterView(APIView):
     """
     Registers a new Hotel Owner (Tenant).
     Called by the Super Admin 'Deploy Node' button.
+    - Creates the User (Owner).
+    - Creates the HotelSettings profile.
+    - 🟢 NEW: Sends Welcome Email/WhatsApp to the new Owner.
     """
     permission_classes = [permissions.IsAdminUser] # Only Super Admin can do this
 
     def post(self, request):
-        # 🟢 CRITICAL FIX: Define 'User' before using it
         User = get_user_model()
-
         data = request.data
+        
         try:
             # 1. Check if username/email exists
             if User.objects.filter(username=data.get('username')).exists():
                 return Response({'detail': 'Cluster ID (Username) already taken.'}, status=400)
             
+            if User.objects.filter(email=data.get('email')).exists():
+                return Response({'detail': 'Email address already registered.'}, status=400)
+
             # 2. Create the User (Owner Role)
             user = User.objects.create_user(
                 username=data['username'],
                 email=data['email'],
                 password=data['password'],
-                first_name=data['first_name'],
-                last_name=data['last_name'],
+                first_name=data['first_name'], # This is mapped to 'Hotel Name' in frontend
+                last_name=data.get('last_name', 'Admin'),
                 role='OWNER'
             )
 
             # 3. Create Hotel Settings
-            # We map the frontend 'plan' string to a real plan object if possible
-            plan_name = data.get('plan', 'Standard')
-            # max_rooms = data.get('max_rooms', 20) 
+            # We map the frontend 'plan' and 'phone' fields
+            phone_number = data.get('phone', '') # For WhatsApp Alerts
             
             HotelSettings.objects.create(
                 owner=user,
-                hotel_name=data['first_name'], # Using the provided name
-                # You can add logic here to save the 'plan' or 'max_rooms' 
-                # if you added those fields to your HotelSettings model.
+                hotel_name=data['first_name'], # Using the provided Hotel Name
+                phone=phone_number,            # 🟢 Save Phone for Twilio
+                email=data['email'],           # Default contact email
+                
+                # Default Config for new tenants
+                enable_whatsapp_alerts=True,
+                enable_email_alerts=True
             )
+
+            # 4. 🟢 Send Welcome Notification (Email/WhatsApp)
+            # Wrapped in try-except so notification failure doesn't break user creation
+            try:
+                NotificationService.notify_new_tenant(user, data['password'])
+            except Exception as notify_error:
+                logger.error(f"Failed to send welcome notification to {user.email}: {notify_error}")
 
             return Response({
                 'status': 'success', 
@@ -2451,6 +2470,7 @@ class TenantRegisterView(APIView):
             }, status=201)
 
         except Exception as e:
+            logger.error(f"Tenant Deployment Failed: {e}")
             return Response({'detail': str(e)}, status=400)
         
 class SuperAdminImpersonateView(APIView):
