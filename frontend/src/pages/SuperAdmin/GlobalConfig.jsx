@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { 
     Settings2, Mail, MessageCircle, Save, 
-    Globe, Server, ShieldAlert, Loader2 
+    Globe, Server, ShieldAlert, Loader2, CheckCircle 
 } from 'lucide-react';
 import { API_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
@@ -29,26 +29,34 @@ const GlobalConfig = () => {
         welcome_email_subject: '',
         welcome_email_body: '',
 
-        // WhatsApp API (Meta)
-        whatsapp_enabled: false,
-        whatsapp_phone_id: '',
-        whatsapp_token: '',
+        // Twilio API (WhatsApp/SMS)
+        twilio_account_sid: '',
+        twilio_auth_token: '',
+        twilio_whatsapp_number: '',
         welcome_whatsapp_msg: '',
 
         // System
         maintenance_mode: false 
     });
 
+    // Fetch Settings
     useEffect(() => {
-        fetch(`${API_URL}/api/super-admin/platform-settings/`, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(data => setConfig(prev => ({ ...prev, ...data })));
+        fetch(`${API_URL}/api/super-admin/config/`, { 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        })
+        .then(res => res.json())
+        .then(data => {
+            // Merge defaults with fetched data to prevent null errors
+            setConfig(prev => ({ ...prev, ...data }));
+        })
+        .catch(err => console.error("Config Load Error:", err));
     }, [token]);
 
+    // Save Settings
     const saveConfig = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/api/super-admin/platform-settings/`, {
+            const res = await fetch(`${API_URL}/api/super-admin/config/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(config)
@@ -129,26 +137,27 @@ const GlobalConfig = () => {
                     </div>
                 </div>
 
-                {/* 3. WHATSAPP GATEWAY */}
+                {/* 3. TWILIO GATEWAY (WHATSAPP) */}
                 <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800">
                     <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
                         <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <MessageCircle size={18} className="text-emerald-500"/> WhatsApp API (Meta Cloud)
+                            <MessageCircle size={18} className="text-emerald-500"/> Twilio API (WhatsApp)
                         </h4>
-                        <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase">{config.whatsapp_enabled ? 'Active' : 'Disabled'}</span>
-                            <div className={`w-10 h-5 rounded-full p-1 cursor-pointer transition-colors ${config.whatsapp_enabled ? 'bg-emerald-500' : 'bg-slate-700'}`} onClick={() => setConfig({...config, whatsapp_enabled: !config.whatsapp_enabled})}>
-                                <div className={`w-3 h-3 bg-white rounded-full shadow-md transition-transform ${config.whatsapp_enabled ? 'translate-x-5' : ''}`}></div>
-                            </div>
+                        <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                            <CheckCircle size={12} className="text-emerald-500"/>
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase">Provider: Twilio</span>
                         </div>
                     </div>
 
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 transition-opacity ${!config.whatsapp_enabled ? 'opacity-50 pointer-events-none' : ''}`}>
-                        <Input label="Phone Number ID" val={config.whatsapp_phone_id} set={v => setConfig({...config, whatsapp_phone_id: v})} placeholder="100345..." />
-                        <Input label="Permanent Access Token" type="password" val={config.whatsapp_token} set={v => setConfig({...config, whatsapp_token: v})} />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="md:col-span-2">
+                            <Input label="Account SID" val={config.twilio_account_sid} set={v => setConfig({...config, twilio_account_sid: v})} placeholder="ACxxxxxxxxxxxxxxxx" />
+                        </div>
+                        <Input label="Auth Token" type="password" val={config.twilio_auth_token} set={v => setConfig({...config, twilio_auth_token: v})} />
+                        <Input label="Twilio WhatsApp Number" val={config.twilio_whatsapp_number} set={v => setConfig({...config, twilio_whatsapp_number: v})} placeholder="+14155238886" />
                     </div>
 
-                    <div className={`bg-slate-950 p-6 rounded-2xl border border-slate-800 transition-opacity ${!config.whatsapp_enabled ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800">
                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Welcome WhatsApp Template</label>
                         <textarea className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm font-medium text-slate-300 outline-none focus:border-emerald-500 min-h-[100px]" 
                             value={config.welcome_whatsapp_msg} 

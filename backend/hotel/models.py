@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 import json
 from datetime import timedelta
+import random # 🟢 Added for Guest ID generation
 
 # ==============================================================================
 # 1. HOTEL SETTINGS (Global Configuration for Tenants)
@@ -45,8 +46,7 @@ class HotelSettings(models.Model):
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_auth_token = models.CharField(max_length=255, blank=True, null=True)
 
-    # 🟢 NEW: Guest Communication Settings (Owner -> Guest)
-    # Allows hotel owners to customize the message their guests receive
+    # 🟢 Guest Communication Settings (Owner -> Guest)
     guest_welcome_template = models.TextField(
         default="Dear {guest_name},\n\nThank you for booking with {hotel_name}!\nYour room ({room_type}) is confirmed for {check_in}.\n\nSee you soon!",
         help_text="Use placeholders like {guest_name}, {hotel_name}, {check_in}"
@@ -54,7 +54,7 @@ class HotelSettings(models.Model):
     enable_whatsapp_alerts = models.BooleanField(default=True)
     enable_email_alerts = models.BooleanField(default=True)
     
-    # Support Contact for Guests (Appears on Booking Page)
+    # Support Contact for Guests
     support_phone = models.CharField(max_length=20, blank=True, null=True)
     support_email = models.CharField(max_length=100, blank=True, null=True)
 
@@ -75,13 +75,13 @@ class SubscriptionPlan(models.Model):
         ('year', 'Yearly'),
     )
 
-    name = models.CharField(max_length=100, unique=True) # e.g. "Gold Tier"
-    price = models.DecimalField(max_digits=10, decimal_places=2) # e.g. 1999.00
+    name = models.CharField(max_length=100, unique=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=10, default='INR')
     interval = models.CharField(max_length=10, choices=PLAN_INTERVALS, default='month')
     max_rooms = models.IntegerField(default=10)
-    features = models.JSONField(default=list) # Stores ["POS", "Inventory"]
-    color = models.CharField(max_length=20, default='blue') # UI Theme color
+    features = models.JSONField(default=list)
+    color = models.CharField(max_length=20, default='blue')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -116,27 +116,43 @@ class Room(models.Model):
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
     
-    # Stores amenities as a JSON string (e.g. "['WiFi', 'AC']")
     amenities = models.TextField(default="[]", blank=True)
     
-    # Channel Manager (iCal)
+    # 🟢 NEW: Description for Public Booking Page
+    description = models.TextField(blank=True, null=True) 
+    
     ical_link = models.URLField(max_length=500, blank=True, null=True, help_text="Paste OTA Calendar Link")
 
     class Meta:
-        # Ensures a hotel cannot have two rooms with the same number
         unique_together = ('owner', 'room_number')
         ordering = ['room_number']
 
     def __str__(self):
         return f"{self.room_number} ({self.get_status_display()})"
 
+# 🟢 NEW MODEL: Room Images (Multiple Photos per Room)
+class RoomImage(models.Model):
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='room_photos/')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Image for {self.room.room_number}"
+
 class Guest(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=255)
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20)
-    id_proof_type = models.CharField(max_length=50, blank=True, null=True)
+    
+    # 🟢 UPDATED: Identity Uploads & Public ID
+    public_guest_id = models.CharField(max_length=20, unique=True, blank=True, null=True) # E.g. GST-92834
+    
+    id_proof_type = models.CharField(max_length=50, blank=True, null=True) # Aadhar, Passport
     id_proof_number = models.CharField(max_length=100, blank=True, null=True)
+    id_proof_image = models.ImageField(upload_to='guest_ids/', blank=True, null=True) # The File
+    profile_image = models.ImageField(upload_to='guest_profiles/', blank=True, null=True) # Selfie
+    
     address = models.TextField(blank=True, null=True)
     
     # Loyalty & Profile
@@ -151,12 +167,17 @@ class Guest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # Prevents duplicate guests (same phone) for the same hotel
         unique_together = ('owner', 'phone')
         ordering = ['-created_at']
 
+    def save(self, *args, **kwargs):
+        # Auto-generate Guest ID like "GST-84392"
+        if not self.public_guest_id:
+            self.public_guest_id = f"GST-{random.randint(10000, 99999)}"
+        super(Guest, self).save(*args, **kwargs)
+
     def __str__(self):
-        return self.full_name
+        return f"{self.full_name} ({self.public_guest_id})"
 
 class Booking(models.Model):
     STATUS_CHOICES = [
@@ -206,10 +227,9 @@ class Booking(models.Model):
         ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
-        # Auto-Calculate Total Amount if not set (Safety Fallback)
+        # Auto-Calculate Total Amount if not set
         if self.room and self.total_amount == 0 and self.check_in_date and self.check_out_date:
             delta = self.check_out_date - self.check_in_date
-            # Ensure at least 1 night is charged even if same-day dates are entered
             nights = delta.days if delta.days > 0 else 1
             self.total_amount = self.room.price_per_night * nights
             
@@ -241,7 +261,6 @@ class InventoryItem(models.Model):
     name = models.CharField(max_length=255)
     category = models.CharField(max_length=100, default='SUPPLIES')
     
-    # Stock Logic
     current_stock = models.IntegerField(default=0) 
     min_stock_alert = models.IntegerField(default=5) 
     unit = models.CharField(max_length=50, default='PCS') 
@@ -301,20 +320,12 @@ class HousekeepingTask(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
 class ActivityLog(models.Model):
-    """
-    Tracks all major system actions for Audit Trails.
-    🟢 CRITICAL: We use 'details' as the field name to match views.py usage.
-    """
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     action = models.CharField(max_length=100) 
-    category = models.CharField(max_length=50, default='GENERAL') # Critical for Admin Filters
-    
-    # This field MUST be named 'details' to prevent 500 Errors in existing views
+    category = models.CharField(max_length=50, default='GENERAL') 
     details = models.TextField() 
-    
     timestamp = models.DateTimeField(auto_now_add=True)
     
-    # Compatibility Property
     @property
     def description(self):
         return self.details
@@ -331,38 +342,29 @@ class ActivityLog(models.Model):
 class PlatformSettings(models.Model):
     """
     Settings for the SaaS Owner (You).
-    Configures White-labeling, Global SMTP, Twilio, Support Info.
     """
-    # Branding
     app_name = models.CharField(max_length=50, default="Atithi SaaS")
     company_name = models.CharField(max_length=100, default="My Tech Company")
     logo = models.ImageField(upload_to='platform/', null=True, blank=True)
     
-    # Contact Info (Visible to Tenants)
     support_email = models.EmailField(default="support@example.com")
     support_phone = models.CharField(max_length=20, default="+91-9999999999")
     address = models.TextField(blank=True, null=True)
 
-    # System SMTP (Global Fallback for Password Resets/Welcome Emails)
     smtp_host = models.CharField(max_length=100, blank=True, null=True)
     smtp_port = models.CharField(max_length=10, default="587")
     smtp_user = models.CharField(max_length=100, blank=True, null=True)
     smtp_password = models.CharField(max_length=100, blank=True, null=True)
 
-    # System WhatsApp (Global Notifications) - Legacy Fields (Can be deprecated later)
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
 
-    # 🟢 NEW: Twilio Credentials (Super Admin)
-    # Used for CEO -> Owner alerts and general system notifications
     twilio_account_sid = models.CharField(max_length=100, blank=True, null=True)
     twilio_auth_token = models.CharField(max_length=100, blank=True, null=True)
     twilio_whatsapp_number = models.CharField(max_length=20, blank=True, null=True, help_text="e.g., +14155238886")
 
-    # 🟢 NEW: Global Maintenance Mode Switch
     maintenance_mode = models.BooleanField(default=False)
 
-    # --- EDITABLE WELCOME MESSAGES ---
     welcome_email_subject = models.CharField(
         max_length=255, 
         default="Welcome to {app_name} - Your Hotel Manager",
@@ -373,14 +375,12 @@ class PlatformSettings(models.Model):
         help_text="Available placeholders: {name}, {app_name}, {username}, {password}, {company_name}"
     )
     
-    # 🟢 NEW: WhatsApp Welcome Message Template
     welcome_whatsapp_msg = models.TextField(
         default="Welcome to {app_name}! Your hotel {hotel} is now live. Login at: http://16.171.144.127/login",
         help_text="Available placeholders: {name}, {app_name}, {hotel}"
     )
 
     def save(self, *args, **kwargs):
-        # Force Singleton (Always ID 1) - Ensures only one settings row exists
         self.pk = 1
         super(PlatformSettings, self).save(*args, **kwargs)
 

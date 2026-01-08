@@ -20,7 +20,7 @@ from .views import (
 
     # --- Auth & Account Views ---
     CustomTokenObtainPairView,  # Login (JWT)
-    TenantRegisterView,         # 🟢 NEW: Tenant Registration (Deploy Node)
+    TenantRegisterView,         # Tenant Registration (Deploy Node)
     StaffRegisterView,
     PasswordResetRequestView, 
     PasswordResetConfirmView,
@@ -37,24 +37,27 @@ from .views import (
     POSChargeView, 
     ReportExportView, 
     DailyReportPDFView,
+    GenerateInvoiceView,        # 🟢 NEW: Invoice PDF
 
     # --- Super Admin Views ---
     SuperAdminStatsView, 
-    PlatformSettingsView,
-    SuperAdminImpersonateView,  # 🟢 CRITICAL FIX: Imported this view
+    PlatformConfigView,         # (Formerly PlatformSettingsView)
+    SuperAdminImpersonateView,  # 🟢 CRITICAL: Impersonation
 
-    # --- Channel Manager View ---
+    # --- Channel Manager & Images ---
     RoomICalView,
+    RoomImageUploadView,        # 🟢 NEW: Room Gallery Uploads
 
-    # --- Public Booking Views ---
+    # --- Public Booking & Guest Views ---
     PublicHotelView, 
     PublicBookingCreateView,
+    PublicMenuView,             # 🟢 NEW: Guest POS Menu
+    PublicOrderCreateView,      # 🟢 NEW: Guest POS Order
 )
 
 # ==========================================
 #  ROUTER CONFIGURATION
 # ==========================================
-# This automatically generates URLs for standard CRUD operations (GET, POST, PUT, DELETE)
 router = DefaultRouter()
 
 # Standard ViewSets
@@ -63,15 +66,14 @@ router.register(r'bookings', BookingViewSet)
 router.register(r'guests', GuestViewSet)
 router.register(r'inventory', InventoryViewSet)
 router.register(r'expenses', ExpenseViewSet)
-router.register(r'services', MenuItemViewSet) # Mapped to 'services' (Food/Laundry items)
+router.register(r'services', MenuItemViewSet) # Food/Laundry items
 router.register(r'orders', OrderViewSet)
 router.register(r'housekeeping', HousekeepingViewSet)
 
-# 🟢 NEW: Subscription Plans (Super Admin Only)
+# Subscription Plans (Super Admin Only)
 router.register(r'plans', SubscriptionPlanViewSet)
 
-# Critical: 'basename' is required here because these ViewSets likely use 
-# distinct get_queryset() logic (e.g., filtering by owner) rather than a static .queryset attribute.
+# Critical: 'basename' required for custom querysets
 router.register(r'logs', ActivityLogViewSet, basename='activitylog')
 router.register(r'staff', StaffViewSet, basename='staff')
 
@@ -84,10 +86,7 @@ urlpatterns = [
 
     # 2. Authentication & Registration
     path('login/', CustomTokenObtainPairView.as_view(), name='login'),
-    
-    # 🟢 NEW: Tenant Registration Endpoint (Matches Frontend "Deploy Node" button)
     path('register/', TenantRegisterView.as_view(), name='register-tenant'),
-    
     path('register/staff/', StaffRegisterView.as_view(), name='register-staff'),
     
     # 3. Password Reset
@@ -102,30 +101,29 @@ urlpatterns = [
     path('license/status/', LicenseStatusView.as_view(), name='license-status'),
     path('license/activate/', LicenseActivateView.as_view(), name='license-activate'),
 
-    # 6. Point of Sale (POS)
+    # 6. Point of Sale (POS) & Invoices
     path('pos/charge/', POSChargeView.as_view(), name='pos-charge'),
+    path('bookings/<int:booking_id>/invoice/', GenerateInvoiceView.as_view(), name='generate-invoice'), # 🟢 NEW
 
     # 7. Reports & Exports
-    # Supports ?token=... for direct browser download (bypassing Auth header restriction)
     path('reports/daily-pdf/', DailyReportPDFView.as_view(), name='daily-report-pdf'),
     path('reports/export/', ReportExportView.as_view(), name='report-export'),
 
-    # 8. Channel Manager (iCal for Airbnb/Booking.com)
-    # The <int:room_id> captures the ID from the URL and passes it to the view
+    # 8. Channel Manager & Room Images
     path('rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
+    path('rooms/<int:room_id>/images/', RoomImageUploadView.as_view(), name='room-images'), # 🟢 NEW: Gallery
 
     # 9. Super Admin Controls (SaaS Platform HQ)
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
-    
-    # Platform Settings is a Singleton (Global Config), so we don't need an ID in the URL.
-    # The view automatically fetches ID=1.
-    path('super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
-    
-    # 🟢 FIX: Added the impersonate endpoint
+    # Note: PlatformConfigView matches the name in your updated views.py
+    path('super-admin/platform-settings/', PlatformConfigView.as_view(), name='platform-settings'), 
     path('super-admin/impersonate/', SuperAdminImpersonateView.as_view(), name='impersonate'),
 
-    # 10. Public Booking Engine (Guest Facing)
-    # These endpoints do NOT require authentication (PermissionAllowAny)
+    # 10. Public Booking Engine & Guest App
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
+    
+    # 🟢 NEW: Guest POS Endpoints
+    path('public/menu/<str:username>/', PublicMenuView.as_view(), name='public-menu'),
+    path('public/order/', PublicOrderCreateView.as_view(), name='public-order'),
 ]

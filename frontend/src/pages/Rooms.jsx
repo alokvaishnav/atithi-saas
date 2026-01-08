@@ -3,7 +3,7 @@ import {
   Plus, Search, BedDouble, Trash2, Edit3, 
   CheckCircle, Loader2, MoreVertical, X, Wrench, 
   AlertCircle, User, Brush, Wifi, Tv, Wind, Coffee,
-  Layers, Users, BarChart3, Calendar, RefreshCcw
+  Layers, Users, BarChart3, Calendar, RefreshCcw, Image as ImageIcon, Upload
 } from 'lucide-react';
 import { API_URL } from '../config';
 import { useAuth } from '../context/AuthContext'; 
@@ -17,7 +17,7 @@ const Rooms = () => {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null); // New: Error State
+  const [error, setError] = useState(null);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState('ALL'); 
@@ -28,6 +28,9 @@ const Rooms = () => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
+  
+  // Image Upload State
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   // 🛡️ SECURITY
   const isAdmin = ['OWNER', 'MANAGER'].includes(role) || user?.is_superuser;
@@ -41,7 +44,9 @@ const Rooms = () => {
     capacity: '2',
     status: 'AVAILABLE',
     amenities: [],
-    ical_link: ''
+    ical_link: '',
+    description: '',
+    images: [] // Holds current images for display
   });
 
   const AMENITY_OPTIONS = [
@@ -68,7 +73,6 @@ const Rooms = () => {
 
       if (res.ok) {
         const data = await res.json();
-        // Numeric sort logic: 1, 2, 10, 101 instead of 1, 10, 101, 2
         const sorted = data.sort((a, b) => 
             a.room_number.toString().localeCompare(b.room_number.toString(), undefined, { numeric: true, sensitivity: 'base' })
         );
@@ -111,6 +115,9 @@ const Rooms = () => {
           capacity: parseInt(formData.capacity),
           amenities: JSON.stringify(formData.amenities)
       };
+      
+      // Remove images array from payload (handled separately)
+      delete payload.images;
 
       const res = await fetch(url, {
         method: method,
@@ -128,6 +135,44 @@ const Rooms = () => {
       }
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
+  };
+
+  // --- IMAGE HANDLING ---
+  const handleImageUpload = async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0 || !editId) return;
+
+      setUploadingImages(true);
+      const data = new FormData();
+      for (let i = 0; i < files.length; i++) {
+          data.append('images', files[i]);
+      }
+
+      try {
+          const res = await fetch(`${API_URL}/api/rooms/${editId}/images/`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: data
+          });
+          
+          if (res.ok) {
+              // Refresh room data to show new images
+              const updatedRes = await fetch(`${API_URL}/api/rooms/${editId}/`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+              });
+              const updatedRoom = await updatedRes.json();
+              setFormData(prev => ({ ...prev, images: updatedRoom.images }));
+              
+              // Also update main list
+              fetchRooms();
+          } else {
+              alert("Failed to upload images.");
+          }
+      } catch (error) {
+          alert("Network error during upload.");
+      } finally {
+          setUploadingImages(false);
+      }
   };
 
   // --- ACTIONS ---
@@ -169,7 +214,9 @@ const Rooms = () => {
         capacity: room.capacity || '2',
         status: room.status,
         amenities: Array.isArray(parsedAmenities) ? parsedAmenities : [],
-        ical_link: room.ical_link || ''
+        ical_link: room.ical_link || '',
+        description: room.description || '',
+        images: room.images || []
     });
     setEditId(room.id);
     setIsEditing(true);
@@ -188,7 +235,7 @@ const Rooms = () => {
   };
 
   const resetForm = () => {
-    setFormData({ room_number: '', room_type: 'SINGLE', price_per_night: '', floor: '1', capacity: '2', status: 'AVAILABLE', amenities: [], ical_link: '' });
+    setFormData({ room_number: '', room_type: 'SINGLE', price_per_night: '', floor: '1', capacity: '2', status: 'AVAILABLE', amenities: [], ical_link: '', description: '', images: [] });
     setIsEditing(false);
     setEditId(null);
   };
@@ -200,6 +247,7 @@ const Rooms = () => {
       case 'OCCUPIED': return { color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: User, label: 'Occupied' };
       case 'DIRTY': return { color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200', icon: Brush, label: 'Cleaning' };
       case 'MAINTENANCE': return { color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', icon: Wrench, label: 'Repairs' };
+      case 'BOOKED': return { color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', icon: Calendar, label: 'Booked' };
       default: return { color: 'text-slate-400', bg: 'bg-slate-50', border: 'border-slate-200', icon: AlertCircle, label: 'Unknown' };
     }
   };
@@ -251,12 +299,10 @@ const Rooms = () => {
         </div>
         
         <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto">
-          {/* Refresh */}
           <button onClick={fetchRooms} className="bg-white p-3 rounded-xl border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm w-fit">
               <RefreshCcw size={18} className={loading ? "animate-spin" : ""}/>
           </button>
 
-          {/* Floor Filter */}
           <div className="relative">
               <Layers className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
               <select 
@@ -268,7 +314,6 @@ const Rooms = () => {
               </select>
           </div>
 
-          {/* Search */}
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
@@ -280,7 +325,6 @@ const Rooms = () => {
             />
           </div>
 
-          {/* 🛡️ ADD BUTTON: Hidden for non-admins */}
           {isAdmin && (
             <button 
                 onClick={() => { resetForm(); setShowModal(true); }} 
@@ -302,7 +346,7 @@ const Rooms = () => {
 
       {/* 3. STATUS TABS */}
       <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-        {['ALL', 'AVAILABLE', 'OCCUPIED', 'DIRTY', 'MAINTENANCE'].map(f => (
+        {['ALL', 'AVAILABLE', 'BOOKED', 'OCCUPIED', 'DIRTY', 'MAINTENANCE'].map(f => (
           <button 
             key={f} 
             onClick={() => setStatusFilter(f)} 
@@ -352,6 +396,13 @@ const Rooms = () => {
                     </div>
                 )}
               </div>
+
+              {/* Room Image Preview (Thumbnail) */}
+              {room.images && room.images.length > 0 && (
+                  <div className="h-24 w-full bg-slate-100 rounded-xl mb-4 overflow-hidden">
+                      <img src={room.images[0].image} alt="Room" className="w-full h-full object-cover"/>
+                  </div>
+              )}
 
               {/* Room Info */}
               <div className="mb-4">
@@ -415,6 +466,30 @@ const Rooms = () => {
                 </div>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
+                    
+                    {/* PHOTO UPLOADER (Only in Edit Mode) */}
+                    {isEditing && (
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-300">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Photo Gallery</label>
+                            
+                            <div className="grid grid-cols-4 gap-2 mb-4">
+                                {formData.images.map(img => (
+                                    <div key={img.id} className="relative aspect-square rounded-lg overflow-hidden group">
+                                        <img src={img.image} alt="Room" className="w-full h-full object-cover"/>
+                                        <button type="button" className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                            <Trash2 size={16}/>
+                                        </button>
+                                    </div>
+                                ))}
+                                <label className="aspect-square rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:bg-slate-100 transition-colors">
+                                    {uploadingImages ? <Loader2 className="animate-spin"/> : <Upload size={20}/>}
+                                    <span className="text-[8px] font-bold uppercase mt-1">Add Photo</span>
+                                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImages}/>
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Room Number</label>
@@ -448,6 +523,13 @@ const Rooms = () => {
                                     value={formData.capacity} onChange={e => setFormData({...formData, capacity: e.target.value})} />
                             </div>
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Description</label>
+                        <textarea className="w-full p-3 bg-slate-50 rounded-xl font-bold border-2 border-transparent focus:border-blue-500 outline-none text-sm transition-all h-20 resize-none" 
+                            placeholder="Describe view, bed size, etc..."
+                            value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
                     </div>
 
                     <div>

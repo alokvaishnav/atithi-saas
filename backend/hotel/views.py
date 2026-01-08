@@ -28,6 +28,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser
 from .notifications import NotificationService
 
 # ==========================================
@@ -2509,3 +2510,80 @@ class SuperAdminImpersonateView(APIView):
 
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=404)
+        
+# 1. PUBLIC GUEST REGISTRATION (With ID Card)
+class PublicGuestRegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+    parser_classes = [MultiPartParser, FormParser] # Allow file uploads
+
+    def post(self, request):
+        data = request.data
+        User = get_user_model()
+        
+        try:
+            owner = User.objects.get(username=data['hotel_username'])
+            
+            # Check if guest exists
+            guest, created = Guest.objects.get_or_create(
+                phone=data['phone'],
+                owner=owner,
+                defaults={
+                    'full_name': data['full_name'],
+                    'email': data.get('email', ''),
+                    'address': data.get('address', '')
+                }
+            )
+            
+            # Update ID Proof if provided
+            if 'id_proof_image' in request.FILES:
+                guest.id_proof_image = request.FILES['id_proof_image']
+                guest.id_proof_type = data.get('id_proof_type', 'AADHAR')
+                guest.id_proof_number = data.get('id_proof_number', '')
+            
+            guest.save()
+            
+            return Response({
+                'status': 'success',
+                'guest_id': guest.public_guest_id,
+                'guest_pk': guest.id,
+                'message': 'Guest Profile Created!'
+            })
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+        
+# 2. ROOM IMAGE UPLOAD (Hotel Admin)
+class RoomImageUploadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, room_id):
+        try:
+            room = Room.objects.get(id=room_id, owner=request.user)
+            images = request.FILES.getlist('images') # Handle multiple files
+            
+            for img in images:
+                RoomImage.objects.create(room=room, image=img)
+                
+            return Response({'status': 'success'})
+        except Room.DoesNotExist:
+            return Response({'error': 'Room not found'}, status=404)
+
+    def delete(self, request, image_id):
+        # Delete a specific photo
+        RoomImage.objects.filter(id=image_id, room__owner=request.user).delete()
+        return Response({'status': 'deleted'})
+
+# 3. PUBLIC MENU VIEW (For Guest Ordering)
+class PublicMenuView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, username):
+        try:
+            owner = User.objects.get(username=username)
+            menu_items = MenuItem.objects.filter(owner=owner, is_available=True)
+            # Simple manual serialization to avoid circular imports
+            data = [{'id': i.id, 'name': i.name, 'price': i.price, 'category': i.category} for i in menu_items]
+            return Response(data)
+        except User.DoesNotExist:
+            return Response({'error': 'Hotel not found'}, status=404)
