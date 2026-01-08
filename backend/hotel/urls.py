@@ -58,6 +58,7 @@ from .views import (
 # ==========================================
 #  ROUTER CONFIGURATION
 # ==========================================
+# This automatically generates URLs for standard CRUD operations
 router = DefaultRouter()
 
 # Standard ViewSets
@@ -115,8 +116,10 @@ urlpatterns = [
 
     # 9. Super Admin Controls (SaaS Platform HQ)
     path('super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
-    # Note: PlatformConfigView matches the name in your updated views.py
-    path('super-admin/platform-settings/', PlatformConfigView.as_view(), name='platform-settings'), 
+    
+    # 🟢 FIXED URL: Changed from 'platform-settings/' to 'config/' to match Frontend
+    path('super-admin/config/', PlatformConfigView.as_view(), name='platform-config'), 
+    
     path('super-admin/impersonate/', SuperAdminImpersonateView.as_view(), name='impersonate'),
 
     # 10. Public Booking Engine & Guest App

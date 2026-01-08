@@ -39,17 +39,31 @@ const GlobalConfig = () => {
         maintenance_mode: false 
     });
 
-    // Fetch Settings
+    // Fetch Settings (With Error Handling Fix)
     useEffect(() => {
-        fetch(`${API_URL}/api/super-admin/config/`, { 
-            headers: { 'Authorization': `Bearer ${token}` } 
-        })
-        .then(res => res.json())
-        .then(data => {
-            // Merge defaults with fetched data to prevent null errors
-            setConfig(prev => ({ ...prev, ...data }));
-        })
-        .catch(err => console.error("Config Load Error:", err));
+        const fetchConfig = async () => {
+            try {
+                // 🟢 FIX: Ensure this URL matches backend/hotel/urls.py exactly
+                const res = await fetch(`${API_URL}/api/super-admin/config/`, { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+
+                // 🟢 FIX: Check if response is OK before parsing JSON
+                // This prevents the "Unexpected token <" error if server returns 404 HTML
+                if (!res.ok) {
+                    console.warn(`Server returned status: ${res.status}`);
+                    return; 
+                }
+
+                const data = await res.json();
+                // Merge defaults with fetched data to prevent null errors
+                setConfig(prev => ({ ...prev, ...data }));
+            } catch (err) {
+                console.error("Config Load Error:", err);
+            }
+        };
+
+        if (token) fetchConfig();
     }, [token]);
 
     // Save Settings
@@ -61,10 +75,15 @@ const GlobalConfig = () => {
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify(config)
             });
-            if(res.ok) alert("✅ Configuration Saved Successfully");
-            else alert("❌ Failed to save configuration");
+            
+            if(res.ok) {
+                alert("✅ Configuration Saved Successfully");
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                alert(`❌ Failed to save: ${errData.detail || 'Unknown Error'}`);
+            }
         } catch (e) {
-            alert("Network Error");
+            alert("Network Error: Could not connect to server.");
         } finally {
             setLoading(false);
         }

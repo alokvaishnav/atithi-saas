@@ -6,23 +6,21 @@ from rest_framework.routers import DefaultRouter
 from rest_framework import permissions
 
 # --- Third Party Imports (Docs & Auth) ---
-# Ensure you have installed: pip install drf-yasg djangorestframework-simplejwt
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework_simplejwt.views import TokenRefreshView
 
 # --- Import Views from the 'hotel' app ---
-# We use 'CustomTokenObtainPairView' instead of 'CustomLoginView' for JWT
 from hotel.views import (
     # 1. ViewSets (CRUD Operations)
     RoomViewSet, BookingViewSet, GuestViewSet, 
     InventoryViewSet, ExpenseViewSet, MenuItemViewSet, 
     OrderViewSet, HousekeepingViewSet, ActivityLogViewSet, 
-    StaffViewSet, SubscriptionPlanViewSet, # 🟢 NEW: Added Plan ViewSet
+    StaffViewSet, SubscriptionPlanViewSet, 
 
     # 2. Authentication Views
-    CustomTokenObtainPairView,  # Replaces CustomLoginView for JWT
-    TenantRegisterView,         # 🟢 NEW: Replaces generic RegisterView for Tenant Deployment
+    CustomTokenObtainPairView,  # Login (JWT)
+    TenantRegisterView,         # Tenant Deployment
     StaffRegisterView,
     PasswordResetRequestView, PasswordResetConfirmView,
 
@@ -30,12 +28,21 @@ from hotel.views import (
     SettingsView, AnalyticsView,
     LicenseStatusView, LicenseActivateView,
     POSChargeView, ReportExportView, DailyReportPDFView,
+    GenerateInvoiceView,        # 🟢 NEW: Invoice PDF
     
     # 4. Super Admin Views
-    SuperAdminStatsView, PlatformSettingsView,
+    SuperAdminStatsView, 
+    PlatformConfigView,         # 🟢 UPDATED: Renamed from PlatformSettingsView
+    SuperAdminImpersonateView,  # 🟢 NEW: Impersonation
 
-    # 5. Public Website & Channel Manager Views
-    PublicHotelView, PublicBookingCreateView, RoomICalView
+    # 5. Public Website & Guest Engine
+    PublicHotelView, PublicBookingCreateView, 
+    PublicMenuView,             # 🟢 NEW: Guest Menu
+    PublicOrderCreateView,      # 🟢 NEW: Guest Ordering
+    
+    # 6. Channel Manager & Images
+    RoomICalView, 
+    RoomImageUploadView         # 🟢 NEW: Room Gallery
 )
 
 # ==============================================================================
@@ -57,7 +64,6 @@ schema_view = get_schema_view(
 # ==============================================================================
 # 2. ROUTER CONFIGURATION
 # ==============================================================================
-# Handles Standard CRUD APIs
 router = DefaultRouter()
 
 # Core Operations
@@ -74,11 +80,10 @@ router.register(r'orders', OrderViewSet)
 # Operations
 router.register(r'housekeeping', HousekeepingViewSet)
 
-# 🟢 NEW: Subscription Plans (Super Admin Only)
+# Subscription Plans (Super Admin Only)
 router.register(r'plans', SubscriptionPlanViewSet)
 
-# Users & Logs
-# 'basename' is required for these because they use custom get_queryset logic
+# Users & Logs (Basename required for custom querysets)
 router.register(r'logs', ActivityLogViewSet, basename='activitylog')
 router.register(r'staff', StaffViewSet, basename='staff')
 
@@ -89,23 +94,20 @@ urlpatterns = [
     # A. Django Admin Panel
     path('admin/', admin.site.urls),
 
-    # B. API Documentation (Swagger & Redoc)
+    # B. API Documentation
     path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 
-    # C. Main API Router (Includes all ViewSets defined above)
+    # C. Main API Router
     path('api/', include(router.urls)),
 
     # D. Custom API Endpoints
     
     # --- Authentication ---
-    path('api/login/', CustomTokenObtainPairView.as_view(), name='login'), # JWT Login
+    path('api/login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    
-    # 🟢 UPDATED: Points to TenantRegisterView for "Deploy Node" functionality
     path('api/register/', TenantRegisterView.as_view(), name='register'), 
-    
     path('api/register/staff/', StaffRegisterView.as_view(), name='register-staff'),
     path('api/password_reset/', PasswordResetRequestView.as_view(), name='password-reset'),
     path('api/password_reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
@@ -118,24 +120,35 @@ urlpatterns = [
     path('api/license/status/', LicenseStatusView.as_view(), name='license-status'),
     path('api/license/activate/', LicenseActivateView.as_view(), name='license-activate'),
 
-    # --- Reports & Exports ---
+    # --- Reports & POS ---
     path('api/pos/charge/', POSChargeView.as_view(), name='pos-charge'),
     path('api/reports/daily-pdf/', DailyReportPDFView.as_view(), name='daily-report-pdf'),
     path('api/reports/export/', ReportExportView.as_view(), name='report-export'),
+    
+    # 🟢 NEW: Invoice Generation
+    path('api/bookings/<int:booking_id>/invoice/', GenerateInvoiceView.as_view(), name='generate-invoice'),
 
     # --- Super Admin (Platform Owner) ---
     path('api/super-admin/stats/', SuperAdminStatsView.as_view(), name='super-admin-stats'),
     
-    # Flexible pattern for Platform Settings (Handles both /settings/ and /settings/1/)
-    re_path(r'^api/super-admin/platform-settings/(?:(?P<pk>\d+)/)?$', PlatformSettingsView.as_view(), name='platform-settings'),
+    # 🟢 FIXED: Matches Frontend URL exactly (/api/super-admin/config/)
+    path('api/super-admin/config/', PlatformConfigView.as_view(), name='platform-config'),
+    
+    path('api/super-admin/impersonate/', SuperAdminImpersonateView.as_view(), name='impersonate'),
 
     # --- PUBLIC BOOKING ENGINE (Website Builder) ---
-    # These paths are Open (AllowAny)
     path('api/public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('api/public/book/', PublicBookingCreateView.as_view(), name='public-book'),
+    
+    # 🟢 NEW: Guest POS (Menu & Ordering)
+    path('api/public/menu/<str:username>/', PublicMenuView.as_view(), name='public-menu'),
+    path('api/public/order/', PublicOrderCreateView.as_view(), name='public-order'),
 
-    # --- CHANNEL MANAGER (iCal) ---
-    path('api/room/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
+    # --- CHANNEL MANAGER & IMAGES ---
+    path('api/rooms/<int:room_id>/ical/', RoomICalView.as_view(), name='room-ical'),
+    
+    # 🟢 NEW: Room Gallery Upload
+    path('api/rooms/<int:room_id>/images/', RoomImageUploadView.as_view(), name='room-images'),
 ]
 
 # ==============================================================================
