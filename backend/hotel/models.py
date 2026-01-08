@@ -293,15 +293,23 @@ class HousekeepingTask(models.Model):
 class ActivityLog(models.Model):
     """
     Tracks all major system actions for Audit Trails.
-    Renamed 'details' to 'description' to match View logic.
-    Added 'category' to support filtering (Admin, System, Booking, etc.)
+    🟢 CRITICAL: We use 'details' as the field name to match views.py usage:
+    ActivityLog.objects.create(details=...)
     """
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     action = models.CharField(max_length=100) 
     category = models.CharField(max_length=50, default='GENERAL') # Critical for Admin Filters
-    description = models.TextField() 
+    
+    # This field MUST be named 'details' to prevent 500 Errors in existing views
+    details = models.TextField() 
+    
     timestamp = models.DateTimeField(auto_now_add=True)
     
+    # Compatibility Property: Allows access via 'description' if needed
+    @property
+    def description(self):
+        return self.details
+
     class Meta:
         ordering = ['-timestamp']
     

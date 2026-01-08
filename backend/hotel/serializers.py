@@ -6,7 +6,6 @@ from datetime import date, datetime
 # ==============================================================================
 # MODEL IMPORTS
 # ==============================================================================
-# Adjust imports based on your actual project structure.
 # Using get_user_model() ensures we always get the active User class.
 User = get_user_model()
 
@@ -17,7 +16,7 @@ from .models import (
     SubscriptionPlan
 )
 
-# If you specifically need the custom user class for type hinting or specific fields:
+# Custom User Handling
 try:
     from core.models import CustomUser
 except ImportError:
@@ -44,13 +43,20 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     # CRITICAL: Include settings so frontend knows the Hotel Name/Logo immediately upon login
     hotel_settings = HotelSettingsSerializer(read_only=True)
+    plan = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined', 'hotel_settings']
+        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined', 'hotel_settings', 'plan']
         
         # Safety: These fields should not be editable by the user themselves via this serializer
         read_only_fields = ['id', 'date_joined', 'role', 'is_active']
+
+    def get_plan(self, obj):
+        # Helper to show plan status in user lists
+        if hasattr(obj, 'hotel_settings') and obj.hotel_settings.license_key:
+            return "PRO"
+        return "FREE"
 
 class StaffSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
