@@ -18,11 +18,12 @@ from hotel.views import (
     RoomViewSet, BookingViewSet, GuestViewSet, 
     InventoryViewSet, ExpenseViewSet, MenuItemViewSet, 
     OrderViewSet, HousekeepingViewSet, ActivityLogViewSet, 
-    StaffViewSet,
+    StaffViewSet, SubscriptionPlanViewSet, # 🟢 NEW: Added Plan ViewSet
 
     # 2. Authentication Views
     CustomTokenObtainPairView,  # Replaces CustomLoginView for JWT
-    RegisterView, StaffRegisterView,
+    TenantRegisterView,         # 🟢 NEW: Replaces generic RegisterView for Tenant Deployment
+    StaffRegisterView,
     PasswordResetRequestView, PasswordResetConfirmView,
 
     # 3. Core Feature Views
@@ -73,6 +74,9 @@ router.register(r'orders', OrderViewSet)
 # Operations
 router.register(r'housekeeping', HousekeepingViewSet)
 
+# 🟢 NEW: Subscription Plans (Super Admin Only)
+router.register(r'plans', SubscriptionPlanViewSet)
+
 # Users & Logs
 # 'basename' is required for these because they use custom get_queryset logic
 router.register(r'logs', ActivityLogViewSet, basename='activitylog')
@@ -98,7 +102,10 @@ urlpatterns = [
     # --- Authentication ---
     path('api/login/', CustomTokenObtainPairView.as_view(), name='login'), # JWT Login
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/register/', RegisterView.as_view(), name='register'), # Owner Registration
+    
+    # 🟢 UPDATED: Points to TenantRegisterView for "Deploy Node" functionality
+    path('api/register/', TenantRegisterView.as_view(), name='register'), 
+    
     path('api/register/staff/', StaffRegisterView.as_view(), name='register-staff'),
     path('api/password_reset/', PasswordResetRequestView.as_view(), name='password-reset'),
     path('api/password_reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),

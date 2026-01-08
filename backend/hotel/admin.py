@@ -3,7 +3,8 @@ from .models import (
     HotelSettings, Room, Guest, Booking, 
     BookingPayment, BookingCharge,
     InventoryItem, MenuItem, Order, Expense, 
-    HousekeepingTask, ActivityLog, PlatformSettings, GlobalAnnouncement
+    HousekeepingTask, ActivityLog, PlatformSettings, GlobalAnnouncement,
+    SubscriptionPlan
 )
 
 # --- INLINES (Display Related Data Inside Parents) ---
@@ -100,13 +101,20 @@ class ActivityLogAdmin(admin.ModelAdmin):
 
 # --- 3. PLATFORM ADMIN (SUPER ADMIN) ---
 
+class SubscriptionPlanAdmin(admin.ModelAdmin):
+    list_display = ('name', 'price', 'interval', 'max_rooms', 'is_active')
+    list_filter = ('interval', 'is_active')
+    search_fields = ('name',)
+    list_editable = ('price', 'is_active', 'max_rooms')
+    ordering = ('price',)
+
 class PlatformSettingsAdmin(admin.ModelAdmin):
-    list_display = ('app_name', 'company_name', 'support_email', 'smtp_host')
+    list_display = ('app_name', 'company_name', 'support_email', 'maintenance_mode')
     
     # Organized layout for better UX in Admin Panel
     fieldsets = (
         ('Branding & Identity', {
-            'fields': ('app_name', 'company_name', 'logo')
+            'fields': ('app_name', 'company_name', 'logo', 'maintenance_mode')
         }),
         ('Contact Info (Visible to Tenants)', {
             'fields': ('support_email', 'support_phone', 'address')
@@ -120,7 +128,7 @@ class PlatformSettingsAdmin(admin.ModelAdmin):
             'description': "Use placeholders: {name}, {username}, {password}, {app_name}, {company_name}"
         }),
         ('System WhatsApp', {
-            'fields': ('whatsapp_phone_id', 'whatsapp_token')
+            'fields': ('whatsapp_phone_id', 'whatsapp_token', 'whatsapp_enabled', 'welcome_whatsapp_msg')
         }),
     )
 
@@ -153,3 +161,4 @@ admin.site.register(HousekeepingTask, HousekeepingAdmin)
 admin.site.register(ActivityLog, ActivityLogAdmin)
 admin.site.register(PlatformSettings, PlatformSettingsAdmin)
 admin.site.register(GlobalAnnouncement, GlobalAnnouncementAdmin)
+admin.site.register(SubscriptionPlan, SubscriptionPlanAdmin)

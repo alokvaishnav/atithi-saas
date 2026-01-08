@@ -20,6 +20,7 @@ from .views import (
 
     # --- Auth & Account Views ---
     CustomTokenObtainPairView,  # Login (JWT)
+    TenantRegisterView,         # 🟢 NEW: Tenant Registration (Deploy Node)
     StaffRegisterView,
     PasswordResetRequestView, 
     PasswordResetConfirmView,
@@ -80,8 +81,12 @@ urlpatterns = [
     # 1. Router URLs (Include all ViewSets above)
     path('', include(router.urls)),
 
-    # 2. Authentication
+    # 2. Authentication & Registration
     path('login/', CustomTokenObtainPairView.as_view(), name='login'),
+    
+    # 🟢 NEW: Tenant Registration Endpoint (Matches Frontend "Deploy Node" button)
+    path('register/', TenantRegisterView.as_view(), name='register-tenant'),
+    
     path('register/staff/', StaffRegisterView.as_view(), name='register-staff'),
     
     # 3. Password Reset
