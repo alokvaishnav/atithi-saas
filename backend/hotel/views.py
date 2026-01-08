@@ -2423,3 +2423,40 @@ class TenantRegisterView(APIView):
 
         except Exception as e:
             return Response({'detail': str(e)}, status=400)
+        
+class SuperAdminImpersonateView(views.APIView):
+    """
+    Allows Super Admin to get a login token for ANY user.
+    Critically useful for support (logging in as the customer).
+    """
+    permission_classes = [permissions.IsAdminUser] # STRICTLY Super Admin Only
+
+    def post(self, request):
+        target_user_id = request.data.get('user_id')
+        if not target_user_id:
+            return Response({'error': 'Target User ID required'}, status=400)
+        
+        try:
+            # 1. Fetch the target user
+            target_user = User.objects.get(id=target_user_id)
+            
+            # 2. Generate a fresh Token Pair for THEM
+            refresh = CustomTokenObtainPairSerializer.get_token(target_user)
+            
+            # 3. Log this sensitive action
+            ActivityLog.objects.create(
+                owner=request.user,
+                action='IMPERSONATION',
+                category='SECURITY',
+                details=f"Super Admin impersonated user: {target_user.username}"
+            )
+
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'username': target_user.username,
+                'role': target_user.role
+            })
+
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=404)

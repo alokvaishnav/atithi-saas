@@ -19,6 +19,7 @@ const GlobalSettings = () => {
 
   // 🛡️ SECURITY CHECK
   const isAuthorized = user?.is_superuser || user?.role === 'SUPERADMIN' || user?.role === 'OWNER';
+  
   if (!isAuthorized) return <AccessDenied user={user} logout={logout} />;
 
   const renderContent = () => {

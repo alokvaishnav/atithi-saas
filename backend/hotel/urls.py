@@ -124,4 +124,6 @@ urlpatterns = [
     # These endpoints do NOT require authentication (PermissionAllowAny)
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
+
+    path('super-admin/impersonate/', SuperAdminImpersonateView.as_view(), name='impersonate'),
 ]
