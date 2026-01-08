@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, Outlet } from 'react-router-dom';
 import { ShieldAlert, Menu, Hotel } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -46,8 +46,10 @@ import Pricing from './pages/Pricing';
 
 // --- SUPER ADMIN (CEO TOOLS) ---
 import SuperAdminDashboard from './pages/SuperAdmin/CommandCenter'; 
-import TenantManager from './pages/SuperAdmin/TenantManager'; // 🟢 FIXED IMPORT NAME
+import TenantManager from './pages/SuperAdmin/TenantManager'; 
 import GlobalConfig from './pages/SuperAdmin/GlobalConfig'; 
+import Infrastructure from './pages/SuperAdmin/Infrastructure'; // 🟢 NEW
+import SubscriptionPlans from './pages/SuperAdmin/SubscriptionPlans'; // 🟢 NEW
 
 // 🦴 LOADING SKELETON
 const AppSkeleton = () => (
@@ -129,16 +131,19 @@ const SuperAdminLayout = () => {
         <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-purple-500/30">
              <div className="max-w-7xl mx-auto p-4 md:p-8">
                 {/* Simple Header for Super Admin */}
-                <header className="mb-8 flex items-center justify-between pb-6 border-b border-slate-800/60">
+                <header className="mb-8 flex flex-col md:flex-row items-start md:items-center justify-between pb-6 border-b border-slate-800/60 gap-4">
                     <div>
                         <h1 className="text-2xl font-black text-white tracking-tight">ATITHI <span className="text-purple-500">HQ</span></h1>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">SaaS Command Center</p>
                     </div>
-                    <nav className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-                        <a href="/super-admin" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors">Overview</a>
-                        <a href="/super-admin/tenants" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors">Tenants</a>
-                        <a href="/super-admin/config" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors">Config</a>
-                        <a href="/dashboard" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all">Hotel View</a>
+                    {/* Navigation using Link components to prevent page reloads */}
+                    <nav className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+                        <Link to="/super-admin" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Overview</Link>
+                        <Link to="/super-admin/tenants" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Tenants</Link>
+                        <Link to="/super-admin/plans" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Plans</Link>
+                        <Link to="/super-admin/infrastructure" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">System</Link>
+                        <Link to="/super-admin/config" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Config</Link>
+                        <Link to="/dashboard" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all whitespace-nowrap">Hotel View</Link>
                     </nav>
                 </header>
                 <Outlet />
@@ -223,6 +228,8 @@ const AppContent = () => {
         }>
              <Route index element={<SuperAdminDashboard />} /> 
              <Route path="tenants" element={<TenantManager />} />
+             <Route path="plans" element={<SubscriptionPlans />} /> {/* 🟢 Added */}
+             <Route path="infrastructure" element={<Infrastructure />} /> {/* 🟢 Added */}
              <Route path="config" element={<GlobalConfig />} />
         </Route>
 

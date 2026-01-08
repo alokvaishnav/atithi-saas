@@ -1966,7 +1966,7 @@ class PlatformSettingsView(APIView):
 class SuperAdminStatsView(APIView):
     """
     Control Plane for the Super Admin (Global HQ).
-    - GET: Fetch Stats, Hotel List, Announcements, Recent Logs, and Trends.
+    - GET: Fetch Stats, Hotel List, Announcements, Recent Logs, and Real Trends.
     - POST: Perform actions (Ban, Edit Tenant, Manage Announcements).
     """
     # Ensures only users with is_staff=True / is_superuser=True can access this
@@ -1982,15 +1982,14 @@ class SuperAdminStatsView(APIView):
             total_hotels = User.objects.filter(role='OWNER').count()
             active_licenses = User.objects.filter(role='OWNER', is_active=True).count()
             
-            # Count total rooms across the entire platform (if Room model exists)
+            # Count total rooms across the entire platform
             try:
                 total_rooms = Room.objects.count()
             except NameError:
                 total_rooms = 0 
             
-            # Mock revenue calculation (e.g., 2999 per active hotel)
-            # In a real app, this would sum up actual Invoice/Payment records
-            platform_revenue = active_licenses * 2999 
+            # Calculate Real Platform Revenue (Sum of all payments)
+            platform_revenue = BookingPayment.objects.aggregate(sum=Sum('amount'))['sum'] or 0
 
             # ==============================================================================
             # 2. FETCH ANNOUNCEMENTS
@@ -1999,34 +1998,50 @@ class SuperAdminStatsView(APIView):
             announcement_serializer = GlobalAnnouncementSerializer(announcements, many=True)
 
             # ==============================================================================
-            # 3. RECENT LOGS (Critical for Dashboard Feed)
+            # 3. RECENT LOGS
             # ==============================================================================
             logs = ActivityLog.objects.all().order_by('-timestamp')[:10]
             log_serializer = ActivityLogSerializer(logs, many=True)
 
             # ==============================================================================
-            # 4. TREND CHART DATA (Mock Data for Visualization)
+            # 4. TREND CHART DATA (REAL DATA ONLY)
             # ==============================================================================
-            # You can implement real monthly aggregation logic here later
-            trend_data = [
-                {'name': 'Jan', 'revenue': 4000}, {'name': 'Feb', 'revenue': 3000},
-                {'name': 'Mar', 'revenue': 5000}, {'name': 'Apr', 'revenue': 4500},
-                {'name': 'May', 'revenue': 6000}, {'name': 'Jun', 'revenue': 7500},
-            ]
+            # This replaces the hardcoded list with actual database queries for the last 6 months.
+            trend_data = []
+            today = timezone.now().date()
+            
+            for i in range(5, -1, -1):
+                # Calculate the first day of the past months
+                # Note: This is a simple approximation. For strict calendar months, use date.replace(day=1)
+                target_date = today - timedelta(days=i*30)
+                month_start = target_date.replace(day=1)
+                
+                # We need the start of the *next* month to define the range
+                if month_start.month == 12:
+                    next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+                else:
+                    next_month_start = month_start.replace(month=month_start.month + 1)
+                
+                # Sum payments for this specific month
+                monthly_revenue = BookingPayment.objects.filter(
+                    date__gte=month_start,
+                    date__lt=next_month_start
+                ).aggregate(sum=Sum('amount'))['sum'] or 0
+                
+                trend_data.append({
+                    'name': month_start.strftime('%b'), # e.g., "Jan", "Feb"
+                    'revenue': monthly_revenue
+                })
 
             # ==============================================================================
             # 5. BUILD HOTEL LIST DATA
             # ==============================================================================
             hotels_data = []
-            
-            # select_related avoids hitting the DB 100 times for 100 hotels
             owners = User.objects.filter(role='OWNER').select_related('hotel_settings').order_by('-date_joined')
             
             for u in owners:
-                # Safely get hotel settings (handle potential missing settings for new signups)
                 settings = getattr(u, 'hotel_settings', None)
                 
-                # Determine Plan based on license key presence
                 if settings and settings.license_key and settings.license_key != 'FREE':
                     plan_status = 'PRO'
                 else:
@@ -2052,8 +2067,8 @@ class SuperAdminStatsView(APIView):
                 },
                 'hotels': hotels_data,
                 'announcements': announcement_serializer.data,
-                'logs': log_serializer.data,  # 🟢 Added logs
-                'trend': trend_data           # 🟢 Added trend
+                'logs': log_serializer.data,
+                'trend': trend_data 
             })
 
         except Exception as e:
@@ -2075,16 +2090,14 @@ class SuperAdminStatsView(APIView):
                 hotel_id = request.data.get('hotel_id')
                 user = User.objects.get(id=hotel_id)
                 
-                # SAFETY: Prevent banning yourself
                 if user.id == request.user.id:
-                    return Response({'error': 'You cannot ban your own Super Admin account.'}, status=400)
+                    return Response({'error': 'Cannot ban self.'}, status=400)
                 
                 user.is_active = not user.is_active
                 user.save()
                 
                 status_msg = 'Active' if user.is_active else 'Suspended'
                 
-                # Log the Ban/Unban action
                 ActivityLog.objects.create(
                     owner=request.user,
                     action='ADMIN_ACTION',
@@ -2095,28 +2108,24 @@ class SuperAdminStatsView(APIView):
                 return Response({'status': 'success', 'new_status': status_msg})
 
             # ==============================================================================
-            # ACTION: EDIT TENANT (Update Name/Expiry)
+            # ACTION: EDIT TENANT
             # ==============================================================================
             elif action == 'edit_tenant':
                 hotel_id = request.data.get('hotel_id')
                 user = User.objects.get(id=hotel_id)
-                
-                # Robustness: Use get_or_create so we can fix broken profiles
                 settings, _ = HotelSettings.objects.get_or_create(owner=user)
                 
                 if 'hotel_name' in request.data:
                     settings.hotel_name = request.data['hotel_name']
                 
                 if 'license_expiry' in request.data:
-                    # Handle empty string (Lifetime) vs Date
                     expiry = request.data['license_expiry']
                     settings.license_expiry = expiry if expiry else None
                 
                 settings.save()
                 
-                # Log this admin action
                 ActivityLog.objects.create(
-                    owner=request.user, # Super Admin is the actor
+                    owner=request.user,
                     action='ADMIN_UPDATE',
                     category='ADMIN',
                     details=f"Updated Tenant {user.username}: {settings.hotel_name}"
