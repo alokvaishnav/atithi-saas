@@ -222,7 +222,7 @@ const AppContent = () => {
 
         {/* 🟢 SUPER ADMIN ROUTES (CEO Dashboard) */}
         <Route path="/super-admin" element={
-            <SuperAdminRoute>
+            <SuperAdminRoute roles={['SUPER-ADMIN']}>
                 <SuperAdminLayout />
             </SuperAdminRoute>
         }>
