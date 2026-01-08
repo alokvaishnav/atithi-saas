@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 const CommandCenter = () => {
     const { token } = useAuth();
     const [stats, setStats] = useState({ total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
+    // 🟢 Fix 1: Ensure logs is always initialized as an array
     const [logs, setLogs] = useState([]);
 
     useEffect(() => {
@@ -15,15 +16,27 @@ const CommandCenter = () => {
                     fetch(`${API_URL}/api/super-admin/stats/`, { headers: { 'Authorization': `Bearer ${token}` } }),
                     fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
+
                 if (statsRes.ok) {
                     const data = await statsRes.json();
-                    setStats(data.stats);
+                    setStats(data.stats || { total_hotels: 0, active_licenses: 0, platform_revenue: 0, total_rooms: 0 });
                 }
-                if (logsRes.ok) setLogs(await logsRes.json());
-            } catch (e) { console.error(e); }
+
+                if (logsRes.ok) {
+                    const logData = await logsRes.json();
+                    // 🟢 Fix 2: Handle both Array and Paginated Object (DRF default)
+                    const logArray = Array.isArray(logData) ? logData : (logData.results || []);
+                    setLogs(logArray);
+                }
+            } catch (e) { 
+                console.error("Dashboard Load Error:", e); 
+            }
         };
         fetchStats();
     }, [token]);
+
+    // 🟢 Fix 3: Safety check before filtering
+    const criticalLogs = Array.isArray(logs) ? logs.filter(l => l.action === 'ERROR' || (l.details && l.details.includes('Failed'))) : [];
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
@@ -53,16 +66,16 @@ const CommandCenter = () => {
                 <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8">
                     <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><AlertTriangle size={18} className="text-yellow-500"/> Critical Alerts</h3>
                     <div className="space-y-4">
-                        {logs.filter(l => l.action === 'ERROR' || l.details.includes('Failed')).slice(0,5).map((l, i) => (
+                        {criticalLogs.slice(0,5).map((l, i) => (
                             <div key={i} className="flex gap-3 items-start p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
                                 <X size={14} className="text-red-500 mt-1 shrink-0"/>
                                 <div>
-                                    <p className="text-xs font-bold text-red-200">{l.details}</p>
+                                    <p className="text-xs font-bold text-red-200">{l.details || "Unknown Error"}</p>
                                     <p className="text-[10px] text-red-400 mt-1">{new Date(l.timestamp).toLocaleTimeString()}</p>
                                 </div>
                             </div>
                         ))}
-                        {logs.length === 0 && <p className="text-slate-500 text-xs italic">System nominal. No critical alerts.</p>}
+                        {criticalLogs.length === 0 && <p className="text-slate-500 text-xs italic">System nominal. No critical alerts.</p>}
                     </div>
                 </div>
             </div>

@@ -6,29 +6,47 @@ import { useAuth } from '../../context/AuthContext';
 const Infrastructure = () => {
     const { token } = useAuth();
     const [announcements, setAnnouncements] = useState([]);
-    const [logs, setLogs] = useState([]);
+    // 🟢 Fix 1: Initialize empty array
+    const [logs, setLogs] = useState([]); 
     const [newMsg, setNewMsg] = useState({ title: '', message: '' });
 
     const fetchData = async () => {
-        const [statsRes, logsRes] = await Promise.all([
-            fetch(`${API_URL}/api/super-admin/stats/`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
-        if(statsRes.ok) setAnnouncements((await statsRes.json()).announcements || []);
-        if(logsRes.ok) setLogs(await logsRes.json());
+        try {
+            const [statsRes, logsRes] = await Promise.all([
+                fetch(`${API_URL}/api/super-admin/stats/`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
+            if (statsRes.ok) {
+                const statsData = await statsRes.json();
+                setAnnouncements(Array.isArray(statsData.announcements) ? statsData.announcements : []);
+            }
+
+            if (logsRes.ok) {
+                const logData = await logsRes.json();
+                // 🟢 Fix 2: Handle Pagination Logic
+                setLogs(Array.isArray(logData) ? logData : (logData.results || []));
+            }
+        } catch (error) {
+            console.error("Infra Fetch Error", error);
+        }
     };
 
     useEffect(() => { fetchData(); }, [token]);
 
     const sendBroadcast = async () => {
-        await fetch(`${API_URL}/api/super-admin/stats/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ action: 'create_announcement', ...newMsg })
-        });
-        setNewMsg({ title: '', message: '' });
-        fetchData();
-        alert("Broadcast Sent!");
+        try {
+            await fetch(`${API_URL}/api/super-admin/stats/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ action: 'create_announcement', ...newMsg })
+            });
+            setNewMsg({ title: '', message: '' });
+            fetchData();
+            alert("Broadcast Sent!");
+        } catch (error) {
+            alert("Failed to send broadcast");
+        }
     };
 
     return (
@@ -56,11 +74,12 @@ const Infrastructure = () => {
             <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 flex flex-col h-[600px]">
                 <h3 className="font-black text-white uppercase text-sm tracking-widest mb-6 flex items-center gap-2"><HardDrive size={18} className="text-blue-400"/> System Logs</h3>
                 <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2">
+                    {/* 🟢 Fix 3: Ensure map works safely */}
                     {logs.map((l, i) => (
                         <div key={i} className="flex gap-3 items-start border-l-2 border-slate-800 pl-4 py-1">
                             <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${l.action === 'ERROR' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
                             <div>
-                                <p className="text-xs font-bold text-slate-300">{l.details}</p>
+                                <p className="text-xs font-bold text-slate-300">{l.details || "System Event"}</p>
                                 <p className="text-[10px] text-slate-600 font-mono mt-1">{new Date(l.timestamp).toLocaleString()}</p>
                             </div>
                         </div>
