@@ -14,7 +14,7 @@ import Register from './pages/Register';
 import DigitalFolio from './pages/DigitalFolio';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import BookingSite from './pages/public/BookingSite'; // 🟢 UPDATED PATH
+import BookingSite from './pages/public/BookingSite'; 
 
 // --- CORE OPERATIONS ---
 import Dashboard from './pages/Dashboard';
@@ -45,9 +45,9 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 
 // --- SUPER ADMIN (CEO TOOLS) ---
-import SuperAdminDashboard from './pages/SuperAdmin/CommandCenter'; // 🟢 NEW
-import TenantManager from './pages/SuperAdmin/Tenants'; // 🟢 NEW
-import GlobalConfig from './pages/SuperAdmin/GlobalConfig'; // 🟢 NEW
+import SuperAdminDashboard from './pages/SuperAdmin/CommandCenter'; 
+import TenantManager from './pages/SuperAdmin/TenantManager'; // 🟢 FIXED IMPORT NAME
+import GlobalConfig from './pages/SuperAdmin/GlobalConfig'; 
 
 // 🦴 LOADING SKELETON
 const AppSkeleton = () => (
