@@ -41,6 +41,7 @@ from .views import (
     # --- Super Admin Views ---
     SuperAdminStatsView, 
     PlatformSettingsView,
+    SuperAdminImpersonateView,  # 🟢 CRITICAL FIX: Imported this view
 
     # --- Channel Manager View ---
     RoomICalView,
@@ -119,11 +120,12 @@ urlpatterns = [
     # Platform Settings is a Singleton (Global Config), so we don't need an ID in the URL.
     # The view automatically fetches ID=1.
     path('super-admin/platform-settings/', PlatformSettingsView.as_view(), name='platform-settings'),
+    
+    # 🟢 FIX: Added the impersonate endpoint
+    path('super-admin/impersonate/', SuperAdminImpersonateView.as_view(), name='impersonate'),
 
     # 10. Public Booking Engine (Guest Facing)
     # These endpoints do NOT require authentication (PermissionAllowAny)
     path('public/hotel/<str:username>/', PublicHotelView.as_view(), name='public-hotel'),
     path('public/book/', PublicBookingCreateView.as_view(), name='public-book'),
-
-    path('super-admin/impersonate/', SuperAdminImpersonateView.as_view(), name='impersonate'),
 ]

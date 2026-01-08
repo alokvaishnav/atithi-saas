@@ -114,7 +114,8 @@ from .serializers import (
     PublicHotelSerializer, 
     PublicRoomSerializer, 
     PlatformSettingsSerializer,
-    SubscriptionPlanSerializer
+    SubscriptionPlanSerializer,
+    GlobalAnnouncementSerializer
 )
 
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -1918,6 +1919,7 @@ class PlatformSettingsView(APIView):
         """
         try:
             # Singleton: Always fetch the first record or create it
+            # We explicitly enforce id=1 to maintain a single configuration row
             settings, created = PlatformSettings.objects.get_or_create(id=1)
             
             serializer = PlatformSettingsSerializer(settings)
@@ -1931,6 +1933,7 @@ class PlatformSettingsView(APIView):
         Update Global Settings (SMTP, App Name, etc.).
         """
         try:
+            # Always operate on the singleton record
             settings, _ = PlatformSettings.objects.get_or_create(id=1)
             
             # Partial update allows changing just the logo or just the SMTP host
@@ -1946,7 +1949,7 @@ class PlatformSettingsView(APIView):
                         owner=request.user,  # Ensures the log is tied to the Admin user
                         action='SYSTEM_UPDATE',
                         category='SYSTEM',   # Useful for filtering system-level events
-                        description=f"Global Platform Settings updated by {request.user.username}"
+                        details=f"Global Platform Settings updated by {request.user.username}"
                     )
                 except Exception as log_error:
                     # Prevent log failure from crashing the whole update
@@ -1963,7 +1966,7 @@ class PlatformSettingsView(APIView):
 class SuperAdminStatsView(APIView):
     """
     Control Plane for the Super Admin (Global HQ).
-    - GET: Fetch Stats, Hotel List, and Announcements.
+    - GET: Fetch Stats, Hotel List, Announcements, Recent Logs, and Trends.
     - POST: Perform actions (Ban, Edit Tenant, Manage Announcements).
     """
     # Ensures only users with is_staff=True / is_superuser=True can access this
@@ -1983,7 +1986,7 @@ class SuperAdminStatsView(APIView):
             try:
                 total_rooms = Room.objects.count()
             except NameError:
-                total_rooms = 0  # Fallback if Room model isn't imported
+                total_rooms = 0 
             
             # Mock revenue calculation (e.g., 2999 per active hotel)
             # In a real app, this would sum up actual Invoice/Payment records
@@ -1992,12 +1995,27 @@ class SuperAdminStatsView(APIView):
             # ==============================================================================
             # 2. FETCH ANNOUNCEMENTS
             # ==============================================================================
-            announcements = GlobalAnnouncement.objects.filter(
-                is_active=True
-            ).order_by('-created_at').values()
+            announcements = GlobalAnnouncement.objects.filter(is_active=True).order_by('-created_at')
+            announcement_serializer = GlobalAnnouncementSerializer(announcements, many=True)
 
             # ==============================================================================
-            # 3. BUILD HOTEL LIST DATA
+            # 3. RECENT LOGS (Critical for Dashboard Feed)
+            # ==============================================================================
+            logs = ActivityLog.objects.all().order_by('-timestamp')[:10]
+            log_serializer = ActivityLogSerializer(logs, many=True)
+
+            # ==============================================================================
+            # 4. TREND CHART DATA (Mock Data for Visualization)
+            # ==============================================================================
+            # You can implement real monthly aggregation logic here later
+            trend_data = [
+                {'name': 'Jan', 'revenue': 4000}, {'name': 'Feb', 'revenue': 3000},
+                {'name': 'Mar', 'revenue': 5000}, {'name': 'Apr', 'revenue': 4500},
+                {'name': 'May', 'revenue': 6000}, {'name': 'Jun', 'revenue': 7500},
+            ]
+
+            # ==============================================================================
+            # 5. BUILD HOTEL LIST DATA
             # ==============================================================================
             hotels_data = []
             
@@ -2033,7 +2051,9 @@ class SuperAdminStatsView(APIView):
                     'total_rooms': total_rooms
                 },
                 'hotels': hotels_data,
-                'announcements': list(announcements)
+                'announcements': announcement_serializer.data,
+                'logs': log_serializer.data,  # 🟢 Added logs
+                'trend': trend_data           # 🟢 Added trend
             })
 
         except Exception as e:
@@ -2069,7 +2089,7 @@ class SuperAdminStatsView(APIView):
                     owner=request.user,
                     action='ADMIN_ACTION',
                     category='ADMIN',
-                    description=f"User {user.username} was {status_msg.lower()} by Super Admin."
+                    details=f"User {user.username} was {status_msg.lower()} by Super Admin."
                 )
 
                 return Response({'status': 'success', 'new_status': status_msg})
@@ -2099,7 +2119,7 @@ class SuperAdminStatsView(APIView):
                     owner=request.user, # Super Admin is the actor
                     action='ADMIN_UPDATE',
                     category='ADMIN',
-                    description=f"Updated Tenant {user.username}: {settings.hotel_name}"
+                    details=f"Updated Tenant {user.username}: {settings.hotel_name}"
                 )
                 
                 return Response({'status': 'success', 'msg': 'Tenant updated successfully'})
@@ -2118,7 +2138,7 @@ class SuperAdminStatsView(APIView):
                         owner=request.user,
                         action='ANNOUNCEMENT',
                         category='ADMIN',
-                        description=f"Posted Announcement: {title}"
+                        details=f"Posted Announcement: {title}"
                     )
 
                     return Response({'status': 'success', 'msg': 'Announcement Posted'})
