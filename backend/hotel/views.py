@@ -2384,6 +2384,9 @@ class TenantRegisterView(APIView):
     permission_classes = [permissions.IsAdminUser] # Only Super Admin can do this
 
     def post(self, request):
+        # 🟢 CRITICAL FIX: Define 'User' before using it
+        User = get_user_model()
+
         data = request.data
         try:
             # 1. Check if username/email exists
@@ -2420,5 +2423,3 @@ class TenantRegisterView(APIView):
 
         except Exception as e:
             return Response({'detail': str(e)}, status=400)
-
-# ... keep your existing views ...
