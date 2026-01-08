@@ -2424,7 +2424,7 @@ class TenantRegisterView(APIView):
         except Exception as e:
             return Response({'detail': str(e)}, status=400)
         
-class SuperAdminImpersonateView(views.APIView):
+class SuperAdminImpersonateView(APIView):
     """
     Allows Super Admin to get a login token for ANY user.
     Critically useful for support (logging in as the customer).
