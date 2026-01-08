@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path' // 🟢 ADDED: Required for alias resolution
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -47,6 +48,13 @@ export default defineConfig(({ mode }) => {
       })
     ],
 
+    // 🟢 ADDED: Resolve Aliases (Best Practice)
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
+
     // Development Server Configuration
     server: {
       host: true, // Expose to network (allows testing on mobile via WiFi IP)
@@ -73,6 +81,12 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: false, // Disable sourcemaps in prod for security/size
+      
+      // 🟢 ADDED: CommonJS Options to fix Recharts/Third-party library errors
+      commonjsOptions: {
+        transformMixedEsModules: true,
+      },
+
       rollupOptions: {
         output: {
           // Smart Chunk Splitting: Keeps the main bundle light
@@ -89,6 +103,10 @@ export default defineConfig(({ mode }) => {
               }
               if (id.includes('react-big-calendar') || id.includes('moment')) {
                 return 'vendor-calendar';
+              }
+              // 🟢 ADDED: Separate Recharts to prevent vendor bundle corruption
+              if (id.includes('recharts')) {
+                return 'vendor-charts';
               }
               return 'vendor-others';
             }
