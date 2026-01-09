@@ -49,23 +49,28 @@ const Login = () => {
          // We prioritize the 'result.user' directly from the API response
          const currentUser = result.user || JSON.parse(localStorage.getItem('user_data'));
          
-         console.log("🔍 Login Check:", { 
-             username: currentUser?.username,
-             role: currentUser?.role, 
-             is_superuser: currentUser?.is_superuser 
-         });
+         const role = currentUser?.role || 'UNKNOWN';
+         const isSuper = currentUser?.is_superuser === true;
 
-         // 1. Check for Super Admin (Platform Owner)
-         // We check strictly for is_superuser OR the specific role string
-         if (currentUser?.is_superuser === true || currentUser?.role === 'SUPER-ADMIN') {
-             console.log("🚀 Redirecting to Super Admin HQ...");
-             navigate('/super-admin/stats', { replace: true });
-         } 
-         // 2. Check for Hotel Owner / Staff (Everyone else)
-         else {
+         console.log("🔍 Login Decision:", { username: currentUser?.username, role, isSuper });
+
+         // 1. EXPLICIT CHECK: Hotel Owners & Staff -> Dashboard
+         // We check this FIRST to prevent any accidental Super Admin redirection
+         if (['OWNER', 'MANAGER', 'STAFF', 'RECEPTIONIST', 'HOUSEKEEPING', 'ACCOUNTANT'].includes(role)) {
              console.log("🏨 Redirecting to Hotel Dashboard...");
              navigate('/dashboard', { replace: true });
          }
+         // 2. EXPLICIT CHECK: Super Admin -> Global HQ
+         else if (isSuper || role === 'SUPER-ADMIN') {
+             console.log("🚀 Redirecting to Super Admin HQ...");
+             navigate('/super-admin/stats', { replace: true });
+         } 
+         // 3. Fallback (Safety Net) -> Dashboard
+         else {
+             console.log("⚠️ Unknown Role. Defaulting to Dashboard...");
+             navigate('/dashboard', { replace: true });
+         }
+
       } else {
          // Login failed
          setError(result.msg || 'Login Failed. Please check your credentials.');

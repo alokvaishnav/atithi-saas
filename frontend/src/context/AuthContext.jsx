@@ -57,10 +57,9 @@ export const AuthProvider = ({ children }) => {
                 setUser(parsedUser);
                 
                 // 🟢 ROLE RESTORATION LOGIC
-                // Explicitly check for Super Admin status during restore
                 let activeRole = parsedUser.role || 'STAFF';
                 
-                // Fix: Ensure Super Admin is recognized even if DB role says 'OWNER'
+                // Ensure Super Admin is recognized correctly
                 if (parsedUser.is_superuser === true || activeRole === 'SUPER-ADMIN') {
                     activeRole = 'SUPER-ADMIN';
                 }
@@ -70,7 +69,6 @@ export const AuthProvider = ({ children }) => {
                 // Restore Hotel Name
                 const settingsName = parsedUser.hotel_settings?.hotel_name;
                 const flatName = parsedUser.hotel_name;
-                // If it's Super Admin, default to "SaaS Core" if no specific hotel is selected (impersonation)
                 const defaultName = activeRole === 'SUPER-ADMIN' ? 'SaaS Core' : 'Atithi HMS';
                 
                 setHotelName(settingsName || flatName || defaultName);
@@ -92,43 +90,10 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // 🟢 5️⃣ CAPABILITY CHECK (The "Secret Handshake")
-  // Checks if user can access Super Admin endpoints
-  const checkPrivileges = async (accessToken, initialUserData) => {
-      try {
-          // 🟢 FIXED URL: Use correct endpoint /api/super-admin/config/
-          const res = await fetch(`${API_URL}/api/super-admin/config/`, {
-              headers: { 'Authorization': `Bearer ${accessToken}` }
-          });
-
-          if (res.ok) {
-              console.log("🔐 Capability Check: SaaS Admin Detected. Upgrading privileges.");
-              
-              const upgradedUser = {
-                  ...initialUserData,
-                  is_superuser: true,
-                  role: 'SUPER-ADMIN', // 🟢 Force role upgrade
-                  hotel_name: 'SaaS Core' 
-              };
-
-              // Persist the upgrade
-              localStorage.setItem('user_data', JSON.stringify(upgradedUser));
-              setUser(upgradedUser);
-              setRole('SUPER-ADMIN');
-              setHotelName('SaaS Core');
-              return upgradedUser;
-          }
-      } catch (e) {
-          // Normal user, do nothing
-      }
-      return initialUserData;
-  };
-
-  // 6️⃣ Login Function
+  // 5️⃣ Login Function
   const login = async (username, password) => {
     try {
-        // 🟢 CRITICAL FIX: Added '/api' before '/token/'
-        // This ensures it hits http://16.171.144.127/api/token/ instead of /token/
+        // 🟢 Using the fixed /api/token/ endpoint
         const res = await fetch(`${API_URL}/api/token/`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -148,16 +113,13 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('access_token', validToken);
             localStorage.setItem('refresh_token', data.refresh);
             
-            // C. Initial Role Logic
-            let detectedRole = data.role === 'ADMIN' ? 'OWNER' : (data.role || 'STAFF');
-            
-            // 🟢 FIX: Prioritize Superuser flag immediately
-            // Convert boolean string/value to actual boolean
+            // C. Determine Role from Backend Response
+            // Prioritize Superuser flag immediately
             const isSuperUser = data.user?.is_superuser === true || data.is_superuser === true;
-
-            if (isSuperUser) {
-                detectedRole = 'SUPER-ADMIN';
-            }
+            
+            let detectedRole = data.role || 'STAFF';
+            if (data.role === 'ADMIN') detectedRole = 'OWNER'; // Backend legacy mapping
+            if (isSuperUser) detectedRole = 'SUPER-ADMIN';
 
             const settings = data.hotel_settings || {};
             const displayHotelName = settings.hotel_name || data.hotel_name || (isSuperUser ? 'SaaS Core' : 'Atithi HMS');
@@ -172,13 +134,7 @@ export const AuthProvider = ({ children }) => {
                 hotel_settings: settings 
             };
 
-            // 🟢 D. RUN CAPABILITY CHECK
-            // Only verify if backend didn't explicitly say they are superuser (Double check)
-            if (!isSuperUser) {
-                userData = await checkPrivileges(validToken, userData);
-            }
-
-            // E. Final Save & Update State
+            // D. Final Save & Update State (No extra checks needed)
             localStorage.setItem('user_data', JSON.stringify(userData));
             setToken(validToken);
             setRole(userData.role);
@@ -186,7 +142,7 @@ export const AuthProvider = ({ children }) => {
             setUser(userData);
             setIsAuthenticated(true);
             
-            // 🟢 CRITICAL FIX: Return the user object so Login.jsx can read it for redirection
+            // Return user object so Login.jsx can redirect correctly
             return { success: true, user: userData };
         } else {
             return { success: false, msg: data.detail || "Login failed" };
