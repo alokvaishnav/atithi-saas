@@ -8,7 +8,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom'; 
 
 const TenantManager = () => {
-    const { token, login } = useAuth(); 
+    // 🟢 FIX 1: We don't import 'login' here anymore because impersonation uses manual session handling
+    const { token } = useAuth(); 
     const navigate = useNavigate();
 
     const [tenants, setTenants] = useState([]);
@@ -88,7 +89,7 @@ const TenantManager = () => {
                     password: formData.password, 
                     first_name: formData.name, // Mapping Hotel Name
                     last_name: 'Admin',
-                    phone: formData.phone, // 🟢 NEW: WhatsApp Number
+                    phone: formData.phone, // 🟢 WhatsApp Number
                     role: 'OWNER',
                     plan: formData.plan,
                     max_rooms: selectedPlan?.max_rooms || 20
@@ -139,7 +140,7 @@ const TenantManager = () => {
         setIsSubmitting(false);
     };
 
-    // --- ACTION: IMPERSONATE (LOGIN AS OWNER) ---
+    // --- 🟢 ACTION: IMPERSONATE (FIXED MANUAL SESSION SWAP) ---
     const handleImpersonate = async (userId) => {
         if(!confirm("⚠️ Ghost Login: You are about to access this tenant's environment. Continue?")) return;
         
@@ -152,10 +153,16 @@ const TenantManager = () => {
 
             if (res.ok) {
                 const data = await res.json();
-                // Switch session to the target user and redirect to dashboard
-                // We pass the new user data to the login context function
-                login(data.access, data.user); 
-                navigate('/dashboard'); 
+                
+                // 🟢 CRITICAL FIX: Manually set session data (Bypassing AuthContext login function)
+                localStorage.setItem('access_token', data.access);
+                localStorage.setItem('refresh_token', data.refresh);
+                localStorage.setItem('user_data', JSON.stringify(data.user));
+                localStorage.setItem('user_role', data.user.role);
+                localStorage.setItem('hotel_name', data.user.hotel_name || "Hotel Dashboard");
+
+                // 🟢 HARD RELOAD: This clears Super Admin state and forces Dashboard load
+                window.location.href = '/dashboard'; 
             } else {
                 const err = await res.json();
                 alert("Impersonation Failed: " + (err.error || "Unknown Error"));
@@ -288,8 +295,8 @@ const TenantManager = () => {
                                     {/* REVENUE */}
                                     <td className="p-6">
                                         <div className="flex items-center gap-1 text-emerald-400 font-bold text-sm">
-                                            <DollarSign size={14}/>
-                                            {getPlanPrice(t.plan)}
+                                            <DollarSign size={14}/> 
+                                            {getPlanPrice(t.plan)} 
                                             <span className="text-[10px] text-slate-600 font-normal ml-1">/mo</span>
                                         </div>
                                     </td>
