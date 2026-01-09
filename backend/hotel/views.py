@@ -97,7 +97,8 @@ from .models import (
     BookingPayment, 
     PlatformSettings, 
     GlobalAnnouncement,
-    SubscriptionPlan
+    SubscriptionPlan,
+    RoomImage
 )
 
 # Serializers

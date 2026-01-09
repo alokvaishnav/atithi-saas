@@ -1,9 +1,8 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-import json
+import random
 from datetime import timedelta
-import random # 🟢 Added for Guest ID generation
 
 # ==============================================================================
 # 1. HOTEL SETTINGS (Global Configuration for Tenants)
@@ -46,7 +45,7 @@ class HotelSettings(models.Model):
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_auth_token = models.CharField(max_length=255, blank=True, null=True)
 
-    # 🟢 Guest Communication Settings (Owner -> Guest)
+    # Guest Communication Settings (Owner -> Guest)
     guest_welcome_template = models.TextField(
         default="Dear {guest_name},\n\nThank you for booking with {hotel_name}!\nYour room ({room_type}) is confirmed for {check_in}.\n\nSee you soon!",
         help_text="Use placeholders like {guest_name}, {hotel_name}, {check_in}"
@@ -80,7 +79,7 @@ class SubscriptionPlan(models.Model):
     currency = models.CharField(max_length=10, default='INR')
     interval = models.CharField(max_length=10, choices=PLAN_INTERVALS, default='month')
     max_rooms = models.IntegerField(default=10)
-    features = models.JSONField(default=list)
+    features = models.JSONField(default=list)  # Stores features as a list ["Analytics", "Inventory"]
     color = models.CharField(max_length=20, default='blue')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -116,9 +115,10 @@ class Room(models.Model):
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='AVAILABLE')
     
-    amenities = models.TextField(default="[]", blank=True)
+    # 🟢 IMPROVED: Using JSONField instead of TextField for easier API handling
+    amenities = models.JSONField(default=list, blank=True)
     
-    # 🟢 NEW: Description for Public Booking Page
+    # Description for Public Booking Page
     description = models.TextField(blank=True, null=True) 
     
     ical_link = models.URLField(max_length=500, blank=True, null=True, help_text="Paste OTA Calendar Link")
@@ -130,8 +130,10 @@ class Room(models.Model):
     def __str__(self):
         return f"{self.room_number} ({self.get_status_display()})"
 
-# 🟢 NEW MODEL: Room Images (Multiple Photos per Room)
 class RoomImage(models.Model):
+    """
+    Gallery images for rooms (for the Public Booking Engine).
+    """
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='room_photos/')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -145,7 +147,7 @@ class Guest(models.Model):
     email = models.EmailField(blank=True, null=True)
     phone = models.CharField(max_length=20)
     
-    # 🟢 UPDATED: Identity Uploads & Public ID
+    # Identity Uploads & Public ID
     public_guest_id = models.CharField(max_length=20, unique=True, blank=True, null=True) # E.g. GST-92834
     
     id_proof_type = models.CharField(max_length=50, blank=True, null=True) # Aadhar, Passport
@@ -285,7 +287,10 @@ class Order(models.Model):
     """POS Orders linked to Booking or Direct"""
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     booking = models.ForeignKey(Booking, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
-    items = models.TextField() # JSON string of items ordered
+    
+    # 🟢 IMPROVED: Using JSONField for order items (e.g. [{"item": "Burger", "qty": 2}])
+    items = models.JSONField(default=list) 
+    
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=50, default='COMPLETED') 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -351,11 +356,13 @@ class PlatformSettings(models.Model):
     support_phone = models.CharField(max_length=20, default="+91-9999999999")
     address = models.TextField(blank=True, null=True)
 
+    # SMTP for System Emails (Password Reset, Welcome Emails)
     smtp_host = models.CharField(max_length=100, blank=True, null=True)
     smtp_port = models.CharField(max_length=10, default="587")
     smtp_user = models.CharField(max_length=100, blank=True, null=True)
     smtp_password = models.CharField(max_length=100, blank=True, null=True)
 
+    # WhatsApp / SMS Providers
     whatsapp_phone_id = models.CharField(max_length=100, blank=True, null=True)
     whatsapp_token = models.CharField(max_length=255, blank=True, null=True)
 
@@ -381,7 +388,7 @@ class PlatformSettings(models.Model):
     )
 
     def save(self, *args, **kwargs):
-        self.pk = 1
+        self.pk = 1  # Force Singleton
         super(PlatformSettings, self).save(*args, **kwargs)
 
     def __str__(self):

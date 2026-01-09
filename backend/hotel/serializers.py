@@ -9,10 +9,10 @@ from datetime import date, datetime
 User = get_user_model()
 
 from .models import (
-    HotelSettings, Room, RoomImage, Guest, Booking, InventoryItem, 
+    HotelSettings, Room, Guest, Booking, InventoryItem, 
     Expense, MenuItem, Order, HousekeepingTask, ActivityLog,
     BookingCharge, BookingPayment, PlatformSettings, GlobalAnnouncement,
-    SubscriptionPlan
+    SubscriptionPlan, RoomImage  # 🟢 ADDED: RoomImage was missing here
 )
 
 try:
@@ -96,7 +96,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
 class RoomImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = RoomImage
-        fields = ['id', 'image']
+        fields = ['id', 'image','uploaded_at']
 
 class PublicHotelSerializer(serializers.ModelSerializer):
     class Meta:
