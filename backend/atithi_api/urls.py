@@ -9,9 +9,8 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,  # <--- ADDED THIS IMPORT
     TokenRefreshView, 
-    TokenVerifyView  # Added for token validity checks
+    TokenVerifyView
 )
 
 # --- Import Views from the 'hotel' app ---
@@ -23,8 +22,8 @@ from hotel.views import (
     StaffViewSet, SubscriptionPlanViewSet, 
 
     # 2. Authentication Views
-    CustomTokenObtainPairView,  # Login (JWT)
-    TenantRegisterView,         # Tenant Deployment
+    CustomTokenObtainPairView,  # 🟢 IMPORTED CUSTOM VIEW
+    TenantRegisterView,         
     StaffRegisterView,
     PasswordResetRequestView, PasswordResetConfirmView,
 
@@ -32,21 +31,21 @@ from hotel.views import (
     SettingsView, AnalyticsView,
     LicenseStatusView, LicenseActivateView,
     POSChargeView, ReportExportView, DailyReportPDFView,
-    GenerateInvoiceView,        # Invoice PDF
+    GenerateInvoiceView,        
     
     # 4. Super Admin Views
     SuperAdminStatsView, 
-    PlatformConfigView,         # Renamed from PlatformSettingsView
-    SuperAdminImpersonateView,  # Impersonation
+    PlatformConfigView,         
+    SuperAdminImpersonateView,  
 
     # 5. Public Website & Guest Engine
     PublicHotelView, PublicBookingCreateView, 
-    PublicMenuView,             # Guest Menu
-    PublicOrderCreateView,      # Guest Ordering
+    PublicMenuView,             
+    PublicOrderCreateView,      
     
     # 6. Channel Manager & Images
     RoomICalView, 
-    RoomImageUploadView         # Room Gallery
+    RoomImageUploadView         
 )
 
 # ==============================================================================
@@ -98,7 +97,7 @@ urlpatterns = [
     # A. Django Admin Panel
     path('admin/', admin.site.urls),
 
-    # B. API Documentation (Corrected to use re_path)
+    # B. API Documentation
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
@@ -106,13 +105,15 @@ urlpatterns = [
     # C. Main API Router
     path('api/', include(router.urls)),
     
-    # D. Browsable API Login (Standard DRF login)
+    # D. Browsable API Login
     path('api-auth/', include('rest_framework.urls')), 
 
     # E. Custom API Endpoints
     
     # --- Authentication & Registration ---
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'), # <--- ADDED THIS LINE
+    # 🟢 FIXED: Point to CustomTokenObtainPairView to get 'role' in response
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'), 
+    
     path('api/login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
