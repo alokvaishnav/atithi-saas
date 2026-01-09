@@ -38,14 +38,13 @@ import HousekeepingMobile from './pages/HousekeepingMobile';
 // --- ADMIN & FINANCE ---
 import Expenses from './pages/Expenses';
 import Reports from './pages/Reports';
-import Staff from './pages/Staff';       
+import Staff from './pages/Staff';
 import Accounting from './pages/Accounting'; 
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
 import Pricing from './pages/Pricing';
 
 // --- SUPER ADMIN (CEO TOOLS) ---
-// 🟢 CRITICAL FIX: You were missing this import!
 import SuperAdminLayout from './pages/SuperAdmin/SuperAdminLayout'; 
 import SuperAdminDashboard from './pages/SuperAdmin/CommandCenter'; 
 import TenantManager from './pages/SuperAdmin/TenantManager'; 
@@ -206,7 +205,6 @@ const AppContent = () => {
         {/* ================================================================= */}
         <Route path="/super-admin" element={
             <SuperAdminRoute>
-                {/* 🟢 THIS USES THE IMPORTED COMPONENT */}
                 <SuperAdminLayout />
             </SuperAdminRoute>
         }>

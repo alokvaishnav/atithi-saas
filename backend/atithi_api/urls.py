@@ -9,6 +9,7 @@ from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework_simplejwt.views import (
+    TokenObtainPairView,  # <--- ADDED THIS IMPORT
     TokenRefreshView, 
     TokenVerifyView  # Added for token validity checks
 )
@@ -111,6 +112,7 @@ urlpatterns = [
     # E. Custom API Endpoints
     
     # --- Authentication & Registration ---
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'), # <--- ADDED THIS LINE
     path('api/login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
