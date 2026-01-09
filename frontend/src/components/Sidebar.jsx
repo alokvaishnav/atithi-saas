@@ -72,7 +72,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
-            const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
+            const res = await axios.get(`${API_URL}/api/super-admin/config/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.data) {
@@ -205,7 +205,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
           {/* 🟢 SPECIAL SUPER ADMIN RETURN BUTTON */}
-          {/* This button appears if a Super Admin is currently viewing the HOTEL DASHBOARD (Impersonation Mode) */}
+          {/* This allows a Super Admin to go BACK to HQ if they are impersonating/inspecting a hotel */}
           {isSaaSAdmin && (
              <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">

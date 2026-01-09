@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, Outlet } from 'react-router-dom';
 import { ShieldAlert, Menu, Hotel } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -45,7 +45,7 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 
 // --- SUPER ADMIN (CEO TOOLS) ---
-// 🟢 IMPORTING THE EXTERNAL LAYOUT FILE (Correct)
+// 🟢 CRITICAL FIX: You were missing this import!
 import SuperAdminLayout from './pages/SuperAdmin/SuperAdminLayout'; 
 import SuperAdminDashboard from './pages/SuperAdmin/CommandCenter'; 
 import TenantManager from './pages/SuperAdmin/TenantManager'; 
@@ -128,9 +128,6 @@ const SuperAdminRoute = ({ children }) => {
     return <Navigate to="/dashboard" replace />;
 };
 
-// ❌ I REMOVED THE DUPLICATE LOCAL 'SuperAdminLayout' FUNCTION HERE
-// It is now correctly imported from './pages/SuperAdmin/SuperAdminLayout'
-
 // 🏗️ THE HOTEL APP LAYOUT (Sidebar + Header)
 const AppLayout = () => {
     const { user, hotelName } = useAuth(); 
@@ -164,7 +161,7 @@ const AppLayout = () => {
                 </div>
             </header>
             <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
-              {/* This Outlet renders the child routes like Dashboard, Rooms, etc. */}
+              {/* 🟢 THIS OUTLET IS CRITICAL */}
               <Outlet />
             </div>
           </main>
@@ -209,6 +206,7 @@ const AppContent = () => {
         {/* ================================================================= */}
         <Route path="/super-admin" element={
             <SuperAdminRoute>
+                {/* 🟢 THIS USES THE IMPORTED COMPONENT */}
                 <SuperAdminLayout />
             </SuperAdminRoute>
         }>
