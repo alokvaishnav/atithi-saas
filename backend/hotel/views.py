@@ -2381,28 +2381,32 @@ class PublicBookingCreateView(APIView):
         
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
-    Customizes the JWT response to include User Role & Hotel Info.
-    This saves the frontend from making a second API call just to get the name/logo.
+    Customizes the JWT response.
+    ⛔ BLOCKS Super Admins from logging into the Hotel App.
     """
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # Add custom claims to the token payload (encrypted inside the token)
         token['role'] = user.role
         token['username'] = user.username
         return token
 
     def validate(self, attrs):
-        # The default result contains 'access' and 'refresh' tokens
         data = super().validate(attrs)
         
-        # We append extra user details to the JSON response
+        # 🛡️ SECURITY: Block Super Admins from the Public Frontend
+        if self.user.is_superuser or self.user.role == 'SUPER-ADMIN':
+            raise serializers.ValidationError(
+                {"detail": "Administrator Access Restricted. Please log in at the Admin Portal: /admin/"}
+            )
+
+        # Standard User Response
         data['id'] = self.user.id
         data['username'] = self.user.username
         data['email'] = self.user.email
         data['role'] = self.user.role
         
-        # Include Hotel Details if they exist (For Dashboard Header)
+        # Include Hotel Details
         if hasattr(self.user, 'hotel_settings') and self.user.hotel_settings:
             data['hotel_name'] = self.user.hotel_settings.hotel_name
             if self.user.hotel_settings.logo:

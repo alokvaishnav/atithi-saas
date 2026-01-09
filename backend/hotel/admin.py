@@ -1,11 +1,17 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
 from .models import (
-    HotelSettings, Room, Guest, Booking, 
+    CustomUser, HotelSettings, Room, Guest, Booking, 
     BookingPayment, BookingCharge,
     InventoryItem, MenuItem, Order, Expense, 
     HousekeepingTask, ActivityLog, PlatformSettings, GlobalAnnouncement,
     SubscriptionPlan
 )
+
+# 1. GLOBAL BRANDING (The CEO Look)
+admin.site.site_header = "Atithi SaaS Command Center"
+admin.site.site_title = "Atithi Admin Portal"
+admin.site.index_title = "Global Infrastructure Management"
 
 # --- INLINES (Display Related Data Inside Parents) ---
 
@@ -25,7 +31,18 @@ class OrderInline(admin.TabularInline):
     extra = 0
     readonly_fields = ('created_at',)
 
-# --- 1. CORE ADMIN CONFIGURATIONS ---
+# --- 2. CUSTOM USER ADMIN (Manage Tenants) ---
+
+class CustomUserAdmin(UserAdmin):
+    list_display = ('username', 'email', 'role', 'is_active', 'date_joined')
+    list_filter = ('role', 'is_active', 'is_superuser')
+    search_fields = ('username', 'email', 'first_name')
+    ordering = ('-date_joined',)
+    fieldsets = UserAdmin.fieldsets + (
+        ('SaaS Role', {'fields': ('role', 'hotel_owner')}),
+    )
+
+# --- 3. CORE ADMIN CONFIGURATIONS ---
 
 class BookingAdmin(admin.ModelAdmin):
     list_display = ('id', 'guest_name', 'room', 'check_in_date', 'check_out_date', 'status', 'payment_status', 'total_amount', 'source')
@@ -59,6 +76,7 @@ class GuestAdmin(admin.ModelAdmin):
 class HotelSettingsAdmin(admin.ModelAdmin):
     list_display = ('hotel_name', 'owner', 'phone', 'email', 'city_display')
     search_fields = ('hotel_name', 'owner__username', 'email')
+    list_filter = ('enable_whatsapp_alerts',)
     readonly_fields = ('license_expiry',) # Admins shouldn't manually edit this easily
     
     def city_display(self, obj):
@@ -68,7 +86,7 @@ class HotelSettingsAdmin(admin.ModelAdmin):
         return '-'
     city_display.short_description = "City"
 
-# --- 2. OPERATIONS ADMIN CONFIGURATIONS ---
+# --- 4. OPERATIONS ADMIN CONFIGURATIONS ---
 
 class InventoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'current_stock', 'min_stock_alert', 'unit', 'owner')
@@ -89,17 +107,17 @@ class HousekeepingAdmin(admin.ModelAdmin):
 class ActivityLogAdmin(admin.ModelAdmin):
     list_display = ('action', 'owner', 'timestamp', 'short_description')
     list_filter = ('action', 'timestamp')
-    search_fields = ('owner__username', 'description')
-    readonly_fields = ('timestamp', 'owner', 'action', 'description') # Logs should be read-only
+    search_fields = ('owner__username', 'details')
+    readonly_fields = ('timestamp', 'owner', 'action', 'details') # Logs should be read-only
     date_hierarchy = 'timestamp'
 
     def short_description(self, obj):
-        if obj.description:
-            return obj.description[:50] + "..." if len(obj.description) > 50 else obj.description
+        if obj.details:
+            return obj.details[:50] + "..." if len(obj.details) > 50 else obj.details
         return "-"
-    short_description.short_description = "description"
+    short_description.short_description = "Details"
 
-# --- 3. PLATFORM ADMIN (SUPER ADMIN) ---
+# --- 5. PLATFORM ADMIN (SUPER ADMIN) ---
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     list_display = ('name', 'price', 'interval', 'max_rooms', 'is_active')
@@ -142,8 +160,9 @@ class GlobalAnnouncementAdmin(admin.ModelAdmin):
     search_fields = ('title', 'message')
     ordering = ('-created_at',)
 
-# --- 4. REGISTER MODELS ---
+# --- 6. REGISTER MODELS ---
 
+admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(HotelSettings, HotelSettingsAdmin)
 admin.site.register(Room, RoomAdmin)
 admin.site.register(Guest, GuestAdmin)
