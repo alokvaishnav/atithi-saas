@@ -2436,7 +2436,7 @@ class TenantRegisterView(APIView):
     - Creates the HotelSettings profile.
     - 🟢 NEW: Sends Welcome Email/WhatsApp to the new Owner.
     """
-    permission_classes = [permissions.IsAdminUser] # Only Super Admin can do this
+    permission_classes = [permissions.AllowAny] # AllowAny so public users can register from the Login screen
 
     def post(self, request):
         User = get_user_model()
