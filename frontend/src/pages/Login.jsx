@@ -46,26 +46,24 @@ const Login = () => {
 
       if (result.success) {
          // 🟢 SMART NAVIGATION LOGIC
-         // Immediately check who logged in to decide destination
-         try {
-             // Use the user data returned directly from the login function
-             const storedUser = result.user || JSON.parse(localStorage.getItem('user_data'));
-             
-             console.log("Login Success. Role:", storedUser?.role);
+         // We prioritize the 'result.user' directly from the API response
+         const currentUser = result.user || JSON.parse(localStorage.getItem('user_data'));
+         
+         console.log("🔍 Login Check:", { 
+             username: currentUser?.username,
+             role: currentUser?.role, 
+             is_superuser: currentUser?.is_superuser 
+         });
 
-             // 1. Check for Super Admin (Platform Owner)
-             if (storedUser?.is_superuser || storedUser?.role === 'SUPER-ADMIN') {
-                 console.log("🚀 Redirecting to Super Admin HQ...");
-                 navigate('/super-admin/stats', { replace: true });
-             } 
-             // 2. Check for Hotel Owner / Staff (Everyone else)
-             else {
-                 console.log("🏨 Redirecting to Hotel Dashboard...");
-                 navigate('/dashboard', { replace: true });
-             }
-         } catch (err) {
-             console.error("Navigation Error:", err);
-             // Fallback if data parsing fails -> Safe default is Dashboard
+         // 1. Check for Super Admin (Platform Owner)
+         // We check strictly for is_superuser OR the specific role string
+         if (currentUser?.is_superuser === true || currentUser?.role === 'SUPER-ADMIN') {
+             console.log("🚀 Redirecting to Super Admin HQ...");
+             navigate('/super-admin/stats', { replace: true });
+         } 
+         // 2. Check for Hotel Owner / Staff (Everyone else)
+         else {
+             console.log("🏨 Redirecting to Hotel Dashboard...");
              navigate('/dashboard', { replace: true });
          }
       } else {

@@ -26,6 +26,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   });
 
   // 🟢 LOGIC: Identify if user is THE SaaS CEO (Superuser)
+  // We check is_superuser OR if the role is SUPER-ADMIN
   const isSaaSAdmin = user?.is_superuser || user?.hotel_name === 'SaaS Core' || user?.role === 'SUPER-ADMIN';
 
   // MOBILE AUTO-CLOSE
@@ -37,7 +38,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
   // 1. FETCH HOTEL BRANDING (Tenant Name)
   useEffect(() => {
-    if (isSaaSAdmin || loading) return; 
+    // Skip fetching hotel branding if this is the Super Admin viewing their own dashboard
+    if (isSaaSAdmin && location.pathname.includes('/super-admin')) return; 
 
     const fetchHotelBranding = async () => {
       if (!token) return;
@@ -61,17 +63,18 @@ const Sidebar = ({ isOpen, onClose }) => {
       }
     };
     
-    // Only fetch if name is default
+    // Only fetch if name is default or missing
     if (!hotelName || hotelName === 'ATITHI HMS' || hotelName === 'Atithi HMS') {
         fetchHotelBranding();
     }
-  }, [token, role, user, hotelName, updateGlobalProfile, isSaaSAdmin, loading]); 
+  }, [token, role, user, hotelName, updateGlobalProfile, isSaaSAdmin, location.pathname]); 
 
-  // 2. FETCH PLATFORM BRANDING
+  // 2. FETCH PLATFORM BRANDING (🟢 FIXED URL)
   useEffect(() => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
+            // Correct URL is /api/super-admin/config/
             const res = await axios.get(`${API_URL}/api/super-admin/config/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -83,7 +86,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 });
             }
         } catch (error) {
-            // Fallback
+            // It's okay if this fails for normal users
         }
     };
     fetchPlatformSettings();
@@ -205,7 +208,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
           {/* 🟢 SPECIAL SUPER ADMIN RETURN BUTTON */}
-          {/* This allows a Super Admin to go BACK to HQ if they are impersonating/inspecting a hotel */}
+          {/* This button appears if a Super Admin is currently viewing the HOTEL DASHBOARD (Impersonation Mode) */}
           {isSaaSAdmin && (
              <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
