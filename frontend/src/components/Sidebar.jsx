@@ -26,7 +26,6 @@ const Sidebar = ({ isOpen, onClose }) => {
   });
 
   // 🟢 LOGIC: Identify if user is THE SaaS CEO (Superuser)
-  // We check is_superuser OR if the role is SUPER-ADMIN
   const isSaaSAdmin = user?.is_superuser || user?.hotel_name === 'SaaS Core' || user?.role === 'SUPER-ADMIN';
 
   // MOBILE AUTO-CLOSE
@@ -69,12 +68,11 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   }, [token, role, user, hotelName, updateGlobalProfile, isSaaSAdmin, location.pathname]); 
 
-  // 2. FETCH PLATFORM BRANDING (🟢 FIXED URL)
+  // 2. FETCH PLATFORM BRANDING
   useEffect(() => {
     const fetchPlatformSettings = async () => {
         if (!token) return;
         try {
-            // Correct URL is /api/super-admin/config/
             const res = await axios.get(`${API_URL}/api/super-admin/config/`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -100,17 +98,18 @@ const Sidebar = ({ isOpen, onClose }) => {
   };
 
   // 🧭 RBAC Navigation Groups
+  // 🟢 UPDATED: Added 'STAFF' to relevant groups so the sidebar isn't empty for them
   const groups = [
     {
       title: "Main",
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING', 'STAFF'],
       items: [
         { icon: <LayoutDashboard size={18} />, label: 'Dashboard', path: '/dashboard' },
       ]
     },
     {
       title: "Front Office",
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'STAFF'],
       items: [
         { icon: <ConciergeBell size={18} />, label: 'Reception Desk', path: '/front-desk' },
         { icon: <BedDouble size={18} />, label: 'Room Status', path: '/rooms' },
@@ -119,20 +118,18 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       title: "Operations",
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING', 'STAFF'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        // 🔒 Hide POS/Inventory from Housekeeping staff
-        ...(role !== 'HOUSEKEEPING' ? [
-            { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
-            { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
-            { icon: <Package size={18} />, label: 'Inventory', path: '/inventory' } 
-        ] : [])
+        // 🔒 Hide POS/Inventory from specific roles if needed
+        { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
+        { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
+        { icon: <Package size={18} />, label: 'Inventory', path: '/inventory' } 
       ]
     },
     {
       title: "Reservations",
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'STAFF'],
       items: [
         { icon: <CalendarCheck size={18} />, label: 'Booking List', path: '/bookings' },
         { icon: <CalendarDays size={18} />, label: 'Timeline Chart', path: '/calendar' },
@@ -159,7 +156,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     },
     {
       title: "Help Desk",
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING'],
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'ACCOUNTANT', 'HOUSEKEEPING', 'STAFF'],
       items: [
         { icon: <BookOpen size={18} />, label: 'Support Portal', path: '/support' },
       ]
@@ -208,7 +205,6 @@ const Sidebar = ({ isOpen, onClose }) => {
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
           {/* 🟢 SPECIAL SUPER ADMIN RETURN BUTTON */}
-          {/* This button appears if a Super Admin is currently viewing the HOTEL DASHBOARD (Impersonation Mode) */}
           {isSaaSAdmin && (
              <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
@@ -232,7 +228,7 @@ const Sidebar = ({ isOpen, onClose }) => {
              </div>
           )}
 
-          {/* 🟢 HOTEL STAFF VIEW (STANDARD MODE) */}
+          {/* 🟢 HOTEL STAFF VIEW */}
           {groups.map((group, index) => (
             // Hide if role doesn't match
             (group.roles.includes(role) || role === 'ADMIN' || isSaaSAdmin) && group.items.length > 0 && (
@@ -284,7 +280,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                     {isSaaSAdmin ? 'System CEO' : 'Active Identity'}
                   </p>
                   <p className="text-[11px] font-black text-white tracking-tight uppercase truncate">
-                    {user?.username || role || 'Staff'}
+                    {role || user?.username || 'Staff'}
                   </p>
               </div>
           </div>
