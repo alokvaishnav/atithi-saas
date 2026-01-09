@@ -127,7 +127,9 @@ export const AuthProvider = ({ children }) => {
   // 6️⃣ Login Function
   const login = async (username, password) => {
     try {
-        const res = await fetch(`${API_URL}/api/token/`, { // Changed from /api/login/ to standard /api/token/ if using simple JWT, but keeping your structure
+        // 🟢 CRITICAL FIX: Added '/api' before '/token/'
+        // This ensures it hits http://16.171.144.127/api/token/ instead of /token/
+        const res = await fetch(`${API_URL}/api/token/`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })

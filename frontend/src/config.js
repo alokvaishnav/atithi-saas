@@ -4,19 +4,24 @@ import axios from 'axios';
 // 1. CONFIGURATION & SERVER CONNECTION
 // ==============================================
 
-// 🟢 AWS SERVER IP:   http://16.171.144.127
-// 🔵 LOCAL DEV:       http://localhost:8000
-// Logic: Tries .env file first, falls back to AWS IP.
+// 🟢 AWS SERVER IP (Use your specific Public IP)
+const SERVER_IP = "http://16.171.144.127";
 
-export const API_URL = (import.meta.env?.VITE_API_URL || "http://16.171.144.127").replace(/\/$/, "");
+// 🔵 Logic: Use .env if available, otherwise fallback to AWS IP.
+// We replace any trailing slash to avoid double-slashes later.
+export const API_URL = (import.meta.env?.VITE_API_URL || SERVER_IP).replace(/\/$/, "");
 
 // ==============================================
 // 2. AXIOS INSTANCE (For API Calls)
 // ==============================================
 const api = axios.create({
-    // 🟢 CRITICAL: We append '/api' here for Axios calls
+    // 🟢 CRITICAL: We append '/api' here for Axios calls.
+    // This results in: http://16.171.144.127/api/...
     baseURL: `${API_URL}/api`,
-    timeout: 30000, // Increased to 30s to handle PDF generation/Reports
+    
+    // Increased timeout for reports/slow connections
+    timeout: 45000, 
+    
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -59,9 +64,11 @@ api.interceptors.response.use(
             }
         }
 
-        // B. Handle Network Errors (Server Down / Offline)
+        // B. Handle Network Errors (Server Down / Offline / CORS)
         if (!error.response) {
             console.error("🚨 Network Error: Unable to reach server at " + API_URL);
+        } else if (error.response.status === 404) {
+            console.error("🚨 404 Error: Resource not found at " + error.config.url);
         }
 
         return Promise.reject(error);
