@@ -1,23 +1,31 @@
 import axios from 'axios';
 
-// ✅ CONNECT TO YOUR SERVER
-// 1. Try to find VITE_API_URL in .env file
-// 2. If not found, use your hardcoded AWS IP
-// 🟢 EXPORT IS REQUIRED: Used by components doing manual 'fetch()' calls
-export const API_URL = import.meta.env?.VITE_API_URL || "http://16.171.144.127";
+// ==============================================
+// 1. CONFIGURATION & SERVER CONNECTION
+// ==============================================
 
-// Create the Axios Instance
+// 🟢 AWS SERVER IP:   http://16.171.144.127
+// 🔵 LOCAL DEV:       http://localhost:8000
+// Logic: Tries .env file first, falls back to AWS IP.
+
+export const API_URL = (import.meta.env?.VITE_API_URL || "http://16.171.144.127").replace(/\/$/, "");
+
+// ==============================================
+// 2. AXIOS INSTANCE (For API Calls)
+// ==============================================
 const api = axios.create({
-    // 🟢 CRITICAL: We append '/api' here for Axios, but keep API_URL as root for manual fetch.
+    // 🟢 CRITICAL: We append '/api' here for Axios calls
     baseURL: `${API_URL}/api`,
-    timeout: 15000, // 15 seconds timeout (prevents infinite hanging)
+    timeout: 30000, // Increased to 30s to handle PDF generation/Reports
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     },
 });
 
-// 🔒 REQUEST INTERCEPTOR: Automatically attach the Token
+// ==============================================
+// 3. REQUEST INTERCEPTOR (Attach Token)
+// ==============================================
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('access_token');
@@ -29,31 +37,31 @@ api.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// 🛡️ RESPONSE INTERCEPTOR: Handle Errors & Session Expiry
+// ==============================================
+// 4. RESPONSE INTERCEPTOR (Error Handling)
+// ==============================================
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
 
-        // 1. Handle 401 Unauthorized (Token Expired)
+        // A. Handle 401 Unauthorized (Token Expired)
         if (error.response && error.response.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
-
             console.warn("⚠️ Session expired. Logging out...");
             
-            // Clear all auth data
+            // Clear all auth data to prevent infinite loops
             localStorage.clear();
             
-            // Redirect to login ONLY if we aren't already there (prevents loops)
+            // Redirect to login ONLY if not already there
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login';
             }
         }
 
-        // 2. Handle Network Errors (Server Down / Offline)
+        // B. Handle Network Errors (Server Down / Offline)
         if (!error.response) {
-            console.error("🚨 Network Error: Unable to reach the server at " + API_URL);
-            // Optional: You could trigger a global toast/alert here
+            console.error("🚨 Network Error: Unable to reach server at " + API_URL);
         }
 
         return Promise.reject(error);

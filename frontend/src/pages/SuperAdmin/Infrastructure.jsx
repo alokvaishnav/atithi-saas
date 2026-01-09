@@ -5,13 +5,15 @@ import { useAuth } from '../../context/AuthContext';
 
 const Infrastructure = () => {
     const { token } = useAuth();
+    
+    // State Initialization
     const [announcements, setAnnouncements] = useState([]);
-    // 🟢 Fix 1: Initialize empty array
     const [logs, setLogs] = useState([]); 
     const [filteredLogs, setFilteredLogs] = useState([]);
     const [logSearch, setLogSearch] = useState('');
     const [newMsg, setNewMsg] = useState({ title: '', message: '' });
 
+    // --- FETCH DATA ---
     const fetchData = async () => {
         try {
             const [statsRes, logsRes] = await Promise.all([
@@ -19,14 +21,17 @@ const Infrastructure = () => {
                 fetch(`${API_URL}/api/logs/`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
+            // 1. Process Announcements
             if (statsRes.ok) {
                 const statsData = await statsRes.json();
+                // Safety check: ensure it's an array
                 setAnnouncements(Array.isArray(statsData.announcements) ? statsData.announcements : []);
             }
 
+            // 2. Process Logs
             if (logsRes.ok) {
                 const logData = await logsRes.json();
-                // 🟢 Fix 2: Handle Pagination Logic & Safe Array Check
+                // 🟢 FIX: Handle both Pagination Object (results) and Direct Array
                 const safeLogs = Array.isArray(logData) ? logData : (logData.results || []);
                 setLogs(safeLogs);
                 setFilteredLogs(safeLogs);
@@ -36,7 +41,9 @@ const Infrastructure = () => {
         }
     };
 
-    useEffect(() => { fetchData(); }, [token]);
+    useEffect(() => { 
+        if (token) fetchData(); 
+    }, [token]);
 
     // --- LOG FILTER LOGIC ---
     useEffect(() => {
@@ -44,6 +51,7 @@ const Infrastructure = () => {
             setFilteredLogs(logs);
         } else {
             const lowerTerm = logSearch.toLowerCase();
+            // 🟢 FIX: Safe filter execution
             setFilteredLogs(logs.filter(l => 
                 (l.details || '').toLowerCase().includes(lowerTerm) || 
                 (l.action || '').toLowerCase().includes(lowerTerm)
@@ -51,22 +59,29 @@ const Infrastructure = () => {
         }
     }, [logSearch, logs]);
 
+    // --- SEND BROADCAST ---
     const sendBroadcast = async () => {
         if(!newMsg.title || !newMsg.message) return alert("Title and Message required");
         try {
-            await fetch(`${API_URL}/api/super-admin/stats/`, {
+            const res = await fetch(`${API_URL}/api/super-admin/stats/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ action: 'create_announcement', ...newMsg })
             });
-            setNewMsg({ title: '', message: '' });
-            fetchData();
-            alert("Broadcast Sent!");
+            
+            if (res.ok) {
+                setNewMsg({ title: '', message: '' });
+                fetchData();
+                alert("Broadcast Sent Successfully!");
+            } else {
+                alert("Failed to send broadcast");
+            }
         } catch (error) {
-            alert("Failed to send broadcast");
+            alert("Network Error");
         }
     };
 
+    // --- DELETE ANNOUNCEMENT ---
     const deleteAnnouncement = async (id) => {
         if(!confirm("Delete this announcement?")) return;
         try {

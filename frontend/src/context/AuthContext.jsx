@@ -56,9 +56,11 @@ export const AuthProvider = ({ children }) => {
                 setUser(parsedUser);
                 
                 // 🟢 ADVANCED ROLE RESTORATION
-                // Prioritize OWNER if is_superuser is true
+                // Explicitly check for Super Admin status during restore
                 let activeRole = parsedUser.role || 'STAFF';
-                if (parsedUser.is_superuser) activeRole = 'OWNER';
+                if (parsedUser.is_superuser) {
+                    activeRole = 'SUPER-ADMIN';
+                }
                 
                 setRole(activeRole);
                 
@@ -69,7 +71,6 @@ export const AuthProvider = ({ children }) => {
                 setIsAuthenticated(true);
             } else {
                 if (rawToken || storedUserData) {
-                    // console.warn("AuthContext: Session invalid. Cleaning up.");
                     localStorage.clear();
                 }
             }
@@ -85,8 +86,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // 🟢 5️⃣ CAPABILITY CHECK (The "Secret Handshake")
-  // This function silently pings a Super-Admin only endpoint.
-  // If it succeeds, it proves the user is a CEO/Superuser, even if the login API missed the flag.
+  // Checks if user can access Super Admin endpoints
   const checkPrivileges = async (accessToken, initialUserData) => {
       try {
           const res = await fetch(`${API_URL}/api/super-admin/platform-settings/`, {
@@ -99,14 +99,14 @@ export const AuthProvider = ({ children }) => {
               const upgradedUser = {
                   ...initialUserData,
                   is_superuser: true,
-                  role: 'OWNER',
+                  role: 'SUPER-ADMIN', // 🟢 FIX: Set role explicitly to SUPER-ADMIN
                   hotel_name: 'SaaS Core' 
               };
 
               // Persist the upgrade
               localStorage.setItem('user_data', JSON.stringify(upgradedUser));
               setUser(upgradedUser);
-              setRole('OWNER');
+              setRole('SUPER-ADMIN');
               setHotelName('SaaS Core');
               return upgradedUser;
           }
@@ -139,9 +139,12 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('refresh_token', data.refresh);
             
             // C. Initial Role Logic
-            let detectedRole = data.role === 'ADMIN' ? 'ADMIN' : (data.role || 'STAFF');
-            // If backend explicitly says superuser, trust it immediately
-            if (data.is_superuser) detectedRole = 'OWNER';
+            let detectedRole = data.role === 'ADMIN' ? 'OWNER' : (data.role || 'STAFF');
+            
+            // 🟢 FIX: Prioritize Superuser flag immediately
+            if (data.is_superuser) {
+                detectedRole = 'SUPER-ADMIN';
+            }
 
             const settings = data.hotel_settings || {};
             const displayHotelName = settings.hotel_name || data.hotel_name || 'Atithi HMS';
@@ -156,8 +159,7 @@ export const AuthProvider = ({ children }) => {
             };
 
             // 🟢 D. RUN CAPABILITY CHECK
-            // If the backend didn't explicitly say "superuser", we verify permissions manually.
-            // This catches cases where role defaults to ADMIN but user is actually SUPERUSER.
+            // Only verify if backend didn't explicitly say they are superuser
             if (!data.is_superuser) {
                 userData = await checkPrivileges(validToken, userData);
             }
@@ -170,7 +172,8 @@ export const AuthProvider = ({ children }) => {
             setUser(userData);
             setIsAuthenticated(true);
             
-            return { success: true };
+            // 🟢 CRITICAL FIX: Return the user object so Login.jsx can read it for redirection
+            return { success: true, user: userData };
         } else {
             return { success: false, msg: data.detail || "Login failed" };
         }
@@ -182,7 +185,11 @@ export const AuthProvider = ({ children }) => {
 
   const hasRole = (allowedRoles) => {
       if (!role) return false;
-      if (role === 'ADMIN' || user?.is_superuser || role === 'OWNER') return true; 
+      // Allow Super Admin everywhere
+      if (role === 'SUPER-ADMIN' || user?.is_superuser) return true; 
+      // Allow Owners everywhere owners are expected
+      if (role === 'OWNER') return true;
+      
       return allowedRoles.includes(role);
   };
 

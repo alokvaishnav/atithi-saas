@@ -48,17 +48,24 @@ const Login = () => {
          // 🟢 SMART NAVIGATION LOGIC
          // Immediately check who logged in to decide destination
          try {
-             const storedUser = JSON.parse(localStorage.getItem('user_data'));
+             // Use the user data returned directly from the login function
+             const storedUser = result.user || JSON.parse(localStorage.getItem('user_data'));
              
-             // If CEO/Superuser/Owner -> Go to Global HQ
-             if (storedUser?.is_superuser || storedUser?.role === 'OWNER') {
-                 navigate('/super-admin', { replace: true });
-             } else {
-                 // If Hotel Staff -> Go to Hotel Dashboard
+             console.log("Login Success. Role:", storedUser?.role);
+
+             // 1. Check for Super Admin (Platform Owner)
+             if (storedUser?.is_superuser || storedUser?.role === 'SUPER-ADMIN') {
+                 console.log("🚀 Redirecting to Super Admin HQ...");
+                 navigate('/super-admin/stats', { replace: true });
+             } 
+             // 2. Check for Hotel Owner / Staff (Everyone else)
+             else {
+                 console.log("🏨 Redirecting to Hotel Dashboard...");
                  navigate('/dashboard', { replace: true });
              }
          } catch (err) {
-             // Fallback if data parsing fails
+             console.error("Navigation Error:", err);
+             // Fallback if data parsing fails -> Safe default is Dashboard
              navigate('/dashboard', { replace: true });
          }
       } else {

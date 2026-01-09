@@ -16,7 +16,6 @@ const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
   
   // 🔐 USE AUTH CONTEXT
-  // Added 'loading' to prevent flashing wrong content while checking user
   const { hotelName, role, user, token, logout, updateGlobalProfile, loading } = useAuth(); 
 
   // State for SaaS Platform Branding
@@ -27,8 +26,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   });
 
   // 🟢 LOGIC: Identify if user is THE SaaS CEO (Superuser)
-  // We check is_superuser OR if the system explicitly named the hotel 'SaaS Core' (from AuthContext)
-  const isSaaSAdmin = user?.is_superuser || user?.hotel_name === 'SaaS Core';
+  const isSaaSAdmin = user?.is_superuser || user?.hotel_name === 'SaaS Core' || user?.role === 'SUPER-ADMIN';
 
   // MOBILE AUTO-CLOSE
   useEffect(() => {
@@ -37,16 +35,7 @@ const Sidebar = ({ isOpen, onClose }) => {
     }
   }, [location.pathname, onClose]);
 
-  // 🟢 AUTO-REDIRECT FOR CEO
-  // If SaaS Admin lands on the Hotel Dashboard, kick them to Global HQ immediately.
-  useEffect(() => {
-    if (!loading && isSaaSAdmin && location.pathname === '/dashboard') {
-        navigate('/super-admin', { replace: true });
-    }
-  }, [isSaaSAdmin, location.pathname, navigate, loading]);
-
   // 1. FETCH HOTEL BRANDING (Tenant Name)
-  // Skip this for SaaS Admin because they don't belong to a specific hotel.
   useEffect(() => {
     if (isSaaSAdmin || loading) return; 
 
@@ -215,64 +204,63 @@ const Sidebar = ({ isOpen, onClose }) => {
         {/* NAVIGATION */}
         <nav className="flex-1 px-4 space-y-8 overflow-y-auto custom-scrollbar py-6">
           
-          {/* 🟢 1. SAAS ADMIN VIEW (CLEAN MODE) */}
-          {isSaaSAdmin ? (
-             <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+          {/* 🟢 SPECIAL SUPER ADMIN RETURN BUTTON */}
+          {/* This button appears if a Super Admin is currently viewing the HOTEL DASHBOARD (Impersonation Mode) */}
+          {isSaaSAdmin && (
+             <div className="animate-in fade-in slide-in-from-left-4 duration-500 mb-6">
                 <div className="px-4 mb-3 text-[10px] font-black text-purple-500 uppercase tracking-[0.2em] opacity-80">
                   Global Administration
                 </div>
                 
                 <button 
-                  onClick={() => navigate('/super-admin')} 
+                  onClick={() => navigate('/super-admin/stats')} 
                   className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
                     location.pathname.includes('/super-admin')
                       ? 'bg-purple-600 text-white shadow-xl shadow-purple-500/20 font-bold' 
-                      : 'text-purple-300 hover:bg-purple-500/10'
+                      : 'bg-purple-500/10 text-purple-300 border border-purple-500/20 hover:bg-purple-500/20'
                   }`}
                 >
                   <div className="flex items-center space-x-3">
                     <Server size={18} />
-                    <span className="uppercase tracking-widest">Global HQ</span>
+                    <span className="uppercase tracking-widest font-bold">Return to HQ</span>
                   </div>
                   <ChevronRight size={12} />
                 </button>
              </div>
-          ) : (
-             /* 🟢 2. HOTEL STAFF VIEW (STANDARD MODE) */
-             <>
-               {groups.map((group, index) => (
-                 // Hide if role doesn't match
-                 (group.roles.includes(role) || role === 'ADMIN') && group.items.length > 0 && (
-                   <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
-                     <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
-                       {group.title}
-                     </div>
-                     <div className="space-y-1">
-                       {group.items.map((item) => (
-                         <button
-                           key={item.path}
-                           onClick={() => navigate(item.path)}
-                           className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
-                             location.pathname === item.path 
-                               ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/20 font-bold' 
-                               : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                           }`}
-                         >
-                           <div className="flex items-center space-x-3">
-                             <span className={`${location.pathname === item.path ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'} transition-colors`}>
-                               {item.icon}
-                             </span>
-                             <span className="uppercase tracking-widest">{item.label}</span>
-                           </div>
-                           <ChevronRight size={12} className={`transition-opacity ${location.pathname === item.path ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
-                         </button>
-                       ))}
-                     </div>
-                   </div>
-                 )
-               ))}
-             </>
           )}
+
+          {/* 🟢 HOTEL STAFF VIEW (STANDARD MODE) */}
+          {groups.map((group, index) => (
+            // Hide if role doesn't match
+            (group.roles.includes(role) || role === 'ADMIN' || isSaaSAdmin) && group.items.length > 0 && (
+              <div key={index} className="animate-in fade-in slide-in-from-left-4 duration-500">
+                <div className="px-4 mb-3 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] opacity-80">
+                  {group.title}
+                </div>
+                <div className="space-y-1">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all text-xs group outline-none ${
+                        location.pathname === item.path 
+                          ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/20 font-bold' 
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className={`${location.pathname === item.path ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'} transition-colors`}>
+                          {item.icon}
+                        </span>
+                        <span className="uppercase tracking-widest">{item.label}</span>
+                      </div>
+                      <ChevronRight size={12} className={`transition-opacity ${location.pathname === item.path ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          ))}
         </nav>
 
         {/* SUPPORT / FOOTER INFO */}

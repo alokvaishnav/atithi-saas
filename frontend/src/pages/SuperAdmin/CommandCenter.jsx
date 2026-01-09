@@ -1,5 +1,4 @@
-import React from 'react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
     TrendingUp, Building, ShieldCheck, Database, 
     BarChart3, AlertTriangle, X, Activity 
@@ -54,7 +53,7 @@ const CommandCenter = () => {
                 console.error("Dashboard Load Error:", e); 
             }
         };
-        fetchDashboard();
+        if (token) fetchDashboard();
     }, [token]);
 
     // 🟢 Critical Fix: Safety check before filtering
@@ -75,7 +74,7 @@ const CommandCenter = () => {
                 />
                 <MetricCard 
                     title="Active Tenants" 
-                    val={stats.total_hotels} 
+                    val={stats.total_hotels || 0} 
                     icon={Building} 
                     color="text-blue-400" 
                     border="border-blue-500/20" 
@@ -83,7 +82,7 @@ const CommandCenter = () => {
                 />
                 <MetricCard 
                     title="Active Licenses" 
-                    val={stats.active_licenses} 
+                    val={stats.active_licenses || 0} 
                     icon={ShieldCheck} 
                     color="text-purple-400" 
                     border="border-purple-500/20" 
@@ -91,7 +90,7 @@ const CommandCenter = () => {
                 />
                 <MetricCard 
                     title="Global Inventory" 
-                    val={stats.total_rooms} 
+                    val={stats.total_rooms || 0} 
                     icon={Database} 
                     color="text-orange-400" 
                     border="border-orange-500/20" 

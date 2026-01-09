@@ -1,7 +1,32 @@
 import { useEffect, useState } from 'react';
-import { Tag, Check, Database, Trash2, Plus, X, Save, Loader2 } from 'lucide-react';
+import { Tag, Check, Database, Trash2, Plus, X, Save, Loader2, CreditCard } from 'lucide-react';
 import { API_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
+
+// Color Mapping for Tailwind (Safelist)
+const COLORS = {
+    blue: 'bg-blue-500',
+    purple: 'bg-purple-500',
+    orange: 'bg-orange-500',
+    emerald: 'bg-emerald-500',
+    red: 'bg-red-500'
+};
+
+const BORDER_COLORS = {
+    blue: 'border-blue-500',
+    purple: 'border-purple-500',
+    orange: 'border-orange-500',
+    emerald: 'border-emerald-500',
+    red: 'border-red-500'
+};
+
+const TEXT_COLORS = {
+    blue: 'text-blue-400',
+    purple: 'text-purple-400',
+    orange: 'text-orange-400',
+    emerald: 'text-emerald-400',
+    red: 'text-red-400'
+};
 
 const SubscriptionPlans = () => {
     const { token } = useAuth();
@@ -9,26 +34,39 @@ const SubscriptionPlans = () => {
     const [showModal, setShowModal] = useState(false);
     const [editingPlan, setEditingPlan] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Form State
     const [form, setForm] = useState({ name: '', price: '', max_rooms: '', features: [], color: 'blue' });
     const [featureInput, setFeatureInput] = useState(''); // For typing new tags
 
     const fetchPlans = async () => {
+        setIsLoading(true);
         try {
             const res = await fetch(`${API_URL}/api/plans/`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if(res.ok) setPlans(await res.json());
-        } catch (e) { console.error(e); }
+            if(res.ok) {
+                const data = await res.json();
+                setPlans(Array.isArray(data) ? data : data.results || []);
+            }
+        } catch (e) { 
+            console.error(e); 
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    useEffect(() => { fetchPlans(); }, [token]);
+    useEffect(() => { 
+        if (token) fetchPlans(); 
+    }, [token]);
 
     // --- FORM HANDLERS ---
     const handleAddFeature = (e) => {
-        if (e.key === 'Enter' && featureInput.trim() !== '') {
-            e.preventDefault();
-            setForm({ ...form, features: [...form.features, featureInput.trim()] });
-            setFeatureInput('');
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Stop form submission
+            if (featureInput.trim() !== '') {
+                setForm({ ...form, features: [...form.features, featureInput.trim()] });
+                setFeatureInput('');
+            }
         }
     };
 
@@ -56,16 +94,24 @@ const SubscriptionPlans = () => {
                 fetchPlans(); 
                 alert("Plan Saved Successfully");
             } else {
-                alert("Failed to save plan");
+                const err = await res.json();
+                alert(`Failed to save plan: ${JSON.stringify(err)}`);
             }
-        } catch(e) { alert("Network Error"); }
-        finally { setIsSubmitting(false); }
+        } catch(e) { 
+            alert("Network Error"); 
+        } finally { 
+            setIsSubmitting(false); 
+        }
     };
 
     const handleDelete = async (id) => {
         if(!confirm("Delete this plan from database? This cannot be undone.")) return;
-        await fetch(`${API_URL}/api/plans/${id}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-        fetchPlans();
+        try {
+            await fetch(`${API_URL}/api/plans/${id}/`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            fetchPlans();
+        } catch(e) {
+            alert("Delete failed");
+        }
     };
 
     const openModal = (plan = null) => {
@@ -81,59 +127,74 @@ const SubscriptionPlans = () => {
         <div className="animate-in fade-in slide-in-from-bottom-4">
             
             {/* Header / Add Button */}
-            <div className="flex justify-end mb-8">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                        <CreditCard className="text-pink-500" /> Subscription Tiers
+                    </h2>
+                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mt-1">
+                        Manage Pricing & Features
+                    </p>
+                </div>
                 <button onClick={() => openModal()} className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 shadow-lg transition-all">
                     <Plus size={16}/> Create New Plan
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {plans.map(plan => (
-                    <div key={plan.id} className={`bg-slate-900 rounded-[35px] border border-slate-800 p-8 relative overflow-hidden group hover:border-${plan.color || 'blue'}-500 transition-all duration-300 shadow-xl`}>
-                        <div className={`absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity bg-${plan.color || 'blue'}-500/20 rounded-bl-[40px]`}>
-                            <Tag size={80} className={`text-${plan.color || 'blue'}-500`}/>
-                        </div>
-                        
-                        <div className="relative z-10">
-                            <div className="flex justify-between items-start mb-2">
-                                <h3 className={`text-sm font-black uppercase tracking-widest text-${plan.color || 'blue'}-400`}>{plan.name}</h3>
-                                {plan.is_active === false && <span className="text-[10px] bg-red-500 text-white px-2 py-1 rounded">HIDDEN</span>}
-                            </div>
-
-                            <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-3xl font-black text-white">₹{plan.price}</span>
-                                <span className="text-xs font-bold text-slate-500 uppercase">/{plan.interval}</span>
-                            </div>
-                            
-                            <div className="space-y-3 mb-8 min-h-[150px]">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-slate-800 p-1.5 rounded-lg text-slate-400"><Database size={12}/></div>
-                                    <p className="text-xs font-bold text-slate-300">{plan.max_rooms} Max Rooms</p>
+            {isLoading ? (
+                <div className="flex justify-center py-20"><Loader2 className="animate-spin text-slate-500" size={40}/></div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {plans.map(plan => {
+                        const themeColor = plan.color || 'blue';
+                        return (
+                            <div key={plan.id} className={`bg-slate-900 rounded-[35px] border border-slate-800 p-8 relative overflow-hidden group hover:${BORDER_COLORS[themeColor]} transition-all duration-300 shadow-xl`}>
+                                <div className={`absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity ${COLORS[themeColor].replace('bg-', 'bg-opacity-20 ')} rounded-bl-[40px]`}>
+                                    <Tag size={80} className={`${TEXT_COLORS[themeColor].replace('text-', 'text-')}-500`}/>
                                 </div>
-                                {/* Safe render of features array */}
-                                {(Array.isArray(plan.features) ? plan.features : []).slice(0, 5).map((feat, i) => (
-                                    <div key={i} className="flex items-center gap-3">
-                                        <div className="bg-green-500/10 p-1.5 rounded-lg text-green-500"><Check size={12}/></div>
-                                        <p className="text-xs font-bold text-slate-400">{feat}</p>
+                                
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className={`text-sm font-black uppercase tracking-widest ${TEXT_COLORS[themeColor]}`}>{plan.name}</h3>
+                                        {plan.is_active === false && <span className="text-[10px] bg-red-500 text-white px-2 py-1 rounded">HIDDEN</span>}
                                     </div>
-                                ))}
-                                {(Array.isArray(plan.features) ? plan.features : []).length > 5 && (
-                                    <p className="text-[10px] text-slate-600 pl-8 italic">+ {(plan.features.length - 5)} more features...</p>
-                                )}
-                            </div>
 
-                            <div className="flex gap-3 pt-6 border-t border-slate-800/50">
-                                <button onClick={() => openModal(plan)} className="flex-1 py-3 bg-slate-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-700 transition-colors">
-                                    Edit Details
-                                </button>
-                                <button onClick={() => handleDelete(plan.id)} className="p-3 bg-slate-900 border border-slate-800 text-red-400 rounded-xl hover:bg-red-500/10 transition-colors">
-                                    <Trash2 size={16}/>
-                                </button>
+                                    <div className="flex items-baseline gap-1 mb-6">
+                                        <span className="text-3xl font-black text-white">₹{plan.price}</span>
+                                        <span className="text-xs font-bold text-slate-500 uppercase">/{plan.interval}</span>
+                                    </div>
+                                    
+                                    <div className="space-y-3 mb-8 min-h-[150px]">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-slate-800 p-1.5 rounded-lg text-slate-400"><Database size={12}/></div>
+                                            <p className="text-xs font-bold text-slate-300">{plan.max_rooms} Max Rooms</p>
+                                        </div>
+                                        {/* Safe render of features array */}
+                                        {(Array.isArray(plan.features) ? plan.features : []).slice(0, 5).map((feat, i) => (
+                                            <div key={i} className="flex items-center gap-3">
+                                                <div className="bg-emerald-500/10 p-1.5 rounded-lg text-emerald-500"><Check size={12}/></div>
+                                                <p className="text-xs font-bold text-slate-400">{feat}</p>
+                                            </div>
+                                        ))}
+                                        {(Array.isArray(plan.features) ? plan.features : []).length > 5 && (
+                                            <p className="text-[10px] text-slate-600 pl-8 italic">+ {(plan.features.length - 5)} more features...</p>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-3 pt-6 border-t border-slate-800/50">
+                                        <button onClick={() => openModal(plan)} className="flex-1 py-3 bg-slate-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-700 transition-colors">
+                                            Edit Details
+                                        </button>
+                                        <button onClick={() => handleDelete(plan.id)} className="p-3 bg-slate-900 border border-slate-800 text-red-400 rounded-xl hover:bg-red-500/10 transition-colors">
+                                            <Trash2 size={16}/>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* MODAL */}
             {showModal && (
@@ -183,9 +244,9 @@ const SubscriptionPlans = () => {
                             <div>
                                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Theme Color</label>
                                 <div className="flex gap-3">
-                                    {['blue', 'purple', 'orange', 'emerald', 'red'].map(c => (
+                                    {Object.keys(COLORS).map(c => (
                                         <div key={c} onClick={() => setForm({...form, color: c})} 
-                                            className={`w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2 transition-all ${form.color === c ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}></div>
+                                            className={`w-8 h-8 rounded-full ${COLORS[c]} cursor-pointer border-2 transition-all ${form.color === c ? 'border-white scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}></div>
                                     ))}
                                 </div>
                             </div>

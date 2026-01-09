@@ -16,9 +16,9 @@ const TenantManager = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingTenant, setEditingTenant] = useState(null);
+    const [loading, setLoading] = useState(true);
     
     // --- FORM STATES ---
-    // Updated to include Phone, Password, and Billing Cycle
     const [formData, setFormData] = useState({ 
         name: '', 
         domain: '', // Maps to username/cluster_id
@@ -42,6 +42,7 @@ const TenantManager = () => {
 
     // --- FETCH DATA ---
     const fetchData = async () => {
+        setLoading(true);
         try {
             const [statsRes, plansRes] = await Promise.all([
                 fetch(`${API_URL}/api/super-admin/stats/`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -55,10 +56,14 @@ const TenantManager = () => {
             if (plansRes.ok) setPlans(await plansRes.json());
         } catch (e) {
             console.error("Fetch Error:", e);
+        } finally {
+            setLoading(false);
         }
     };
 
-    useEffect(() => { fetchData(); }, [token]);
+    useEffect(() => { 
+        if (token) fetchData(); 
+    }, [token]);
 
     // --- ACTION: CREATE TENANT ---
     const handleCreate = async () => {
@@ -148,7 +153,9 @@ const TenantManager = () => {
             if (res.ok) {
                 const data = await res.json();
                 // Switch session to the target user and redirect to dashboard
-                login(data, () => navigate('/dashboard')); 
+                // We pass the new user data to the login context function
+                login(data.access, data.user); 
+                navigate('/dashboard'); 
             } else {
                 const err = await res.json();
                 alert("Impersonation Failed: " + (err.error || "Unknown Error"));
@@ -241,13 +248,15 @@ const TenantManager = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
-                            {filteredTenants.map(t => (
+                            {loading ? (
+                                <tr><td colSpan="5" className="p-8 text-center"><Loader2 className="animate-spin mx-auto text-purple-500"/></td></tr>
+                            ) : filteredTenants.map(t => (
                                 <tr key={t.id} className="hover:bg-slate-800/30 group transition-colors">
                                     {/* IDENTITY */}
                                     <td className="p-6">
                                         <div className="flex items-center gap-4">
                                             <div className="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center font-bold text-slate-400 group-hover:bg-purple-600 group-hover:text-white transition-colors shadow-inner">
-                                                {(t.hotel_name || t.username)[0].toUpperCase()}
+                                                {(t.hotel_name || t.username || '?')[0].toUpperCase()}
                                             </div>
                                             <div>
                                                 <p className="font-bold text-white text-sm">{t.hotel_name || "Unconfigured"}</p>
@@ -334,7 +343,7 @@ const TenantManager = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {filteredTenants.length === 0 && (
+                            {!loading && filteredTenants.length === 0 && (
                                 <tr><td colSpan="5" className="p-12 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">No Active Nodes Found</td></tr>
                             )}
                         </tbody>

@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import { 
-    Settings2, Mail, MessageCircle, Save, 
-    Globe, Server, ShieldAlert, Loader2, CheckCircle 
+    Settings2, Mail, MessageCircle, Save, Upload,
+    Globe, Server, ShieldAlert, Loader2, CheckCircle, Image as ImageIcon 
 } from 'lucide-react';
 import { API_URL } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 
 const GlobalConfig = () => {
-    const { token } = useAuth();
+    const { token, updateGlobalProfile } = useAuth();
     const [loading, setLoading] = useState(false);
+    
+    // 🟢 New State for Logo Handling
+    const [logoPreview, setLogoPreview] = useState(null);
+    const [logoFile, setLogoFile] = useState(null);
+
     const [config, setConfig] = useState({ 
         // Branding
         app_name: '', 
@@ -39,48 +44,81 @@ const GlobalConfig = () => {
         maintenance_mode: false 
     });
 
-    // Fetch Settings (With Error Handling Fix)
+    // --- FETCH SETTINGS ---
     useEffect(() => {
         const fetchConfig = async () => {
             try {
-                // 🟢 FIX: Ensure this URL matches backend/hotel/urls.py exactly
                 const res = await fetch(`${API_URL}/api/super-admin/config/`, { 
                     headers: { 'Authorization': `Bearer ${token}` } 
                 });
-
-                // 🟢 FIX: Check if response is OK before parsing JSON
-                // This prevents the "Unexpected token <" error if server returns 404 HTML
-                if (!res.ok) {
-                    console.warn(`Server returned status: ${res.status}`);
-                    return; 
+                if (res.ok) {
+                    const data = await res.json();
+                    setConfig(prev => ({ ...prev, ...data }));
+                    
+                    // 🟢 Set initial logo preview from server URL
+                    if(data.logo) {
+                        setLogoPreview(data.logo); 
+                    }
                 }
-
-                const data = await res.json();
-                // Merge defaults with fetched data to prevent null errors
-                setConfig(prev => ({ ...prev, ...data }));
             } catch (err) {
                 console.error("Config Load Error:", err);
             }
         };
-
         if (token) fetchConfig();
     }, [token]);
 
-    // Save Settings
+    // --- HANDLE FILE SELECT ---
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setLogoFile(file);
+            // Create a temporary URL to show the user what they selected
+            setLogoPreview(URL.createObjectURL(file));
+        }
+    };
+
+    // --- SAVE SETTINGS (MULTIPART) ---
     const saveConfig = async () => {
         setLoading(true);
         try {
+            // 🟢 CRITICAL: Use FormData for File Uploads
+            const formData = new FormData();
+            
+            // Append all text fields
+            Object.keys(config).forEach(key => {
+                // Don't append null values, send empty strings if needed
+                // Also exclude 'logo' string from state to avoid conflict with file
+                if (key !== 'logo') {
+                    formData.append(key, config[key] || '');
+                }
+            });
+
+            // Append new Logo file ONLY if changed
+            if (logoFile) {
+                formData.append('logo', logoFile);
+            }
+
             const res = await fetch(`${API_URL}/api/super-admin/config/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(config)
+                headers: { 
+                    'Authorization': `Bearer ${token}` 
+                    // Note: Content-Type header is NOT set here. 
+                    // The browser automatically sets it to 'multipart/form-data' with the boundary.
+                },
+                body: formData
             });
             
             if(res.ok) {
+                const updatedData = await res.json();
                 alert("✅ Configuration Saved Successfully");
+                
+                // Update Context if App Name Changed so Sidebar updates immediately
+                if(updatedData.app_name) {
+                    updateGlobalProfile(updatedData.app_name);
+                }
             } else {
-                const errData = await res.json().catch(() => ({}));
-                alert(`❌ Failed to save: ${errData.detail || 'Unknown Error'}`);
+                const err = await res.json();
+                alert(`❌ Failed to save: ${JSON.stringify(err)}`);
             }
         } catch (e) {
             alert("Network Error: Could not connect to server.");
@@ -92,6 +130,8 @@ const GlobalConfig = () => {
     return (
         <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 pb-20">
             
+            
+
             {/* HEADER */}
             <div className="flex justify-between items-center mb-8">
                 <div>
@@ -114,13 +154,37 @@ const GlobalConfig = () => {
                     <h4 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2 border-b border-slate-800 pb-4">
                         <Globe size={18} className="text-blue-500"/> Platform Identity
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input label="Application Name" val={config.app_name} set={v => setConfig({...config, app_name: v})} placeholder="e.g. Atithi SaaS" />
-                        <Input label="Company Legal Name" val={config.company_name} set={v => setConfig({...config, company_name: v})} placeholder="e.g. Atithi Tech Pvt Ltd" />
-                        <Input label="Support Email" val={config.support_email} set={v => setConfig({...config, support_email: v})} placeholder="support@atithi.com" />
-                        <Input label="Support Phone" val={config.support_phone} set={v => setConfig({...config, support_phone: v})} placeholder="+91 98765 43210" />
-                        <div className="md:col-span-2">
-                            <Input label="Office Address" val={config.address} set={v => setConfig({...config, address: v})} placeholder="123, Tech Park, Pune, India" />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {/* 🟢 Logo Uploader UI */}
+                        <div className="md:col-span-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">App Logo</label>
+                            <div className="relative group cursor-pointer">
+                                <div className="w-full h-40 bg-slate-950 border-2 border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center overflow-hidden hover:border-blue-500 transition-all">
+                                    {logoPreview ? (
+                                        <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-4"/>
+                                    ) : (
+                                        <ImageIcon className="text-slate-700 mb-2" size={32}/>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Upload className="text-white mb-2" size={24}/>
+                                        <span className="text-xs font-bold text-white">Click to Upload</span>
+                                    </div>
+                                </div>
+                                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileChange} />
+                            </div>
+                            <p className="text-[10px] text-slate-600 mt-2 text-center">Recommended: 500x500 PNG</p>
+                        </div>
+
+                        {/* Text Inputs */}
+                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Input label="Application Name" val={config.app_name} set={v => setConfig({...config, app_name: v})} placeholder="e.g. Atithi SaaS" />
+                            <Input label="Company Legal Name" val={config.company_name} set={v => setConfig({...config, company_name: v})} placeholder="e.g. Atithi Tech Pvt Ltd" />
+                            <Input label="Support Email" val={config.support_email} set={v => setConfig({...config, support_email: v})} placeholder="support@atithi.com" />
+                            <Input label="Support Phone" val={config.support_phone} set={v => setConfig({...config, support_phone: v})} placeholder="+91 98765 43210" />
+                            <div className="md:col-span-2">
+                                <Input label="Office Address" val={config.address} set={v => setConfig({...config, address: v})} placeholder="123, Tech Park, Pune, India" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -214,7 +278,7 @@ const Input = ({ label, val, set, type="text", placeholder="" }) => (
         <input 
             type={type} 
             className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-medium text-slate-200 outline-none focus:border-purple-500 focus:bg-slate-900 transition-all placeholder:text-slate-700" 
-            value={val} 
+            value={val || ''} 
             onChange={e => set(e.target.value)}
             placeholder={placeholder}
         />

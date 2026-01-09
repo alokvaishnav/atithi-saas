@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ShieldAlert, Menu, Hotel } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -45,11 +45,13 @@ import Settings from './pages/Settings';
 import Pricing from './pages/Pricing';
 
 // --- SUPER ADMIN (CEO TOOLS) ---
+// 🟢 IMPORTING THE EXTERNAL LAYOUT FILE (Correct)
+import SuperAdminLayout from './pages/SuperAdmin/SuperAdminLayout'; 
 import SuperAdminDashboard from './pages/SuperAdmin/CommandCenter'; 
 import TenantManager from './pages/SuperAdmin/TenantManager'; 
 import GlobalConfig from './pages/SuperAdmin/GlobalConfig'; 
-import Infrastructure from './pages/SuperAdmin/Infrastructure'; // 🟢 NEW
-import SubscriptionPlans from './pages/SuperAdmin/SubscriptionPlans'; // 🟢 NEW
+import Infrastructure from './pages/SuperAdmin/Infrastructure'; 
+import SubscriptionPlans from './pages/SuperAdmin/SubscriptionPlans'; 
 
 // 🦴 LOADING SKELETON
 const AppSkeleton = () => (
@@ -84,7 +86,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
   // Superuser bypasses role checks
-  if (user?.is_superuser || role === 'ADMIN') return children;
+  if (user?.is_superuser || role === 'ADMIN' || role === 'SUPER-ADMIN') return children;
 
   if (allowedRoles && !allowedRoles.includes(role)) {
     return (
@@ -117,40 +119,17 @@ const SuperAdminRoute = ({ children }) => {
     if (loading) return <AppSkeleton />;
     if (!isAuthenticated) return <Navigate to="/login" replace />;
     
-    // Strict Check: Must be Superuser or Owner or SUPERADMIN role
-    if (user?.is_superuser || user?.role === 'SUPERADMIN' || user?.role === 'OWNER') {
+    // Strict Check: Must be Superuser or SUPER-ADMIN role
+    if (user?.is_superuser || user?.role === 'SUPER-ADMIN') {
         return children;
     }
     
+    // If unauthorized, send to hotel dashboard
     return <Navigate to="/dashboard" replace />;
 };
 
-// 🟢 SUPER ADMIN LAYOUT (Dedicated Workspace)
-const SuperAdminLayout = () => {
-    return (
-        <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-purple-500/30">
-             <div className="max-w-7xl mx-auto p-4 md:p-8">
-                {/* Simple Header for Super Admin */}
-                <header className="mb-8 flex flex-col md:flex-row items-start md:items-center justify-between pb-6 border-b border-slate-800/60 gap-4">
-                    <div>
-                        <h1 className="text-2xl font-black text-white tracking-tight">ATITHI <span className="text-purple-500">HQ</span></h1>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">SaaS Command Center</p>
-                    </div>
-                    {/* Navigation using Link components to prevent page reloads */}
-                    <nav className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
-                        <Link to="/super-admin" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Overview</Link>
-                        <Link to="/super-admin/tenants" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Tenants</Link>
-                        <Link to="/super-admin/plans" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Plans</Link>
-                        <Link to="/super-admin/infrastructure" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">System</Link>
-                        <Link to="/super-admin/config" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap">Config</Link>
-                        <Link to="/dashboard" className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 transition-all whitespace-nowrap">Hotel View</Link>
-                    </nav>
-                </header>
-                <Outlet />
-             </div>
-        </div>
-    );
-};
+// ❌ I REMOVED THE DUPLICATE LOCAL 'SuperAdminLayout' FUNCTION HERE
+// It is now correctly imported from './pages/SuperAdmin/SuperAdminLayout'
 
 // 🏗️ THE HOTEL APP LAYOUT (Sidebar + Header)
 const AppLayout = () => {
@@ -185,6 +164,7 @@ const AppLayout = () => {
                 </div>
             </header>
             <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
+              {/* This Outlet renders the child routes like Dashboard, Rooms, etc. */}
               <Outlet />
             </div>
           </main>
@@ -201,83 +181,95 @@ const AppContent = () => {
 
   return (
     <Routes>
-        {/* ROOT: Redirect based on auth */}
-        <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
+        {/* ================================================================= */}
+        {/* 🟢 1. PUBLIC ROUTES (No Auth Required) */}
+        {/* ================================================================= */}
         
-        {/* PUBLIC AUTH ROUTES */}
-        <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />} />
-        <Route path="/register" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} /> 
+        {/* Public Booking Engine - This MUST be accessible without login */}
+        <Route path="/book/:username" element={<BookingSite />} />
         
-        {/* RECOVERY & PUBLIC SITES */}
+        {/* Public Digital Folio (For Guests) */}
+        <Route path="/folio-live/:id" element={<DigitalFolio />} />
+        
+        {/* Auth Pages */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} /> 
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uid/:token" element={<ResetPassword />} />
         
-        {/* 🟢 NEW: Public Booking Engine Route */}
-        <Route path="/book/:username" element={<BookingSite />} />
-        
-        {/* Legacy route support (optional) */}
+        {/* Legacy Redirect */}
         <Route path="/hotel/:username" element={<Navigate to={`/book/${window.location.pathname.split('/').pop()}`} replace />} />
 
-        <Route path="/folio-live/:id" element={<DigitalFolio />} />
+        {/* Landing Page Redirect */}
+        <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
 
-        {/* 🟢 SUPER ADMIN ROUTES (CEO Dashboard) */}
+
+        {/* ================================================================= */}
+        {/* 🔴 2. SUPER ADMIN ROUTES (CEO Only) */}
+        {/* ================================================================= */}
         <Route path="/super-admin" element={
-            <SuperAdminRoute roles={['SUPER-ADMIN']}>
+            <SuperAdminRoute>
                 <SuperAdminLayout />
             </SuperAdminRoute>
         }>
              <Route index element={<SuperAdminDashboard />} /> 
+             {/* Stats Route for Login Redirection */}
+             <Route path="stats" element={<SuperAdminDashboard />} /> 
+             
              <Route path="tenants" element={<TenantManager />} />
-             <Route path="plans" element={<SubscriptionPlans />} /> {/* 🟢 Added */}
-             <Route path="infrastructure" element={<Infrastructure />} /> {/* 🟢 Added */}
+             <Route path="plans" element={<SubscriptionPlans />} />
+             <Route path="infrastructure" element={<Infrastructure />} />
              <Route path="config" element={<GlobalConfig />} />
         </Route>
 
-        {/* 🟢 HOUSEKEEPING MOBILE (Fullscreen) */}
+
+        {/* ================================================================= */}
+        {/* 🔵 3. HOTEL APP ROUTES (Owners, Managers, Staff) */}
+        {/* ================================================================= */}
+        
+        {/* Housekeeping Mobile View (Fullscreen) */}
         <Route path="/hk-mobile" element={
           <ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING']}>
             <HousekeepingMobile />
           </ProtectedRoute>
         } />
 
-        {/* 🟢 HOTEL APP ROUTES (Wrapped in AppLayout) */}
+        {/* Main Hotel Dashboard (Wrapped in Sidebar Layout) */}
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/support" element={<Support />} />
             <Route path="/onboarding" element={<OnboardingWizard />} />
 
-            {/* FRONT OFFICE */}
+            {/* Front Office */}
             <Route path="/front-desk" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><FrontDesk /></ProtectedRoute>} />
             <Route path="/rooms" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Rooms /></ProtectedRoute>} />
             <Route path="/guests" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Guests /></ProtectedRoute>} />
             <Route path="/guests/edit/:id" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><EditGuest /></ProtectedRoute>} />
             
-            {/* RESERVATIONS */}
+            {/* Reservations */}
             <Route path="/bookings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Bookings /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><CalendarView /></ProtectedRoute>} />
             <Route path="/folio/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Folio /></ProtectedRoute>} />
             <Route path="/print-grc/:bookingId" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><PrintGRC /></ProtectedRoute>} />
 
-            {/* POS & SERVICES */}
+            {/* Operations */}
             <Route path="/pos" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><POS /></ProtectedRoute>} />
             <Route path="/services" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Services /></ProtectedRoute>} />
+            <Route path="/inventory" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Inventory /></ProtectedRoute>} />
+            <Route path="/housekeeping" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}><Housekeeping /></ProtectedRoute>} />
 
-            {/* MANAGEMENT */}
+            {/* Admin Management */}
             <Route path="/staff" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}><Staff /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER']}><Settings /></ProtectedRoute>} />
             <Route path="/pricing" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}><Pricing /></ProtectedRoute>} />
 
-            {/* FINANCE */}
+            {/* Finance */}
             <Route path="/accounting" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}><Accounting /></ProtectedRoute>} />
             <Route path="/expenses" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'ACCOUNTANT', 'MANAGER']}><Expenses /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT']}><Reports /></ProtectedRoute>} />
             
-            {/* OPERATIONS */}
-            <Route path="/inventory" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST']}><Inventory /></ProtectedRoute>} />
-            <Route path="/housekeeping" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER', 'HOUSEKEEPING', 'RECEPTIONIST']}><Housekeeping /></ProtectedRoute>} />
-
-            {/* Fallback */}
+            {/* Catch-all Redirect */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
     </Routes>
