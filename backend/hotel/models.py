@@ -61,6 +61,9 @@ class HotelSettings(models.Model):
     license_key = models.CharField(max_length=255, blank=True, null=True)
     license_expiry = models.DateField(null=True, blank=True)
     
+    class Meta:
+        verbose_name_plural = "Hotel Settings"
+
     def __str__(self):
         return f"Settings for {self.hotel_name}"
 
@@ -68,24 +71,46 @@ class HotelSettings(models.Model):
 # 2. SUBSCRIPTION PLANS (For SaaS Management)
 # ==============================================================================
 
-class SubscriptionPlan(models.Model):
-    PLAN_INTERVALS = (
-        ('month', 'Monthly'),
-        ('year', 'Yearly'),
-    )
-
-    name = models.CharField(max_length=100, unique=True)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=10, default='INR')
-    interval = models.CharField(max_length=10, choices=PLAN_INTERVALS, default='month')
-    max_rooms = models.IntegerField(default=10)
-    features = models.JSONField(default=list)  # Stores features as a list ["Analytics", "Inventory"]
-    color = models.CharField(max_length=20, default='blue')
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+# 🟢 NEW: Define available features for plans (reusable checkboxes)
+class PlanFeature(models.Model):
+    name = models.CharField(max_length=50, help_text="Display Name (e.g. 'Advanced POS')")
+    key = models.CharField(max_length=50, unique=True, help_text="System Key (e.g. 'pos_advanced')")
 
     def __str__(self):
-        return f"{self.name} - ₹{self.price}"
+        return self.name
+
+class SubscriptionPlan(models.Model):
+    name = models.CharField(max_length=50)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    currency = models.CharField(max_length=3, default='INR')
+    
+    INTERVAL_CHOICES = [
+        ('monthly', 'Monthly'),
+        ('yearly', 'Yearly')
+    ]
+    interval = models.CharField(max_length=10, choices=INTERVAL_CHOICES, default='monthly')
+    
+    max_rooms = models.IntegerField(default=10)
+    
+    # 🟢 CHANGED: ManyToManyField creates Checkboxes in Admin
+    features = models.ManyToManyField(PlanFeature, blank=True)
+    
+    # 🟢 CHANGED: Choices create a Dropdown in Admin
+    COLOR_CHOICES = [
+        ('bg-blue-600', 'Blue'),
+        ('bg-emerald-500', 'Green'),
+        ('bg-purple-600', 'Purple'),
+        ('bg-orange-500', 'Orange'),
+        ('bg-yellow-500', 'Gold'),
+        ('bg-slate-900', 'Black'),
+        ('bg-rose-600', 'Red'),
+    ]
+    color = models.CharField(max_length=50, choices=COLOR_CHOICES, default='bg-blue-600')
+    
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.price})"
 
 # ==============================================================================
 # 3. CORE MODELS (Rooms, Guests, Bookings)
@@ -386,6 +411,9 @@ class PlatformSettings(models.Model):
         default="Welcome to {app_name}! Your hotel {hotel} is now live. Login at: http://16.171.144.127/login",
         help_text="Available placeholders: {name}, {app_name}, {hotel}"
     )
+
+    class Meta:
+        verbose_name_plural = "Platform Settings"
 
     def save(self, *args, **kwargs):
         self.pk = 1  # Force Singleton

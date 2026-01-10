@@ -26,6 +26,7 @@ ALLOWED_HOSTS = ['*', '16.171.144.127', 'localhost', '127.0.0.1']
 # ==============================================================================
 
 INSTALLED_APPS = [
+    'jazzmin',  # 🟢 MUST be at the very top for the theme to load
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -233,4 +234,104 @@ LOGGING = {
             'propagate': True,
         },
     },
+}
+
+# ==============================================================================
+# 10. JAZZMIN ADMIN THEME SETTINGS (Professional SaaS UI)
+# ==============================================================================
+
+JAZZMIN_SETTINGS = {
+    # Branding
+    "site_title": "Atithi SaaS",
+    "site_header": "Atithi Command Center",
+    "site_brand": "Atithi HQ",
+    "welcome_sign": "Welcome to the Command Center",
+    "copyright": "Atithi Tech Ltd",
+    "search_model": ["core.CustomUser", "hotel.Booking"],
+
+    # UI Customization
+    "topmenu_links": [
+        {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Public Site", "url": "/", "new_window": True},
+        {"name": "Support", "url": "https://support.atithi.com", "new_window": True},
+    ],
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "hide_apps": [],
+    "hide_models": [],
+    
+    # Icons (FontAwesome)
+    "icons": {
+        "auth": "fas fa-users-cog",
+        "auth.user": "fas fa-user",
+        "auth.Group": "fas fa-users",
+        
+        # Hotel Operations
+        "hotel.Booking": "fas fa-calendar-check",
+        "hotel.Room": "fas fa-bed",
+        "hotel.Guest": "fas fa-user-tie",
+        "hotel.HotelSettings": "fas fa-hotel",
+        "hotel.InventoryItem": "fas fa-boxes",
+        "hotel.MenuItem": "fas fa-utensils",
+        "hotel.Order": "fas fa-receipt",
+        "hotel.HousekeepingTask": "fas fa-broom",
+        
+        # Finance
+        "hotel.BookingPayment": "fas fa-file-invoice-dollar",
+        "hotel.BookingCharge": "fas fa-file-invoice",
+        "hotel.Expense": "fas fa-money-bill-wave",
+        
+        # SaaS Management
+        "hotel.SubscriptionPlan": "fas fa-gem",
+        "hotel.PlanFeature": "fas fa-list-check",
+        
+        # System
+        "hotel.PlatformSettings": "fas fa-cogs",
+        "hotel.ActivityLog": "fas fa-history",
+        "hotel.GlobalAnnouncement": "fas fa-bullhorn",
+    },
+    
+    # Order of Sidebar Menus
+    "order_with_respect_to": [
+        "hotel.Booking", 
+        "hotel.Room", 
+        "hotel.Guest", 
+        "hotel.BookingPayment", 
+        "hotel.Expense", 
+        "core.CustomUser", 
+        "hotel.HotelSettings",
+        "hotel.PlatformSettings"
+    ],
+
+    # Custom CSS/JS (Optional)
+    "custom_css": None,
+    "custom_js": None,
+    "show_ui_builder": False,  # Set to True to customize colors live
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-dark",
+    "accent": "accent-primary",
+    "navbar": "navbar-dark",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-primary",
+    "sidebar_nav_small_text": False,
+    "theme": "flatly",  # Professional Flat Theme
+    "dark_mode_theme": None,
+    "button_classes": {
+        "primary": "btn-primary",
+        "secondary": "btn-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success"
+    }
 }
