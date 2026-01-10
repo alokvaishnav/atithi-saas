@@ -87,7 +87,7 @@ class RoomAdmin(admin.ModelAdmin):
     list_display = ('room_number', 'room_type', 'status', 'price_per_night', 'floor', 'owner')
     list_filter = ('status', 'room_type', 'owner', 'floor')
     search_fields = ('room_number', 'owner__username')
-    list_editable = ('status', 'price_per_night') # 🟢 Advanced: Edit status directly from list
+    list_editable = ('status', 'price_per_night') 
     ordering = ('room_number',)
     inlines = [RoomImageInline]
     list_per_page = 25
@@ -106,7 +106,6 @@ class HotelSettingsAdmin(admin.ModelAdmin):
     readonly_fields = ('license_expiry',)
     save_on_top = True
     
-    # 🟢 Advanced: Grouping fields for cleaner UI
     fieldsets = (
         ('Branding & Contact', {
             'fields': ('owner', 'hotel_name', 'description', 'logo', 'address', 'phone', 'email', 'website')
@@ -119,7 +118,7 @@ class HotelSettingsAdmin(admin.ModelAdmin):
         }),
         ('SMTP Configuration', {
             'fields': ('smtp_server', 'smtp_port', 'smtp_username', 'smtp_password'),
-            'classes': ('collapse',), # Hide by default
+            'classes': ('collapse',), 
         }),
         ('WhatsApp API', {
             'fields': ('whatsapp_provider', 'whatsapp_phone_id', 'whatsapp_auth_token'),
@@ -136,7 +135,7 @@ class InventoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'current_stock', 'min_stock_alert', 'unit', 'owner')
     list_filter = ('category', 'owner')
     search_fields = ('name',)
-    list_editable = ('current_stock',) # 🟢 Advanced: Quick stock update
+    list_editable = ('current_stock',)
     readonly_fields = ('last_updated',)
     list_per_page = 25
 
@@ -144,7 +143,7 @@ class MenuItemAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'price', 'is_available', 'owner')
     list_filter = ('category', 'is_available', 'owner')
     search_fields = ('name',)
-    list_editable = ('price', 'is_available') # 🟢 Advanced: Quick menu update
+    list_editable = ('price', 'is_available')
     list_per_page = 25
 
 class OrderAdmin(admin.ModelAdmin):
@@ -163,7 +162,7 @@ class ExpenseAdmin(admin.ModelAdmin):
 class HousekeepingAdmin(admin.ModelAdmin):
     list_display = ('room', 'task_type', 'status', 'priority', 'assigned_to', 'created_at')
     list_filter = ('status', 'priority', 'task_type')
-    list_editable = ('status', 'assigned_to') # 🟢 Advanced: Quick task assignment
+    list_editable = ('status', 'assigned_to')
     readonly_fields = ('created_at', 'completed_at')
     list_per_page = 25
 
@@ -189,7 +188,7 @@ class ActivityLogAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
     def has_delete_permission(self, request, obj=None):
-        return False # 🟢 Advanced: Prevent deleting logs
+        return False
 
 # --- PLATFORM ADMIN ---
 
@@ -198,13 +197,14 @@ class PlanFeatureAdmin(admin.ModelAdmin):
     search_fields = ('name', 'key')
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'interval', 'max_rooms', 'is_active')
-    list_filter = ('interval', 'is_active')
+    # 🟢 UPDATED: Added is_trial and trial_days support
+    list_display = ('name', 'price', 'interval', 'is_trial', 'trial_days', 'is_active')
+    list_filter = ('interval', 'is_active', 'is_trial')
     search_fields = ('name',)
-    list_editable = ('price', 'is_active', 'max_rooms')
+    list_editable = ('price', 'is_active', 'is_trial') # Quick toggle for Trial
     ordering = ('price',)
     
-    # 🟢 FIX: Render ManyToMany fields (Features) as Checkboxes
+    # Render ManyToMany fields (Features) as Checkboxes
     formfield_overrides = {
         models.ManyToManyField: {'widget': CheckboxSelectMultiple},
     }
@@ -212,7 +212,6 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
 class PlatformSettingsAdmin(admin.ModelAdmin):
     list_display = ('app_name', 'company_name', 'support_email', 'maintenance_mode')
     
-    # 🟢 FIX: Removed 'whatsapp_enabled' because it doesn't exist in the model
     fieldsets = (
         ('Branding & Identity', {
             'fields': ('app_name', 'company_name', 'logo', 'maintenance_mode')
@@ -245,7 +244,6 @@ class GlobalAnnouncementAdmin(admin.ModelAdmin):
 
 # --- 6. REGISTER MODELS (SAFE VERSION) ---
 
-# 🟢 FIX: Force Unregister first to prevent "AlreadyRegistered" crash
 try:
     admin.site.unregister(CustomUser)
 except admin.sites.NotRegistered:
@@ -267,4 +265,4 @@ admin.site.register(ActivityLog, ActivityLogAdmin)
 admin.site.register(PlatformSettings, PlatformSettingsAdmin)
 admin.site.register(GlobalAnnouncement, GlobalAnnouncementAdmin)
 admin.site.register(SubscriptionPlan, SubscriptionPlanAdmin)
-admin.site.register(PlanFeature, PlanFeatureAdmin) # 🟢 Registered PlanFeature
+admin.site.register(PlanFeature, PlanFeatureAdmin)

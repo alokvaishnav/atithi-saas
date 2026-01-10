@@ -92,9 +92,13 @@ class SubscriptionPlan(models.Model):
     
     max_rooms = models.IntegerField(default=10)
     
-    # 🟢 CHANGED: ManyToManyField creates Checkboxes in Admin
+    # Checkboxes for Features
     features = models.ManyToManyField(PlanFeature, blank=True)
     
+    # 🟢 NEW: Trial Flag (Mark this plan as the "Free Trial")
+    is_trial = models.BooleanField(default=False, help_text="Check this if this is the free trial plan for new users.")
+    trial_days = models.IntegerField(default=30, help_text="Duration of the trial in days.")
+
     # 🟢 CHANGED: Choices create a Dropdown in Admin
     COLOR_CHOICES = [
         ('bg-blue-600', 'Blue'),
@@ -104,8 +108,10 @@ class SubscriptionPlan(models.Model):
         ('bg-yellow-500', 'Gold'),
         ('bg-slate-900', 'Black'),
         ('bg-rose-600', 'Red'),
+        # 🟢 Added Teal Gradient option for Trial Plan
+        ('bg-gradient-to-br from-emerald-500 to-teal-600', 'Teal Gradient (Trial)'), 
     ]
-    color = models.CharField(max_length=50, choices=COLOR_CHOICES, default='bg-blue-600')
+    color = models.CharField(max_length=100, choices=COLOR_CHOICES, default='bg-blue-600') # Increased max_length for gradient class
     
     is_active = models.BooleanField(default=True)
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   Check, Crown, Star, ShieldCheck, Zap, Phone, Mail, 
-  HelpCircle, Server, Globe, Lock, X 
+  HelpCircle, Server, Globe, Lock, X, Rocket 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth for real data
 
@@ -10,13 +10,30 @@ const Pricing = () => {
   const [billingCycle, setBillingCycle] = useState('MONTHLY'); // MONTHLY | YEARLY
   
   // 🟢 Logic: Determine User's actual plan (Default to STARTER if unknown)
-  const currentPlan = user?.subscription_plan ? user.subscription_plan.toUpperCase() : "STARTER";
+  // If no plan is set, we might assume they are eligible for trial or currently on nothing.
+  const currentPlan = user?.subscription_plan ? user.subscription_plan.toUpperCase() : "NONE";
 
   const handleUpgrade = (planName) => {
-      alert(`🔄 Requesting upgrade to ${planName}... \n\nOur sales team will contact you shortly to finalize the switch.`);
+      if (planName === "TRIAL") {
+          alert("✅ Your 30-Day Free Trial has been activated!\n\nEnjoy full access to Atithi SaaS.");
+          // In a real app, you would make an API call here to update the user's plan.
+      } else {
+          alert(`🔄 Requesting upgrade to ${planName}... \n\nOur sales team will contact you shortly to finalize the switch.`);
+      }
   };
 
   const plans = [
+    // 🟢 NEW: FREE TRIAL PLAN
+    {
+        name: "TRIAL",
+        monthly: 0,
+        yearly: 0,
+        features: ["Full System Access", "Unlimited Rooms", "POS & Inventory", "WhatsApp Alerts", "Valid for 30 Days"],
+        color: "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-200 border-none",
+        btnColor: "bg-white text-emerald-600 hover:bg-emerald-50",
+        badge: "New User Special",
+        icon: <Rocket className="w-6 h-6 mb-2 text-emerald-100" />
+    },
     {
         name: "STARTER",
         monthly: 999,
@@ -45,15 +62,15 @@ const Pricing = () => {
   ];
 
   const features = [
-      { name: "Front Desk Operations", starter: true, pro: true, ent: true },
-      { name: "Housekeeping Module", starter: true, pro: true, ent: true },
-      { name: "Guest Invoicing & Folios", starter: true, pro: true, ent: true },
-      { name: "POS (Restaurant/Cafe)", starter: false, pro: true, ent: true },
-      { name: "Inventory Management", starter: false, pro: true, ent: true },
-      { name: "WhatsApp Automation", starter: false, pro: true, ent: true },
-      { name: "Financial Accounting", starter: false, pro: true, ent: true },
-      { name: "Channel Manager Integration", starter: false, pro: false, ent: true },
-      { name: "Custom Domain (White-label)", starter: false, pro: false, ent: true },
+      { name: "Front Desk Operations", trial: true, starter: true, pro: true, ent: true },
+      { name: "Housekeeping Module", trial: true, starter: true, pro: true, ent: true },
+      { name: "Guest Invoicing & Folios", trial: true, starter: true, pro: true, ent: true },
+      { name: "POS (Restaurant/Cafe)", trial: true, starter: false, pro: true, ent: true },
+      { name: "Inventory Management", trial: true, starter: false, pro: true, ent: true },
+      { name: "WhatsApp Automation", trial: true, starter: false, pro: true, ent: true },
+      { name: "Financial Accounting", trial: true, starter: false, pro: true, ent: true },
+      { name: "Channel Manager Integration", trial: false, starter: false, pro: false, ent: true },
+      { name: "Custom Domain (White-label)", trial: false, starter: false, pro: false, ent: true },
   ];
 
   return (
@@ -63,7 +80,7 @@ const Pricing = () => {
       <div className="text-center max-w-2xl mx-auto mb-16 pt-8">
         <h2 className="text-4xl font-black text-slate-800 tracking-tighter uppercase italic mb-4">Subscription Plans</h2>
         <p className="text-slate-500 font-medium mb-8">
-            Manage your hotel operations with the power you need. Transparent pricing, no hidden fees.
+            Start with a <span className="text-emerald-600 font-bold underline">Free 30-Day Trial</span>. No credit card required.
         </p>
         
         {/* BILLING TOGGLE */}
@@ -88,33 +105,39 @@ const Pricing = () => {
       </div>
 
       {/* --- PRICING CARDS --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-20 px-2">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-7xl mx-auto mb-20 px-2">
         {plans.map(plan => {
             const price = billingCycle === 'MONTHLY' ? plan.monthly : plan.yearly;
             const cycleLabel = billingCycle === 'MONTHLY' ? '/mo' : '/yr';
             const isCurrent = currentPlan === plan.name;
             
             return (
-                <div key={plan.name} className={`relative p-8 rounded-[40px] border-2 flex flex-col transition-transform hover:scale-[1.02] duration-300 ${plan.color}`}>
-                    {plan.recommended && (
-                        <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-1">
-                            <Star size={12} fill="currentColor"/> Most Popular
+                <div key={plan.name} className={`relative p-6 rounded-[30px] border-2 flex flex-col transition-transform hover:scale-[1.02] duration-300 ${plan.color}`}>
+                    {/* Badge for Recommended/Trial */}
+                    {(plan.recommended || plan.badge) && (
+                        <div className={`absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-1 ${
+                            plan.name === 'TRIAL' ? 'bg-emerald-100 text-emerald-800' : 'bg-yellow-400 text-yellow-900'
+                        }`}>
+                            <Star size={12} fill="currentColor"/> {plan.badge || "Most Popular"}
                         </div>
                     )}
 
                     <div className="mb-6">
+                        {plan.icon}
                         <h3 className="text-sm font-black uppercase tracking-widest opacity-80 mb-2">{plan.name}</h3>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-4xl font-black">₹{price.toLocaleString()}</span>
-                            <span className="text-xs font-bold opacity-60">{cycleLabel}</span>
+                            <span className="text-4xl font-black">
+                                {price === 0 ? "Free" : `₹${price.toLocaleString()}`}
+                            </span>
+                            {price > 0 && <span className="text-xs font-bold opacity-60">{cycleLabel}</span>}
                         </div>
                     </div>
 
                     <ul className="space-y-4 mb-8 flex-1">
                         {plan.features.map(f => (
-                            <li key={f} className="flex items-start gap-3 text-sm font-bold opacity-90">
+                            <li key={f} className="flex items-start gap-3 text-xs font-bold opacity-90 leading-relaxed">
                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center mt-0.5 shrink-0 ${
-                                    plan.name === 'PRO' || plan.name === 'ENTERPRISE' ? 'bg-white/20 text-white' : 'bg-green-100 text-green-600'
+                                    plan.name === 'PRO' || plan.name === 'ENTERPRISE' || plan.name === 'TRIAL' ? 'bg-white/20 text-white' : 'bg-green-100 text-green-600'
                                 }`}>
                                     <Check size={12}/>
                                 </div>
@@ -128,7 +151,7 @@ const Pricing = () => {
                         disabled={isCurrent}
                         className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed ${plan.btnColor}`}
                     >
-                        {isCurrent ? 'Current Plan' : 'Upgrade Now'}
+                        {isCurrent ? 'Current Plan' : (plan.name === 'TRIAL' ? 'Start Free Trial' : 'Upgrade Now')}
                     </button>
                 </div>
             );
@@ -161,14 +184,15 @@ const Pricing = () => {
       </div>
 
       {/* --- FEATURE COMPARISON --- */}
-      <div className="max-w-5xl mx-auto mb-20 px-2">
+      <div className="max-w-6xl mx-auto mb-20 px-2">
           <h3 className="text-2xl font-black text-slate-800 uppercase italic text-center mb-8">Compare Features</h3>
           <div className="bg-white rounded-[30px] border border-slate-200 overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[600px]">
+                  <table className="w-full text-left min-w-[700px]">
                       <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
                               <th className="p-6 text-xs font-black text-slate-500 uppercase tracking-widest">Feature</th>
+                              <th className="p-6 text-xs font-black text-emerald-600 uppercase tracking-widest text-center">Trial</th>
                               <th className="p-6 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Starter</th>
                               <th className="p-6 text-xs font-black text-blue-600 uppercase tracking-widest text-center">Pro</th>
                               <th className="p-6 text-xs font-black text-purple-600 uppercase tracking-widest text-center">Enterprise</th>
@@ -178,8 +202,9 @@ const Pricing = () => {
                           {features.map((feat, i) => (
                               <tr key={i} className="hover:bg-slate-50/50">
                                   <td className="p-4 pl-6 font-bold text-slate-700 text-sm">{feat.name}</td>
+                                  <td className="p-4 text-center bg-emerald-50/30">{feat.trial ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
                                   <td className="p-4 text-center">{feat.starter ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
-                                  <td className="p-4 text-center bg-blue-50/30">{feat.pro ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
+                                  <td className="p-4 text-center bg-blue-50/10">{feat.pro ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
                                   <td className="p-4 text-center">{feat.ent ? <Check className="mx-auto text-green-500" size={18}/> : <X className="mx-auto text-slate-300" size={18}/>}</td>
                               </tr>
                           ))}
@@ -221,9 +246,9 @@ const Pricing = () => {
             </div>
             
             <div className="relative z-10">
-                <h3 className="text-2xl font-black uppercase italic mb-2">Large Chain Hotel?</h3>
+                <h3 className="text-2xl font-black uppercase italic mb-2">Need a Custom Solution?</h3>
                 <p className="text-slate-400 text-sm max-w-md leading-relaxed">
-                    We offer dedicated servers, API engineering, and custom white-label branding for hotels with 5+ properties.
+                    Large chains get dedicated servers, API engineering, and custom white-label branding.
                 </p>
             </div>
 
