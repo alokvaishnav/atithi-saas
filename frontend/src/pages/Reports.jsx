@@ -45,11 +45,21 @@ const Reports = () => {
           return;
       }
 
-      if (resAnalytics.ok) setData(await resAnalytics.json());
-      else throw new Error("Failed to fetch analytics");
+      if (resAnalytics.ok) {
+          const analyticsData = await resAnalytics.json();
+          setData(analyticsData);
+      } else {
+          throw new Error("Failed to fetch analytics");
+      }
 
-      if (resLogs.ok) setLogs(await resLogs.json());
-      else throw new Error("Failed to fetch logs");
+      if (resLogs.ok) {
+          const logsData = await resLogs.json();
+          // 🟢 SAFETY FIX: Handle Pagination vs Array
+          const logsList = Array.isArray(logsData) ? logsData : (logsData.results || []);
+          setLogs(logsList);
+      } else {
+          throw new Error("Failed to fetch logs");
+      }
 
     } catch (err) { 
         console.error("Report Intelligence Sync Error:", err);
@@ -202,7 +212,8 @@ const Reports = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {data?.trend?.length > 0 ? data.trend.map((day, i) => (
+                    {/* 🟢 SAFETY CHECK: Ensure trend exists and is an array */}
+                    {Array.isArray(data?.trend) && data.trend.length > 0 ? data.trend.map((day, i) => (
                         <tr key={i} className="group transition-all">
                             <td className="px-6 py-5 bg-slate-50 rounded-l-2xl font-bold text-slate-600 group-hover:bg-blue-50 transition-colors">
                                 <div className="flex items-center gap-3">
@@ -241,7 +252,8 @@ const Reports = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {logs.slice(0, 8).map((log, i) => (
+            {/* 🟢 SAFETY CHECK: Slice only if logs is a valid array */}
+            {Array.isArray(logs) && logs.length > 0 ? logs.slice(0, 8).map((log, i) => (
                 <div key={i} className="flex gap-5 items-start p-6 bg-slate-50 rounded-[30px] border border-slate-100 hover:border-blue-200 transition-all">
                     <div className={`mt-1 p-2 rounded-xl ${log.action === 'CREATE' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
                         <Activity size={16}/>
@@ -254,7 +266,9 @@ const Reports = () => {
                         </p>
                     </div>
                 </div>
-            ))}
+            )) : (
+                <p className="text-slate-400 font-bold text-xs uppercase">No logs available</p>
+            )}
         </div>
       </div>
     </div>

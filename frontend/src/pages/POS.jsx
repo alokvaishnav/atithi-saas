@@ -42,11 +42,20 @@ const POS = () => {
           return;
       }
 
-      if (srvRes.ok) setServices(await srvRes.json());
-      else throw new Error("Failed to load services");
+      if (srvRes.ok) {
+          const data = await srvRes.json();
+          // 🟢 SAFETY FIX: Handle Pagination
+          const serviceList = Array.isArray(data) ? data : (data.results || []);
+          setServices(serviceList);
+      } else {
+          throw new Error("Failed to load services");
+      }
       
       if (bookingRes.ok) {
-          const allBookings = await bookingRes.json();
+          const allBookingsData = await bookingRes.json();
+          // 🟢 SAFETY FIX: Handle Pagination
+          const allBookings = Array.isArray(allBookingsData) ? allBookingsData : (allBookingsData.results || []);
+
           // Filter only for currently CHECKED_IN guests who can charge to room
           const activeGuests = allBookings.filter(b => b.status === 'CHECKED_IN').map(b => ({
               id: b.id,

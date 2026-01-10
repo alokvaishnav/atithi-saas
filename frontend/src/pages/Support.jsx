@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Mail, Phone, HelpCircle, FileText, MessageSquare, 
   Send, Server, Database, Wifi, CheckCircle, 
-  Loader2, LifeBuoy
+  Loader2, LifeBuoy, AlertCircle
 } from 'lucide-react';
 import axios from 'axios';
 import { API_URL } from '../config';
@@ -25,29 +25,47 @@ const Support = () => {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // --- 3. FETCH SETTINGS ON LOAD ---
+  // --- 3. FETCH SETTINGS (SMART LOGIC) ---
   useEffect(() => {
-    const fetchSupportInfo = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.data) {
-          // If the API returns an array, take the first item, otherwise use the object directly
-          const data = Array.isArray(res.data) ? res.data[0] : res.data;
-          setInfo(prev => ({ 
-              ...prev, 
-              app_name: data.app_name || prev.app_name,
-              company_name: data.company_name || prev.company_name,
-              support_email: data.support_email || prev.support_email
+    const loadSettings = async () => {
+      // OPTION A: If User context already has settings, use them immediately
+      if (user?.hotel_settings) {
+          const settings = user.hotel_settings;
+          setInfo(prev => ({
+              ...prev,
+              app_name: settings.hotel_name || prev.app_name,
+              // If your settings model has support info, map it here
+              // Otherwise keep defaults
           }));
-        }
-      } catch (err) {
-        console.warn("Using default support info (API unreachable)");
+      }
+
+      // OPTION B: Only Super Admins can fetch platform settings
+      if (user?.is_superuser) {
+          try {
+            const res = await axios.get(`${API_URL}/api/super-admin/platform-settings/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.data) {
+                const data = Array.isArray(res.data) ? res.data[0] : res.data;
+                if (data) {
+                    setInfo(prev => ({ 
+                        ...prev, 
+                        app_name: data.app_name || prev.app_name,
+                        company_name: data.company_name || prev.company_name,
+                        support_email: data.support_email || prev.support_email,
+                        support_phone: data.support_phone || prev.support_phone
+                    }));
+                }
+            }
+          } catch (err) {
+            // Silent fail - use defaults
+            console.warn("Could not fetch platform settings (Using defaults)");
+          }
       }
     };
-    if (token) fetchSupportInfo();
-  }, [token]);
+
+    loadSettings();
+  }, [token, user]);
 
   // --- 4. TICKET SUBMISSION (SIMULATED) ---
   const handleSubmit = (e) => {

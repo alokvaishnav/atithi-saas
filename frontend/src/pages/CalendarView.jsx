@@ -49,9 +49,13 @@ const CalendarView = () => {
       }
 
       if (resBookings.ok && resRooms.ok) {
-        const bookingsData = await resBookings.json();
-        const roomsData = await resRooms.json();
+        const bookingsDataRaw = await resBookings.json();
+        const roomsDataRaw = await resRooms.json();
         
+        // 🟢 SAFETY FIX: Handle Pagination vs Array
+        const bookingsData = Array.isArray(bookingsDataRaw) ? bookingsDataRaw : (bookingsDataRaw.results || []);
+        const roomsData = Array.isArray(roomsDataRaw) ? roomsDataRaw : (roomsDataRaw.results || []);
+
         // Map Room IDs to Numbers for display
         const roomMap = {};
         roomsData.forEach(r => roomMap[r.id] = r.room_number);

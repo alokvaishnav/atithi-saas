@@ -59,9 +59,19 @@ const Bookings = () => {
 
       if (resBookings.ok) {
           const data = await resBookings.json();
+          // 🟢 SAFETY FIX: Handle Pagination vs Array
+          let bookingList = [];
+          if (Array.isArray(data)) {
+              bookingList = data;
+          } else if (data && Array.isArray(data.results)) {
+              bookingList = data.results;
+          } else {
+              bookingList = [];
+          }
+
           // Smart Sort: Priority to Check-ins happening TODAY, then by creation date
           const today = new Date().toISOString().split('T')[0];
-          const sortedData = data.sort((a, b) => {
+          const sortedData = bookingList.sort((a, b) => {
               if (a.check_in_date === today && b.check_in_date !== today) return -1;
               if (b.check_in_date === today && a.check_in_date !== today) return 1;
               return new Date(b.created_at) - new Date(a.created_at);
@@ -71,7 +81,12 @@ const Bookings = () => {
           throw new Error("Failed to load bookings");
       }
 
-      if (resRooms.ok) setRooms(await resRooms.json());
+      if (resRooms.ok) {
+          const roomData = await resRooms.json();
+          // 🟢 SAFETY FIX: Also check Room pagination
+          const roomList = Array.isArray(roomData) ? roomData : (roomData.results || []);
+          setRooms(roomList);
+      }
 
     } catch (err) {
       console.error("Fetch Error:", err);

@@ -121,9 +121,6 @@ from .serializers import (
     GlobalAnnouncementSerializer
 )
 
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-
 # Alias for backward compatibility if code references HousekeepingSerializer
 HousekeepingSerializer = HousekeepingTaskSerializer
 # ==============================================================================
@@ -471,6 +468,10 @@ class BaseSaaSViewSet(viewsets.ModelViewSet):
     """
     permission_classes = [permissions.IsAuthenticated]
     
+    # 🟢 CRITICAL FIX: Disable pagination to prevent frontend crashes (white screen)
+    # This ensures the API returns a simple List [] instead of a Paged Object {}
+    pagination_class = None 
+    
     def get_owner(self):
         """
         Helper to find the 'Data Owner' for the current user.
@@ -725,17 +726,26 @@ class BookingViewSet(BaseSaaSViewSet):
         """Processes Checkout: Updates status, marks room dirty, alerts housekeeping"""
         booking = self.get_object()
         
-        # 1. Update Booking Status
+        # 🟢 1. Security Check: Prevent Checkout if Balance Due
+        total_charges = booking.total_amount + (BookingCharge.objects.filter(booking=booking).aggregate(Sum('amount'))['amount__sum'] or 0)
+        total_paid = BookingPayment.objects.filter(booking=booking).aggregate(Sum('amount'))['amount__sum'] or 0
+        balance = total_charges - total_paid
+
+        if balance > 0:
+            return Response({'error': f'Cannot Checkout. Pending Balance: {balance}'}, status=400)
+
+        # 2. Update Booking Status
         booking.status = 'CHECKED_OUT'
         booking.checked_out_at = timezone.now()
+        booking.payment_status = 'PAID' # Ensure it marks as paid
         booking.save()
         
-        # 2. Update Room Status -> Dirty
+        # 3. Update Room Status -> Dirty
         if booking.room:
             booking.room.status = 'DIRTY'
             booking.room.save()
             
-            # 3. Create Housekeeping Task
+            # 4. Create Housekeeping Task
             HousekeepingTask.objects.create(
                 owner=self.get_owner(),
                 room=booking.room,

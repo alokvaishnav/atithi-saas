@@ -73,9 +73,22 @@ const Rooms = () => {
 
       if (res.ok) {
         const data = await res.json();
-        const sorted = data.sort((a, b) => 
+        
+        // 🟢 SAFETY FIX: Handle Pagination vs Array
+        let roomList = [];
+        if (Array.isArray(data)) {
+            roomList = data;
+        } else if (data && Array.isArray(data.results)) {
+            roomList = data.results;
+        } else {
+            roomList = [];
+        }
+
+        // Sort Safely
+        const sorted = roomList.sort((a, b) => 
             a.room_number.toString().localeCompare(b.room_number.toString(), undefined, { numeric: true, sensitivity: 'base' })
         );
+        
         setRooms(sorted);
       } else {
         setError("Failed to load rooms.");
