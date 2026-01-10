@@ -12,7 +12,7 @@ from .models import (
     HotelSettings, Room, Guest, Booking, InventoryItem, 
     Expense, MenuItem, Order, HousekeepingTask, ActivityLog,
     BookingCharge, BookingPayment, PlatformSettings, GlobalAnnouncement,
-    SubscriptionPlan, RoomImage, PlanFeature # 🟢 Ensure PlanFeature is imported
+    SubscriptionPlan, RoomImage, PlanFeature 
 )
 
 try:
@@ -25,7 +25,7 @@ except ImportError:
 # ==============================================================================
 
 class HotelSettingsSerializer(serializers.ModelSerializer):
-    # 🟢 NEW: Include hotel_code in response so frontend knows the ID
+    # Include hotel_code in response so frontend knows the ID
     hotel_code = serializers.CharField(read_only=True)
 
     class Meta:
@@ -40,7 +40,7 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     hotel_settings = HotelSettingsSerializer(read_only=True)
     plan = serializers.SerializerMethodField()
-    # 🟢 NEW: Expose hotel_code on the user object
+    # Expose hotel_code on the user object
     hotel_code = serializers.CharField(read_only=True)
 
     class Meta:
@@ -49,12 +49,22 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined', 'role', 'is_active', 'hotel_code', 'is_superuser']
 
     def get_plan(self, obj):
-        # Logic to check active subscription
         if hasattr(obj, 'hotel_settings') and obj.hotel_settings.license_key:
-            return "PRO" # Simplified logic
+            return "PRO"
         return "FREE"
 
-# 🟢 UPDATED: Handles Owner Registration + Hotel Creation
+# 🟢 NEW: Missing Class Added Here (Fixes ImportError)
+class StaffSerializer(serializers.ModelSerializer):
+    """
+    Serializer for listing and updating Staff members.
+    Used by StaffViewSet in views.py.
+    """
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'phone_number', 'is_active', 'date_joined', 'hotel_code']
+        read_only_fields = ['id', 'date_joined', 'hotel_code']
+
+# Handles Owner Registration + Hotel Creation
 class TenantRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     hotel_name = serializers.CharField(write_only=True)
@@ -76,13 +86,13 @@ class TenantRegisterSerializer(serializers.ModelSerializer):
         # 2. Create Hotel Settings (This generates the Hotel ID automatically via model signal/save)
         settings = HotelSettings.objects.create(owner=user, hotel_name=hotel_name)
         
-        # 3. 🟢 Critical: Sync the generated code back to the user immediately
+        # 3. Critical: Sync the generated code back to the user immediately
         user.hotel_code = settings.hotel_code
         user.save()
         
         return user
 
-# 🟢 UPDATED: Handles Staff Registration
+# Handles Staff Registration (Creating new staff)
 class StaffRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     
@@ -135,7 +145,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
 class RoomImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = RoomImage
-        fields = ['id', 'image','created_at'] # Changed uploaded_at to created_at to match model
+        fields = ['id', 'image','created_at']
 
 class PublicHotelSerializer(serializers.ModelSerializer):
     class Meta:
