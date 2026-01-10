@@ -168,9 +168,44 @@ const Settings = () => {
     }
   };
 
+  // 🟢 SAFETY COPY FUNCTION (Works on HTTP & HTTPS)
   const copyToClipboard = (text) => {
-      navigator.clipboard.writeText(text);
-      alert("Link copied to clipboard!");
+      // Method 1: Try Modern API (HTTPS Only)
+      if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text)
+              .then(() => alert("Link copied to clipboard! ✅"))
+              .catch(() => manualCopyFallback(text));
+      } else {
+          // Method 2: Fallback for HTTP (Your current situation)
+          manualCopyFallback(text);
+      }
+  };
+
+  const manualCopyFallback = (text) => {
+      try {
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          
+          // Ensure it's part of the DOM but invisible
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          textArea.style.top = "0";
+          
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textArea);
+          
+          if (successful) {
+              alert("Link copied to clipboard! ✅");
+          } else {
+              prompt("Press Ctrl+C to copy this link:", text);
+          }
+      } catch (err) {
+          prompt("Press Ctrl+C to copy this link:", text);
+      }
   };
 
   if (loading) return <div className="p-20 text-center flex justify-center items-center gap-2"><Loader2 className="animate-spin text-blue-600"/> Loading System Config...</div>;
