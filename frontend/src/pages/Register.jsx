@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, Building, User, Lock, Mail, ArrowRight, 
   Eye, EyeOff, CheckCircle, AlertCircle, ShieldCheck,
-  CreditCard 
+  CreditCard, Copy 
 } from 'lucide-react';
 import { API_URL } from '../config';
 
@@ -23,6 +23,10 @@ const Register = () => {
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  // 🟢 Success State to show the Hotel ID Modal
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [newHotelId, setNewHotelId] = useState('');
   
   const navigate = useNavigate();
 
@@ -83,17 +87,16 @@ const Register = () => {
         const data = await res.json();
 
         if (res.ok) {
-            // Success: Redirect to Login with message
-            navigate('/login', { state: { msg: 'Registration Successful! Please check your email to verify.' } });
+            // 🟢 Success: Show Modal with Hotel ID instead of immediate redirect
+            setNewHotelId(data.hotel_code || "HTL-XXXX"); // Fallback if backend doesn't send it yet
+            setRegistrationSuccess(true);
         } else {
             // Error Handling: Extract first error message from Django DRF response
-            // Responses can be { field: ["error"] } or { error: "msg" }
             const firstErrorKey = Object.keys(data)[0];
             const errorMessage = Array.isArray(data[firstErrorKey]) 
                 ? data[firstErrorKey][0] 
                 : data[firstErrorKey] || "Registration failed.";
             
-            // Format nice message for field errors
             const displayError = firstErrorKey === 'error' || firstErrorKey === 'detail' 
                 ? errorMessage 
                 : `${firstErrorKey.charAt(0).toUpperCase() + firstErrorKey.slice(1)}: ${errorMessage}`;
@@ -108,6 +111,48 @@ const Register = () => {
     }
   };
 
+  const copyToClipboard = () => {
+      navigator.clipboard.writeText(newHotelId);
+      alert("Hotel ID copied to clipboard!");
+  };
+
+  // 🟢 SUCCESS MODAL VIEW
+  if (registrationSuccess) {
+      return (
+        <div className="flex min-h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
+            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
+            
+            <div className="bg-white p-10 rounded-[40px] shadow-2xl w-full max-w-md text-center animate-in zoom-in duration-500 relative z-10">
+                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600 shadow-lg shadow-emerald-200">
+                    <CheckCircle size={40} />
+                </div>
+                
+                <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter italic mb-2">Success!</h2>
+                <p className="text-slate-500 font-medium mb-8">Your hotel account has been created.</p>
+                
+                <div className="bg-blue-50 border-2 border-blue-100 p-6 rounded-3xl mb-8">
+                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Your Unique Hotel License ID</p>
+                    <div className="flex items-center justify-center gap-3">
+                        <span className="text-4xl font-black text-slate-800 tracking-tight">{newHotelId}</span>
+                        <button onClick={copyToClipboard} className="p-2 hover:bg-blue-100 rounded-full text-blue-600 transition-colors">
+                            <Copy size={20} />
+                        </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 font-bold">⚠️ SAVE THIS ID. YOU NEED IT TO LOGIN.</p>
+                </div>
+
+                <button 
+                    onClick={() => navigate('/login')}
+                    className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl"
+                >
+                    Go to Login
+                </button>
+            </div>
+        </div>
+      );
+  }
+
+  // 🟢 STANDARD REGISTRATION FORM
   return (
     <div className="flex min-h-screen bg-slate-900 items-center justify-center p-4 font-sans relative overflow-hidden">
       
@@ -115,7 +160,6 @@ const Register = () => {
       <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-blue-600 rounded-full blur-[120px] opacity-20 animate-pulse pointer-events-none"></div>
       <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600 rounded-full blur-[120px] opacity-10 pointer-events-none"></div>
       
-      {/* Grid Pattern Overlay */}
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
 
       <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl w-full max-w-lg relative z-10 border-4 border-slate-100/10 backdrop-blur-sm animate-in fade-in zoom-in duration-300">

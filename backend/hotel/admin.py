@@ -49,15 +49,18 @@ class RoomImageInline(admin.TabularInline):
 # --- CUSTOM USER ADMIN ---
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'role', 'hotel_owner_name', 'is_active', 'date_joined')
+    # 🟢 UPDATED: Added 'hotel_code' to list display
+    list_display = ('username', 'email', 'role', 'hotel_owner_name', 'hotel_code', 'is_active', 'date_joined')
     list_filter = ('role', 'is_active', 'is_superuser')
-    search_fields = ('username', 'email', 'first_name')
+    search_fields = ('username', 'email', 'first_name', 'hotel_code')
     ordering = ('-date_joined',)
     list_per_page = 25
     
+    # 🟢 UPDATED: Added 'hotel_code' to fieldsets
     fieldsets = UserAdmin.fieldsets + (
-        ('SaaS Role', {'fields': ('role', 'hotel_owner')}),
+        ('SaaS Role', {'fields': ('role', 'hotel_owner', 'hotel_code')}),
     )
+    readonly_fields = ('hotel_code',) # Keep ID read-only
 
     def hotel_owner_name(self, obj):
         return obj.hotel_owner.username if obj.hotel_owner else '-'
@@ -100,15 +103,20 @@ class GuestAdmin(admin.ModelAdmin):
     list_per_page = 25
 
 class HotelSettingsAdmin(admin.ModelAdmin):
-    list_display = ('hotel_name', 'owner', 'phone', 'email', 'license_expiry')
-    search_fields = ('hotel_name', 'owner__username', 'email')
+    # 🟢 UPDATED: Added 'hotel_code' to list display and search
+    list_display = ('hotel_name', 'hotel_code', 'owner', 'phone', 'email', 'license_expiry')
+    search_fields = ('hotel_name', 'owner__username', 'email', 'hotel_code')
     list_filter = ('enable_whatsapp_alerts', 'auto_send_invoice')
-    readonly_fields = ('license_expiry',)
+    readonly_fields = ('license_expiry', 'hotel_code') # Keep ID read-only
     save_on_top = True
     
+    # 🟢 UPDATED: Reorganized fieldsets to include Hotel ID
     fieldsets = (
-        ('Branding & Contact', {
-            'fields': ('owner', 'hotel_name', 'description', 'logo', 'address', 'phone', 'email', 'website')
+        ('Identity', {
+            'fields': ('hotel_code', 'owner', 'hotel_name', 'description', 'logo')
+        }),
+        ('Contact Info', {
+            'fields': ('address', 'phone', 'email', 'website')
         }),
         ('Operations', {
             'fields': ('check_in_time', 'check_out_time', 'currency_symbol', 'tax_gst_number')
@@ -197,7 +205,6 @@ class PlanFeatureAdmin(admin.ModelAdmin):
     search_fields = ('name', 'key')
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
-    # 🟢 UPDATED: Added is_trial and trial_days support
     list_display = ('name', 'price', 'interval', 'is_trial', 'trial_days', 'is_active')
     list_filter = ('interval', 'is_active', 'is_trial')
     search_fields = ('name',)

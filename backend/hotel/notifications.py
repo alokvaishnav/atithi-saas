@@ -1,118 +1,122 @@
-# backend/hotel/notifications.py
-
 import logging
-from django.core.mail import send_mail
 from django.conf import settings
 from .models import PlatformSettings, HotelSettings
+from .utils import send_welcome_email, send_booking_email, send_whatsapp_message
 
-# Try importing Twilio (We will install this package next)
+# Try importing requests safely (matches utils.py dependency)
 try:
-    from twilio.rest import Client
+    import requests
 except ImportError:
-    Client = None
+    requests = None
 
 logger = logging.getLogger(__name__)
 
 class NotificationService:
-    
-    @staticmethod
-    def get_platform_config():
-        return PlatformSettings.objects.first()
+    """
+    Centralized Service to handle System & Tenant Notifications.
+    Separates the 'Trigger' logic (Views) from the 'Sending' logic (utils.py).
+    """
 
-    @staticmethod
-    def send_whatsapp(to_number, body):
-        """
-        Sends WhatsApp message using Global Platform Credentials (Twilio).
-        """
-        config = NotificationService.get_platform_config()
-        if not config or not config.twilio_account_sid:
-            logger.warning("Twilio not configured.")
-            return False
-
-        if not Client:
-            logger.error("Twilio library not installed.")
-            return False
-
-        try:
-            client = Client(config.twilio_account_sid, config.twilio_auth_token)
-            message = client.messages.create(
-                from_=f"whatsapp:{config.twilio_whatsapp_number}",
-                body=body,
-                to=f"whatsapp:{to_number}"
-            )
-            return message.sid
-        except Exception as e:
-            logger.error(f"WhatsApp Failed: {e}")
-            return False
-
-    @staticmethod
-    def send_email(subject, body, to_email):
-        """
-        Sends Email using Django's SMTP backend.
-        """
-        try:
-            send_mail(
-                subject,
-                body,
-                settings.DEFAULT_FROM_EMAIL,
-                [to_email],
-                fail_silently=False,
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Email Failed: {e}")
-            return False
-
-    # --- SCENARIO 1: CEO -> HOTEL OWNER ---
     @staticmethod
     def notify_new_tenant(user, password):
-        config = NotificationService.get_platform_config()
-        
-        # 1. Prepare Message
-        context = {
-            "name": user.first_name,
-            "hotel": user.hotel_settings.hotel_name if hasattr(user, 'hotel_settings') else "Your Hotel",
-            "username": user.username,
-            "password": password,
-            "url": "http://16.171.144.127/login"
-        }
-        
-        # Format the default template
-        msg_body = config.welcome_email_body.format(**context)
-        subject = config.welcome_email_subject
+        """
+        Triggered when a new Hotel Owner registers.
+        Sends:
+        1. Welcome Email (Includes Hotel ID) -> Handled by utils.py
+        2. Welcome WhatsApp (Includes Hotel ID) -> Handled locally here
+        """
+        try:
+            # 1. Send Email (This uses the logic in utils.py which includes the Hotel ID)
+            email_sent = send_welcome_email(user, password)
+            if email_sent:
+                logger.info(f"Welcome email sent to {user.email}")
 
-        # 2. Send Email
-        NotificationService.send_email(subject, msg_body, user.email)
+            # 2. Send WhatsApp to Owner
+            # We do this here explicitly to ensure the owner gets their credentials
+            NotificationService.send_owner_whatsapp(user, password)
 
-        # 3. Send WhatsApp (if phone exists)
-        # Assuming you added a 'phone' field to CustomUser or profile
-        # NotificationService.send_whatsapp(user.phone, msg_body)
+        except Exception as e:
+            logger.error(f"Notification Service Error: {e}")
 
-    # --- SCENARIO 2: HOTEL OWNER -> GUEST ---
+    @staticmethod
+    def send_owner_whatsapp(user, password):
+        """
+        Sends the Hotel ID and Credentials to the Owner's WhatsApp.
+        Uses Meta Cloud API (Consistent with utils.py).
+        """
+        if not requests:
+            logger.warning("Requests library not installed. Skipping Owner WhatsApp.")
+            return
+
+        try:
+            # Fetch Global Platform Config for WhatsApp API Credentials
+            ps = PlatformSettings.objects.first()
+            
+            # Only proceed if Platform has WhatsApp configured
+            if not ps or not ps.whatsapp_phone_id or not ps.whatsapp_token:
+                logger.warning("Global WhatsApp not configured. Skipping owner alert.")
+                return
+
+            # Get User Phone
+            # Priority: HotelSettings Phone -> User Phone
+            phone = None
+            if hasattr(user, 'hotel_settings') and user.hotel_settings.phone:
+                phone = user.hotel_settings.phone
+            elif user.phone_number:
+                phone = user.phone_number
+
+            if not phone:
+                logger.warning(f"No phone number found for user {user.username}")
+                return
+
+            # 🟢 Get Hotel Code (Critical for Login)
+            hotel_code = getattr(user, 'hotel_code', 'PENDING')
+
+            # Construct Message
+            message_body = (
+                f"🎉 Welcome to {ps.app_name}!\n\n"
+                f"Your Hotel Management System is ready.\n\n"
+                f"🏨 *License ID:* {hotel_code} (Save this!)\n"
+                f"👤 *User:* {user.username}\n"
+                f"🔑 *Pass:* {password}\n\n"
+                f"Login here: http://16.171.144.127/login"
+            )
+
+            # API Call to Meta
+            url = f"https://graph.facebook.com/v19.0/{ps.whatsapp_phone_id}/messages"
+            headers = {
+                "Authorization": f"Bearer {ps.whatsapp_token}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": phone,
+                "type": "text",
+                "text": {"body": message_body}
+            }
+
+            response = requests.post(url, headers=headers, json=payload)
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"Welcome WhatsApp sent to {phone}")
+            else:
+                logger.error(f"Meta API Error: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Failed to send Owner WhatsApp: {e}")
+
     @staticmethod
     def notify_guest_booking(booking):
-        owner_settings = HotelSettings.objects.get(owner=booking.owner)
-        
-        # 1. Prepare Message (Customizable by Owner)
-        context = {
-            "guest_name": booking.guest.full_name,
-            "hotel_name": owner_settings.hotel_name,
-            "room_type": booking.room.room_type,
-            "check_in": booking.check_in_date,
-            "amount": booking.total_amount
-        }
-        
-        # Use the Owner's custom template
+        """
+        Triggered when a Guest books via the Public Engine.
+        Delegates to utils.py to ensure consistent templates are used.
+        """
         try:
-            msg_body = owner_settings.guest_welcome_template.format(**context)
-        except KeyError:
-            # Fallback if template has invalid keys
-            msg_body = f"Booking Confirmed at {owner_settings.hotel_name} for {booking.check_in_date}."
-
-        # 2. Send WhatsApp (if enabled by Owner)
-        if owner_settings.enable_whatsapp_alerts and booking.guest.phone:
-            NotificationService.send_whatsapp(booking.guest.phone, msg_body)
-
-        # 3. Send Email (if enabled by Owner)
-        if owner_settings.enable_email_alerts and booking.guest.email:
-            NotificationService.send_email(f"Booking Confirmation - {owner_settings.hotel_name}", msg_body, booking.guest.email)
+            # 1. Send Confirmation Email
+            send_booking_email(booking, 'CONFIRMATION')
+            
+            # 2. Send WhatsApp
+            send_whatsapp_message(booking, 'CONFIRMATION')
+            
+        except Exception as e:
+            logger.error(f"Guest Notification Error: {e}")

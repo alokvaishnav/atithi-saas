@@ -15,6 +15,8 @@ def send_welcome_email(user, password):
     """
     Sends a welcome email to new Hotel Owners using the Global Platform SMTP.
     Uses the EDITABLE template from PlatformSettings.
+    
+    UPDATED: Now includes the Hotel ID (Tenant Code).
     """
     try:
         # Import inside function to avoid circular import error with models.py
@@ -40,10 +42,26 @@ def send_welcome_email(user, password):
             use_tls=True
         )
 
+        # 🟢 NEW: Fetch Hotel Code for the email
+        # We use getattr because user.hotel_code might not be refreshed in memory yet
+        hotel_code = getattr(user, 'hotel_code', 'PENDING')
+
         # 3. Dynamic Replacement (The Magic Part)
         # Default templates if DB is empty
         subject_tpl = ps.welcome_email_subject if ps else "Welcome to Atithi"
-        body_tpl = ps.welcome_email_body if ps else "Your account is ready.\nUsername: {username}\nPassword: {password}"
+        
+        # 🟢 UPDATED DEFAULT TEMPLATE to include Hotel ID
+        default_body = (
+            "Welcome! Your account is ready.\n\n"
+            "---------------------------------\n"
+            "🏨 HOTEL ID: {hotel_code}  <-- SAVE THIS!\n"
+            "---------------------------------\n"
+            "Username: {username}\n"
+            "Password: {password}\n\n"
+            "Login here: http://16.171.144.127/login"
+        )
+        
+        body_tpl = ps.welcome_email_body if ps else default_body
         
         app_name = ps.app_name if ps else "Atithi SaaS"
         company_name = ps.company_name if ps else "Atithi Inc"
@@ -52,6 +70,7 @@ def send_welcome_email(user, password):
             "{name}": user.first_name or user.username,
             "{username}": user.username,
             "{password}": password,
+            "{hotel_code}": hotel_code,  # 🟢 Added to Context
             "{app_name}": app_name,
             "{company_name}": company_name
         }

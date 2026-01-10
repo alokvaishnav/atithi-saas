@@ -90,14 +90,20 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // 5️⃣ Login Function
-  const login = async (username, password) => {
+  // 5️⃣ Login Function (🟢 UPDATED: Now accepts hotel_code)
+  const login = async (username, password, hotel_code) => {
     try {
+        // Construct Payload
+        const payload = { username, password };
+        if (hotel_code) {
+            payload.hotel_code = hotel_code;
+        }
+
         // 🟢 Using the fixed /api/token/ endpoint
         const res = await fetch(`${API_URL}/api/token/`, { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify(payload) // Send updated payload
         });
 
         const data = await res.json();
@@ -127,9 +133,10 @@ export const AuthProvider = ({ children }) => {
             // Construct standardized user object
             let userData = {
                 username: data.username || data.user?.username,
-                id: data.id || data.user?.id,
+                id: data.id || data.user?.id || data.user_id,
                 is_superuser: isSuperUser,
                 role: detectedRole,
+                hotel_code: data.hotel_code || hotel_code, // 🟢 Save Hotel Code
                 hotel_name: displayHotelName,
                 hotel_settings: settings 
             };
@@ -149,6 +156,7 @@ export const AuthProvider = ({ children }) => {
         }
     } catch (err) {
         // Silent failure
+        console.error(err);
         return { success: false, msg: "Server connection failed" };
     }
   };

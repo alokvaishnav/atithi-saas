@@ -150,6 +150,10 @@ class CustomTokenSerializer(TokenObtainPairSerializer):
         data['id'] = self.user.id
         data['is_superuser'] = self.user.is_superuser
         
+        # 🟢 CRITICAL UPDATE: Add Hotel Code to response
+        # This is required for the Frontend to persist the session correctly
+        data['hotel_code'] = self.user.hotel_code
+        
         # 3. Smartly fetch Hotel Name & Logo based on Role
         try: 
             if self.user.is_superuser:
@@ -257,7 +261,10 @@ class RegisterView(APIView):
     Registers a new SaaS Tenant (Hotel Owner).
     Automatically creates a HotelSettings object for them.
     
-    UPDATED: Now uses database transactions for safety and logs the event.
+    UPDATED: 
+    1. Generates Hotel ID via HotelSettings.
+    2. Syncs Hotel ID to the User.
+    3. Returns Hotel ID to the Frontend.
     """
     permission_classes = [permissions.AllowAny]
     
@@ -285,18 +292,23 @@ class RegisterView(APIView):
                 )
                 
                 # B. Create Default Hotel Settings immediately
-                HotelSettings.objects.create(
+                # This triggers the model's .save() method which generates the 'hotel_code'
+                settings = HotelSettings.objects.create(
                     owner=user, 
                     hotel_name=data.get('hotel_name', 'My Hotel')
                 )
                 
-                # C. Log the Registration Activity
-                # Note: We can log this safely because if transaction fails, this log rolls back too.
+                # 🟢 C. CRITICAL: Sync the generated Hotel Code back to the User
+                # The user needs this saved in their row to perform the "Triple Auth" login later
+                user.hotel_code = settings.hotel_code
+                user.save()
+                
+                # D. Log the Registration Activity
                 ActivityLog.objects.create(
                     owner=user,
                     action='SIGNUP',
                     category='SYSTEM',
-                    details=f"New Tenant Registered: {user.username} - {data.get('hotel_name', 'My Hotel')}"
+                    details=f"New Tenant Registered: {user.username} (ID: {settings.hotel_code})"
                 )
             
             # 3. Trigger Welcome Email (Outside atomic block to prevent email delays locking DB)
@@ -306,7 +318,12 @@ class RegisterView(APIView):
                 # Log error but don't fail the response, as account is already created
                 print(f"Warning: Welcome email could not be sent. Error: {str(email_error)}")
             
-            return Response({'status': 'Success', 'message': 'Account created successfully'}, status=201)
+            # 🟢 4. Return Success Response with Hotel Code
+            return Response({
+                'status': 'Success', 
+                'message': 'Account created successfully',
+                'hotel_code': settings.hotel_code  # <--- Needed for Frontend Modal
+            }, status=201)
             
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -1165,7 +1182,8 @@ class StaffViewSet(viewsets.ModelViewSet):
 class StaffRegisterView(APIView):
     """
     Dedicated Endpoint for Owners to register new Staff members.
-    Links the new staff directly to the authenticated Owner's account.
+    Links the new staff directly to the authenticated Owner's account
+    AND assigns them the correct Hotel ID.
     """
     permission_classes = [permissions.IsAuthenticated]
     
@@ -1191,7 +1209,11 @@ class StaffRegisterView(APIView):
                 role=data.get('role', 'STAFF'), 
                 first_name=data.get('first_name', ''),
                 last_name=data.get('last_name', ''),
-                hotel_owner=request.user 
+                hotel_owner=request.user,
+                
+                # 🟢 CRITICAL UPDATE: Assign the Hotel ID so staff can login!
+                # This ensures they are part of the correct tenant.
+                hotel_code=request.user.hotel_code
             )
             
             # 4. Log the Action
@@ -2445,12 +2467,12 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
 class TenantRegisterView(APIView):
     """
     Registers a new Hotel Owner (Tenant).
-    Called by the Super Admin 'Deploy Node' button.
+    Called by the Super Admin 'Deploy Node' button or Public Registration.
     - Creates the User (Owner).
-    - Creates the HotelSettings profile.
-    - 🟢 NEW: Sends Welcome Email/WhatsApp to the new Owner.
+    - Creates the HotelSettings profile (which auto-generates the Hotel ID).
+    - 🟢 NEW: Returns the generated Hotel ID so the frontend can show the success modal.
     """
-    permission_classes = [permissions.AllowAny] # AllowAny so public users can register from the Login screen
+    permission_classes = [permissions.AllowAny] 
 
     def post(self, request):
         User = get_user_model()
@@ -2459,7 +2481,7 @@ class TenantRegisterView(APIView):
         try:
             # 1. Check if username/email exists
             if User.objects.filter(username=data.get('username')).exists():
-                return Response({'detail': 'Cluster ID (Username) already taken.'}, status=400)
+                return Response({'detail': 'Username already taken.'}, status=400)
             
             if User.objects.filter(email=data.get('email')).exists():
                 return Response({'detail': 'Email address already registered.'}, status=400)
@@ -2469,41 +2491,45 @@ class TenantRegisterView(APIView):
                 username=data['username'],
                 email=data['email'],
                 password=data['password'],
-                first_name=data['first_name'], # This is mapped to 'Hotel Name' in frontend
-                last_name=data.get('last_name', 'Admin'),
+                first_name=data.get('first_name', ''), 
+                last_name=data.get('last_name', ''),
                 role='OWNER'
             )
 
-            # 3. Create Hotel Settings
-            # We map the frontend 'plan' and 'phone' fields
-            phone_number = data.get('phone', '') # For WhatsApp Alerts
+            # 3. Create Hotel Settings (This generates the hotel_code via signals/model save)
+            phone_number = data.get('phone', '') 
             
-            HotelSettings.objects.create(
+            settings = HotelSettings.objects.create(
                 owner=user,
-                hotel_name=data['first_name'], # Using the provided Hotel Name
-                phone=phone_number,            # 🟢 Save Phone for Twilio
-                email=data['email'],           # Default contact email
-                
-                # Default Config for new tenants
+                hotel_name=data.get('hotel_name', 'My Hotel'),
+                phone=phone_number,           
+                email=data['email'],          
                 enable_whatsapp_alerts=True,
                 enable_email_alerts=True
             )
+            
+            # 🟢 CRITICAL: Sync the generated code back to the user object immediately
+            user.hotel_code = settings.hotel_code
+            user.save()
 
-            # 4. 🟢 Send Welcome Notification (Email/WhatsApp)
-            # Wrapped in try-except so notification failure doesn't break user creation
+            # 4. Send Welcome Notification (Email/WhatsApp)
             try:
+                # Assuming NotificationService is imported at the top
+                from .notifications import NotificationService
                 NotificationService.notify_new_tenant(user, data['password'])
             except Exception as notify_error:
                 logger.error(f"Failed to send welcome notification to {user.email}: {notify_error}")
 
+            # 🟢 5. Return Success Response with Hotel Code
             return Response({
                 'status': 'success', 
-                'message': 'Tenant deployed successfully',
-                'user_id': user.id
+                'message': 'Registration successful',
+                'user_id': user.id,
+                'hotel_code': settings.hotel_code  # <--- This is what the Frontend needs!
             }, status=201)
 
         except Exception as e:
-            logger.error(f"Tenant Deployment Failed: {e}")
+            logger.error(f"Tenant Registration Failed: {e}")
             return Response({'detail': str(e)}, status=400)
         
 class SuperAdminImpersonateView(APIView):

@@ -12,7 +12,7 @@ from .models import (
     HotelSettings, Room, Guest, Booking, InventoryItem, 
     Expense, MenuItem, Order, HousekeepingTask, ActivityLog,
     BookingCharge, BookingPayment, PlatformSettings, GlobalAnnouncement,
-    SubscriptionPlan, RoomImage  # 🟢 ADDED: RoomImage was missing here
+    SubscriptionPlan, RoomImage, PlanFeature # 🟢 Ensure PlanFeature is imported
 )
 
 try:
@@ -25,10 +25,13 @@ except ImportError:
 # ==============================================================================
 
 class HotelSettingsSerializer(serializers.ModelSerializer):
+    # 🟢 NEW: Include hotel_code in response so frontend knows the ID
+    hotel_code = serializers.CharField(read_only=True)
+
     class Meta:
         model = HotelSettings
         fields = '__all__'
-        read_only_fields = ['id', 'owner', 'license_key', 'license_expiry']
+        read_only_fields = ['id', 'owner', 'license_key', 'license_expiry', 'hotel_code']
         extra_kwargs = {
             'smtp_password': {'write_only': True},
             'whatsapp_auth_token': {'write_only': True}
@@ -37,29 +40,66 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     hotel_settings = HotelSettingsSerializer(read_only=True)
     plan = serializers.SerializerMethodField()
+    # 🟢 NEW: Expose hotel_code on the user object
+    hotel_code = serializers.CharField(read_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined', 'hotel_settings', 'plan']
-        read_only_fields = ['id', 'date_joined', 'role', 'is_active']
+        fields = ['id', 'username', 'email', 'role', 'first_name', 'last_name', 'is_active', 'date_joined', 'hotel_settings', 'plan', 'hotel_code', 'is_superuser']
+        read_only_fields = ['id', 'date_joined', 'role', 'is_active', 'hotel_code', 'is_superuser']
 
     def get_plan(self, obj):
+        # Logic to check active subscription
         if hasattr(obj, 'hotel_settings') and obj.hotel_settings.license_key:
-            return "PRO"
+            return "PRO" # Simplified logic
         return "FREE"
 
-class StaffSerializer(serializers.ModelSerializer):
+# 🟢 UPDATED: Handles Owner Registration + Hotel Creation
+class TenantRegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    hotel_name = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'username', 'email', 'password', 'hotel_name')
+
+    def create(self, validated_data):
+        hotel_name = validated_data.pop('hotel_name')
+        password = validated_data.pop('password')
+        
+        # 1. Create User (Owner)
+        user = User.objects.create(**validated_data)
+        user.set_password(password)
+        user.role = 'OWNER'
+        user.save()
+        
+        # 2. Create Hotel Settings (This generates the Hotel ID automatically via model signal/save)
+        settings = HotelSettings.objects.create(owner=user, hotel_name=hotel_name)
+        
+        # 3. 🟢 Critical: Sync the generated code back to the user immediately
+        user.hotel_code = settings.hotel_code
+        user.save()
+        
+        return user
+
+# 🟢 UPDATED: Handles Staff Registration
+class StaffRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     
     class Meta:
         model = CustomUser
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'password', 'date_joined']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'password', 'date_joined', 'phone_number']
         read_only_fields = ['id', 'date_joined']
         
     def create(self, validated_data):
+        # The View (StaffRegisterView) will inject 'hotel_owner' and 'hotel_code'
         if 'role' not in validated_data:
             validated_data['role'] = 'STAFF'
-        user = CustomUser.objects.create_user(**validated_data)
+            
+        password = validated_data.pop('password')
+        user = CustomUser.objects.create(**validated_data)
+        user.set_password(password)
+        user.save()
         return user
 
 # ==============================================================================
@@ -92,11 +132,10 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
 # 3. PUBLIC FACING SERIALIZERS (WEBSITE BUILDER)
 # ==============================================================================
 
-# 🟢 NEW: Room Image Serializer (For Gallery)
 class RoomImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = RoomImage
-        fields = ['id', 'image','uploaded_at']
+        fields = ['id', 'image','created_at'] # Changed uploaded_at to created_at to match model
 
 class PublicHotelSerializer(serializers.ModelSerializer):
     class Meta:
@@ -109,7 +148,6 @@ class PublicHotelSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class PublicRoomSerializer(serializers.ModelSerializer):
-    # 🟢 Include Gallery Images
     images = RoomImageSerializer(many=True, read_only=True)
     
     class Meta:
@@ -146,7 +184,6 @@ class PublicBookingSerializer(serializers.Serializer):
 # ==============================================================================
 
 class RoomSerializer(serializers.ModelSerializer):
-    # 🟢 Include Gallery Images for Admin Dashboard too
     images = RoomImageSerializer(many=True, read_only=True)
 
     class Meta:

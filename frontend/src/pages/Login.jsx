@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { Loader2, Lock, User, ShieldCheck, AlertCircle, CheckCircle } from 'lucide-react';
+import { Loader2, Lock, User, ShieldCheck, AlertCircle, CheckCircle, Building2 } from 'lucide-react'; // 🟢 Added Building2 Icon
 import { useAuth } from '../context/AuthContext'; 
 
 const Login = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  // 🟢 Updated State to include Hotel Code
+  const [formData, setFormData] = useState({
+    hotel_code: '',
+    username: '',
+    password: ''
+  });
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null); 
   const [successMsg, setSuccessMsg] = useState('');
@@ -18,12 +23,11 @@ const Login = () => {
   useEffect(() => {
     if (location.state?.msg) {
         setSuccessMsg(location.state.msg);
-        // Clear history state immediately so message doesn't persist on refresh
         window.history.replaceState({}, document.title);
     }
   }, [location]);
 
-  // 2️⃣ CLEANUP: Clear any stale session data on mount
+  // 2️⃣ CLEANUP: Clear stale session data
   useEffect(() => {
     const keysToRemove = [
         'access_token', 'refresh_token', 'user_data', 
@@ -33,20 +37,24 @@ const Login = () => {
     keysToRemove.forEach(key => localStorage.removeItem(key));
   }, []);
 
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError(null);
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!username || !password) return;
+    if (!formData.username || !formData.password) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // Delegate API call to AuthContext
-      const result = await login(username, password);
+      // 🟢 Delegate API call to AuthContext (Now passes 3 args)
+      const result = await login(formData.username, formData.password, formData.hotel_code);
 
       if (result.success) {
-         // 🟢 SMART NAVIGATION LOGIC
-         // We prioritize the 'result.user' directly from the API response
+         // SMART NAVIGATION LOGIC
          const currentUser = result.user || JSON.parse(localStorage.getItem('user_data'));
          
          const role = currentUser?.role || 'UNKNOWN';
@@ -54,26 +62,24 @@ const Login = () => {
 
          console.log("🔍 Login Decision:", { username: currentUser?.username, role, isSuper });
 
-         // 1. EXPLICIT CHECK: Hotel Owners & Staff -> Dashboard
-         // We check this FIRST to prevent any accidental Super Admin redirection
+         // 1. Hotel Owners & Staff -> Dashboard
          if (['OWNER', 'MANAGER', 'STAFF', 'RECEPTIONIST', 'HOUSEKEEPING', 'ACCOUNTANT'].includes(role)) {
              console.log("🏨 Redirecting to Hotel Dashboard...");
              navigate('/dashboard', { replace: true });
          }
-         // 2. EXPLICIT CHECK: Super Admin -> Global HQ
+         // 2. Super Admin -> Global HQ
          else if (isSuper || role === 'SUPER-ADMIN') {
              console.log("🚀 Redirecting to Super Admin HQ...");
              navigate('/super-admin/stats', { replace: true });
          } 
-         // 3. Fallback (Safety Net) -> Dashboard
+         // 3. Fallback
          else {
              console.log("⚠️ Unknown Role. Defaulting to Dashboard...");
              navigate('/dashboard', { replace: true });
          }
 
       } else {
-         // Login failed
-         setError(result.msg || 'Login Failed. Please check your credentials.');
+         setError(result.msg || 'Login Failed. Please check your Hotel ID and credentials.');
       }
 
     } catch (err) {
@@ -123,17 +129,32 @@ const Login = () => {
         )}
 
         <form onSubmit={handleLogin} className="space-y-4">
+          
+          {/* 🟢 NEW: HOTEL ID INPUT */}
+          <div className="relative group">
+            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+            <input
+              autoFocus
+              type="text"
+              name="hotel_code"
+              placeholder="Hotel License ID (e.g. HTL-8842)"
+              className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400 focus:bg-white uppercase"
+              value={formData.hotel_code}
+              onChange={handleChange}
+              // Not required strictly here because Super Admins might bypass it, handled in backend
+            />
+          </div>
+
           <div className="relative group">
             <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
             <input
-              autoFocus
               type="text"
               name="username"
               autoComplete="username"
               placeholder="Operator ID / Username"
               className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400 focus:bg-white"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={formData.username}
+              onChange={handleChange}
               required
             />
           </div>
@@ -146,8 +167,8 @@ const Login = () => {
               autoComplete="current-password"
               placeholder="Access Key / Password"
               className="w-full bg-slate-50 border-2 border-slate-100 p-4 pl-12 rounded-2xl font-bold text-slate-700 outline-none focus:border-blue-600 transition-all placeholder:font-medium placeholder:text-slate-400 focus:bg-white"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={formData.password}
+              onChange={handleChange}
               required
             />
           </div>

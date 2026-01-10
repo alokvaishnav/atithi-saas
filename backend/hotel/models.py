@@ -2,7 +2,12 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 import random
+import string # 🟢 Added for ID generation
 from datetime import timedelta
+
+# 🟢 Helper function to generate unique 6-digit Hotel ID
+def generate_hotel_code():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 # ==============================================================================
 # 1. HOTEL SETTINGS (Global Configuration for Tenants)
@@ -15,6 +20,10 @@ class HotelSettings(models.Model):
         related_name='hotel_settings'
     )
     
+    # 🟢 NEW: The Master Hotel ID (Unique Key for the System)
+    # This is the "Tenant ID" that links all data and users together.
+    hotel_code = models.CharField(max_length=10, unique=True, editable=False, null=True, blank=True)
+
     # --- Branding ---
     hotel_name = models.CharField(max_length=255, default="My Hotel")
     description = models.TextField(blank=True, null=True)
@@ -64,8 +73,20 @@ class HotelSettings(models.Model):
     class Meta:
         verbose_name_plural = "Hotel Settings"
 
+    def save(self, *args, **kwargs):
+        # 🟢 Logic: Auto-generate Hotel ID if it doesn't exist
+        if not self.hotel_code:
+            self.hotel_code = generate_hotel_code()
+            
+            # Sync this code to the Owner User so they can login with it
+            if self.owner:
+                self.owner.hotel_code = self.hotel_code
+                self.owner.save()
+                
+        super(HotelSettings, self).save(*args, **kwargs)
+
     def __str__(self):
-        return f"Settings for {self.hotel_name}"
+        return f"[{self.hotel_code}] Settings for {self.hotel_name}"
 
 # ==============================================================================
 # 2. SUBSCRIPTION PLANS (For SaaS Management)

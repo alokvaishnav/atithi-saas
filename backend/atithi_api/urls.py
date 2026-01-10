@@ -13,6 +13,9 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView
 )
 
+# 🟢 IMPORT CUSTOM LOGIN VIEW FROM CORE (New Multi-Tenant Logic)
+from core.views import CustomTokenObtainPairView
+
 # --- Import Views from the 'hotel' app ---
 from hotel.views import (
     # 1. ViewSets (CRUD Operations)
@@ -21,8 +24,7 @@ from hotel.views import (
     OrderViewSet, HousekeepingViewSet, ActivityLogViewSet, 
     StaffViewSet, SubscriptionPlanViewSet, 
 
-    # 2. Authentication Views
-    CustomTokenObtainPairView,  # 🟢 IMPORTED CUSTOM VIEW
+    # 2. Authentication Views (Register & Password)
     TenantRegisterView,         
     StaffRegisterView,
     PasswordResetRequestView, PasswordResetConfirmView,
@@ -111,7 +113,7 @@ urlpatterns = [
     # E. Custom API Endpoints
     
     # --- Authentication & Registration ---
-    # 🟢 FIXED: Point to CustomTokenObtainPairView to get 'role' in response
+    # 🟢 UPDATED: Uses Custom Login View from Core App (Hotel ID Logic)
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'), 
     
     path('api/login/', CustomTokenObtainPairView.as_view(), name='login'),
