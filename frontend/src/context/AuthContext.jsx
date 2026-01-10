@@ -80,7 +80,7 @@ export const AuthProvider = ({ children }) => {
                 }
             }
         } catch (error) {
-            console.error("AuthContext: Restoration Error:", error);
+            // Silently handle error and clear storage
             localStorage.clear();
         } finally {
             setLoading(false);
@@ -148,7 +148,7 @@ export const AuthProvider = ({ children }) => {
             return { success: false, msg: data.detail || "Login failed" };
         }
     } catch (err) {
-        console.error("Login Network Error:", err);
+        // Silent failure
         return { success: false, msg: "Server connection failed" };
     }
   };
