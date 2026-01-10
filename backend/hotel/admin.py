@@ -190,13 +190,17 @@ class ActivityLogAdmin(admin.ModelAdmin):
         return obj.details[:60] + "..." if len(obj.details) > 60 else obj.details
     short_description.short_description = "Details"
 
-    # Make Logs Read-Only for Security (Audit Trail Integrity)
+    # --- PERMISSIONS (UPDATED) ---
     def has_add_permission(self, request):
         return False
+        
     def has_change_permission(self, request, obj=None):
         return False
+    
+    # 🟢 CRITICAL FIX: Allow Superusers to delete logs
+    # This prevents the "Cannot delete user because logs exist" error.
     def has_delete_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser
 
 # --- PLATFORM ADMIN ---
 
