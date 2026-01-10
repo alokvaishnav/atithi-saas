@@ -1,7 +1,17 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+
+# 🟢 FIX: Import CustomUser from the correct 'core' app
+try:
+    from core.models import CustomUser
+except ImportError:
+    # Fallback if your project structure is different, though the error confirms it's not in hotel.models
+    from django.contrib.auth import get_user_model
+    CustomUser = get_user_model()
+
+# Import the rest of the models from the current 'hotel' app
 from .models import (
-    CustomUser, HotelSettings, Room, Guest, Booking, 
+    HotelSettings, Room, Guest, Booking, 
     BookingPayment, BookingCharge,
     InventoryItem, MenuItem, Order, Expense, 
     HousekeepingTask, ActivityLog, PlatformSettings, GlobalAnnouncement,
