@@ -4,7 +4,7 @@ import {
   LogOut, ShoppingBag, Utensils, CalendarDays, FileText, 
   ConciergeBell, Sparkles, ShieldCheck, UserCog, Wallet, 
   BookOpen, ChevronRight, Settings, Package, X, 
-  Server
+  Server, CreditCard // 🟢 Added CreditCard icon
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
@@ -98,7 +98,6 @@ const Sidebar = ({ isOpen, onClose }) => {
   };
 
   // 🧭 RBAC Navigation Groups
-  // 🟢 UPDATED: Added 'STAFF' to relevant groups so the sidebar isn't empty for them
   const groups = [
     {
       title: "Main",
@@ -121,7 +120,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'RECEPTIONIST', 'HOUSEKEEPING', 'STAFF'],
       items: [
         { icon: <Sparkles size={18} />, label: 'Housekeeping', path: '/housekeeping' },
-        // 🔒 Hide POS/Inventory from specific roles if needed
         { icon: <Utensils size={18} />, label: 'POS Terminal', path: '/pos' },
         { icon: <ShoppingBag size={18} />, label: 'Services & Menu', path: '/services' },
         { icon: <Package size={18} />, label: 'Inventory', path: '/inventory' } 
@@ -140,7 +138,6 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'ACCOUNTANT'], 
       items: [
         { icon: <Wallet size={18} />, label: 'Expenses', path: '/expenses' },
-        // 🔒 Staff Directory for Admin/Owners
         ...(['ADMIN', 'OWNER', 'MANAGER'].includes(role) ? [
             { icon: <UserCog size={18} />, label: 'Staff Directory', path: '/staff' }
         ] : []),
@@ -152,6 +149,8 @@ const Sidebar = ({ isOpen, onClose }) => {
       roles: ['ADMIN', 'OWNER', 'MANAGER'], 
       items: [
         { icon: <Settings size={18} />, label: 'Property Settings', path: '/settings' },
+        // 🟢 ADDED: Subscription Plan Link
+        { icon: <CreditCard size={18} />, label: 'Subscription Plan', path: '/pricing' },
       ]
     },
     {
