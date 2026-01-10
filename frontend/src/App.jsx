@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, Outlet } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ShieldAlert, Menu, Hotel } from 'lucide-react'; 
 import { useState } from 'react'; 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -42,7 +42,7 @@ import Staff from './pages/Staff';
 import Accounting from './pages/Accounting'; 
 import Support from './pages/Support'; 
 import Settings from './pages/Settings'; 
-import Pricing from './pages/Pricing';
+import Pricing from './pages/Pricing'; // 🟢 Ensure this file exists
 
 // --- SUPER ADMIN (CEO TOOLS) ---
 import SuperAdminLayout from './pages/SuperAdmin/SuperAdminLayout'; 
@@ -258,6 +258,8 @@ const AppContent = () => {
             {/* Admin Management */}
             <Route path="/staff" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}><Staff /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER']}><Settings /></ProtectedRoute>} />
+            
+            {/* 🟢 NEW PRICING ROUTE */}
             <Route path="/pricing" element={<ProtectedRoute allowedRoles={['ADMIN', 'OWNER', 'MANAGER']}><Pricing /></ProtectedRoute>} />
 
             {/* Finance */}

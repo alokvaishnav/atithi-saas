@@ -3,10 +3,18 @@ import {
   Check, Crown, Star, ShieldCheck, Zap, Phone, Mail, 
   HelpCircle, Server, Globe, Lock, X 
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext'; // 🟢 Import Auth for real data
 
 const Pricing = () => {
+  const { user } = useAuth(); // 🟢 Get current user
   const [billingCycle, setBillingCycle] = useState('MONTHLY'); // MONTHLY | YEARLY
-  const currentPlan = "PRO"; // ℹ️ In a real app, fetch this from your backend/context
+  
+  // 🟢 Logic: Determine User's actual plan (Default to STARTER if unknown)
+  const currentPlan = user?.subscription_plan ? user.subscription_plan.toUpperCase() : "STARTER";
+
+  const handleUpgrade = (planName) => {
+      alert(`🔄 Requesting upgrade to ${planName}... \n\nOur sales team will contact you shortly to finalize the switch.`);
+  };
 
   const plans = [
     {
@@ -32,7 +40,7 @@ const Pricing = () => {
         yearly: 49990,
         features: ["Unlimited Rooms", "Multi-Property", "Dedicated Account Manager", "Unlimited Staff", "Custom Branding", "API Access"],
         color: "bg-slate-900 border-slate-900 text-white shadow-xl shadow-slate-300",
-        btnColor: "bg-purple-600 text-white hover:bg-purple-500"
+        btnColor: "bg-purple-600 text-white hover:bg-purple-50"
     }
   ];
 
@@ -84,6 +92,7 @@ const Pricing = () => {
         {plans.map(plan => {
             const price = billingCycle === 'MONTHLY' ? plan.monthly : plan.yearly;
             const cycleLabel = billingCycle === 'MONTHLY' ? '/mo' : '/yr';
+            const isCurrent = currentPlan === plan.name;
             
             return (
                 <div key={plan.name} className={`relative p-8 rounded-[40px] border-2 flex flex-col transition-transform hover:scale-[1.02] duration-300 ${plan.color}`}>
@@ -114,8 +123,12 @@ const Pricing = () => {
                         ))}
                     </ul>
 
-                    <button className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 ${plan.btnColor}`}>
-                        {currentPlan === plan.name ? 'Current Plan' : 'Upgrade Now'}
+                    <button 
+                        onClick={() => !isCurrent && handleUpgrade(plan.name)}
+                        disabled={isCurrent}
+                        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed ${plan.btnColor}`}
+                    >
+                        {isCurrent ? 'Current Plan' : 'Upgrade Now'}
                     </button>
                 </div>
             );
@@ -215,10 +228,10 @@ const Pricing = () => {
             </div>
 
             <div className="flex gap-4 relative z-10">
-                <a href="tel:+919876543210" className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 transition-all shadow-lg">
+                <a href="tel:+917620054157" className="bg-white text-slate-900 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 flex items-center gap-2 transition-all shadow-lg">
                     <Phone size={16}/> Call Sales
                 </a>
-                <a href="mailto:sales@atithi.com" className="bg-slate-800 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 flex items-center gap-2 transition-all border border-slate-700">
+                <a href="mailto:support@atithi.com" className="bg-slate-800 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-700 flex items-center gap-2 transition-all border border-slate-700">
                     <Mail size={16}/> Email Us
                 </a>
             </div>
