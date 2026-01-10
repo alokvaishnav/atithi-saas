@@ -1,15 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-# 🟢 FIX: Import CustomUser from the correct 'core' app
+# 1. Import CustomUser correctly
 try:
     from core.models import CustomUser
 except ImportError:
-    # Fallback if your project structure is different, though the error confirms it's not in hotel.models
     from django.contrib.auth import get_user_model
     CustomUser = get_user_model()
 
-# Import the rest of the models from the current 'hotel' app
+# Import the rest of the models
 from .models import (
     HotelSettings, Room, Guest, Booking, 
     BookingPayment, BookingCharge,
@@ -18,16 +17,16 @@ from .models import (
     SubscriptionPlan
 )
 
-# 1. GLOBAL BRANDING (The CEO Look)
+# 2. GLOBAL BRANDING
 admin.site.site_header = "Atithi SaaS Command Center"
 admin.site.site_title = "Atithi Admin Portal"
 admin.site.index_title = "Global Infrastructure Management"
 
-# --- INLINES (Display Related Data Inside Parents) ---
+# --- INLINES ---
 
 class BookingPaymentInline(admin.TabularInline):
     model = BookingPayment
-    extra = 0 # Don't show empty extra rows by default
+    extra = 0
     readonly_fields = ('date',)
     can_delete = True
 
@@ -41,7 +40,7 @@ class OrderInline(admin.TabularInline):
     extra = 0
     readonly_fields = ('created_at',)
 
-# --- 2. CUSTOM USER ADMIN (Manage Tenants) ---
+# --- CUSTOM USER ADMIN ---
 
 class CustomUserAdmin(UserAdmin):
     list_display = ('username', 'email', 'role', 'is_active', 'date_joined')
@@ -52,19 +51,15 @@ class CustomUserAdmin(UserAdmin):
         ('SaaS Role', {'fields': ('role', 'hotel_owner')}),
     )
 
-# --- 3. CORE ADMIN CONFIGURATIONS ---
+# --- CORE ADMIN CONFIGURATIONS ---
 
 class BookingAdmin(admin.ModelAdmin):
     list_display = ('id', 'guest_name', 'room', 'check_in_date', 'check_out_date', 'status', 'payment_status', 'total_amount', 'source')
     list_filter = ('status', 'payment_status', 'source', 'check_in_date')
     search_fields = ('guest__full_name', 'guest__email', 'id', 'room__room_number', 'guest__phone')
-    readonly_fields = ('created_at', 'total_amount') # Protect audit fields
+    readonly_fields = ('created_at', 'total_amount')
     ordering = ('-created_at',)
-    
-    # NEW: Date Drill-down navigation
     date_hierarchy = 'check_in_date'
-    
-    # NEW: Show payments and charges directly inside the Booking page
     inlines = [BookingChargeInline, BookingPaymentInline, OrderInline]
 
     def guest_name(self, obj):
@@ -87,16 +82,15 @@ class HotelSettingsAdmin(admin.ModelAdmin):
     list_display = ('hotel_name', 'owner', 'phone', 'email', 'city_display')
     search_fields = ('hotel_name', 'owner__username', 'email')
     list_filter = ('enable_whatsapp_alerts',)
-    readonly_fields = ('license_expiry',) # Admins shouldn't manually edit this easily
+    readonly_fields = ('license_expiry',)
     
     def city_display(self, obj):
-        # Safe extraction of city from address if possible
         if obj.address and ',' in obj.address:
             return obj.address.split(',')[-1].strip()
         return '-'
     city_display.short_description = "City"
 
-# --- 4. OPERATIONS ADMIN CONFIGURATIONS ---
+# --- OPERATIONS ADMIN ---
 
 class InventoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'current_stock', 'min_stock_alert', 'unit', 'owner')
@@ -118,7 +112,7 @@ class ActivityLogAdmin(admin.ModelAdmin):
     list_display = ('action', 'owner', 'timestamp', 'short_description')
     list_filter = ('action', 'timestamp')
     search_fields = ('owner__username', 'details')
-    readonly_fields = ('timestamp', 'owner', 'action', 'details') # Logs should be read-only
+    readonly_fields = ('timestamp', 'owner', 'action', 'details')
     date_hierarchy = 'timestamp'
 
     def short_description(self, obj):
@@ -127,7 +121,7 @@ class ActivityLogAdmin(admin.ModelAdmin):
         return "-"
     short_description.short_description = "Details"
 
-# --- 5. PLATFORM ADMIN (SUPER ADMIN) ---
+# --- PLATFORM ADMIN ---
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     list_display = ('name', 'price', 'interval', 'max_rooms', 'is_active')
@@ -138,29 +132,23 @@ class SubscriptionPlanAdmin(admin.ModelAdmin):
 
 class PlatformSettingsAdmin(admin.ModelAdmin):
     list_display = ('app_name', 'company_name', 'support_email', 'maintenance_mode')
-    
-    # Organized layout for better UX in Admin Panel
     fieldsets = (
         ('Branding & Identity', {
             'fields': ('app_name', 'company_name', 'logo', 'maintenance_mode')
         }),
-        ('Contact Info (Visible to Tenants)', {
+        ('Contact Info', {
             'fields': ('support_email', 'support_phone', 'address')
         }),
-        ('System SMTP (Global Fallback)', {
+        ('System SMTP', {
             'fields': ('smtp_host', 'smtp_port', 'smtp_user', 'smtp_password'),
-            'description': 'Used for password resets and system notifications.'
         }),
-        ('Welcome Email Automation (Editable)', {
+        ('Welcome Email Automation', {
             'fields': ('welcome_email_subject', 'welcome_email_body'),
-            'description': "Use placeholders: {name}, {username}, {password}, {app_name}, {company_name}"
         }),
         ('System WhatsApp', {
             'fields': ('whatsapp_phone_id', 'whatsapp_token', 'whatsapp_enabled', 'welcome_whatsapp_msg')
         }),
     )
-
-    # Helper to enforce Singleton pattern in Admin (prevent adding more than 1 row)
     def has_add_permission(self, request):
         return not PlatformSettings.objects.exists()
 
@@ -170,18 +158,21 @@ class GlobalAnnouncementAdmin(admin.ModelAdmin):
     search_fields = ('title', 'message')
     ordering = ('-created_at',)
 
-# --- 6. REGISTER MODELS ---
+# --- 6. REGISTER MODELS (SAFE VERSION) ---
 
+# 🟢 FIX: Force Unregister first to prevent "AlreadyRegistered" crash
+try:
+    admin.site.unregister(CustomUser)
+except admin.sites.NotRegistered:
+    pass
 admin.site.register(CustomUser, CustomUserAdmin)
+
 admin.site.register(HotelSettings, HotelSettingsAdmin)
 admin.site.register(Room, RoomAdmin)
 admin.site.register(Guest, GuestAdmin)
 admin.site.register(Booking, BookingAdmin)
-# Payments and Charges are now inlines of Booking, but we can still register them 
-# if we want to view them independently.
 admin.site.register(BookingPayment)
 admin.site.register(BookingCharge)
-
 admin.site.register(InventoryItem, InventoryAdmin)
 admin.site.register(MenuItem)
 admin.site.register(Order, OrderAdmin)
